@@ -9,7 +9,8 @@
     "start": "node dist/server.js",
     "migrate": "node-pg-migrate -j ts",
     "test:concurrency-create-job": "tsx scripts/concurrency-create-job.ts",
-    "test:concurrency-start-job": "tsx scripts/concurrency-start-job.ts"
+    "test:concurrency-start-job": "tsx scripts/concurrency-start-job.ts",
+    "test:raw-ingestion": "tsx --test src/modules/raw-ingestion/raw-ingestion.route.test.ts"
   },
   "keywords": [],
   "author": "",
