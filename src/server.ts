@@ -8,6 +8,8 @@ import {
   CalculationJobNotStartableError,
   CalculationJobStateConflictError,
 } from './modules/calculation-job.errors.js';
+import { ActiveRawIngestionBatchExistsError } from './modules/raw-ingestion/raw-ingestion.errors.js';
+import { rawIngestionRoutes } from './modules/raw-ingestion/raw-ingestion.route.js';
 
 const app = Fastify({
   logger: true,
@@ -43,6 +45,13 @@ app.setErrorHandler(
       });
     }
 
+    if (error instanceof ActiveRawIngestionBatchExistsError) {
+      return reply.code(409).send({
+        message: error.message,
+        code: error.code,
+      });
+    }
+
     request.log.error(error);
 
     return reply.status(500).send({
@@ -69,7 +78,7 @@ await app.register(submitCalculationForValidationRoutes);
 await app.register(publishCalculationJobRoutes);
 await app.register(rejectCalculationJobRoutes);
 await app.register(failCalculationJobRoutes);
-
+await app.register(rawIngestionRoutes);
 
 const port = Number(process.env.PORT ?? 3000);
 
