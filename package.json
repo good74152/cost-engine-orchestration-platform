@@ -1,0 +1,30 @@
+{
+  "name": "financial-calculation-platform",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "migrate": "node-pg-migrate -j ts",
+    "test:concurrency-create-job": "tsx scripts/concurrency-create-job.ts",
+    "test:concurrency-start-job": "tsx scripts/concurrency-start-job.ts"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "dependencies": {
+    "dotenv": "^17.4.2",
+    "fastify": "^5.11.3",
+    "pg": "^8.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.2.0",
+    "@types/pg": "^8.21.0",
+    "node-pg-migrate": "^9.0.0",
+    "tsx": "^4.23.12",
+    "typescript": "^7.0.2"
+  }
+}
