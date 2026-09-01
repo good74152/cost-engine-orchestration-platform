@@ -6,12 +6,12 @@ export async function up(pgm: MigrationBuilder): Promise<void> {
     pgm.createTable('raw_ingestion_series', {
         id: {
             type: 'uuid',
-            primaryKey: true,
-            notNull: true
+            primaryKey: true
         },
         domain: {
             type: 'varchar(50)',
-            notNull: true
+            notNull: true,
+            check: "domain IN ('FAB_COST_RAW','CAPEX_RAW','DPR_RAW')"
         },
         business_key: {
             type: 'varchar(255)',
@@ -20,8 +20,8 @@ export async function up(pgm: MigrationBuilder): Promise<void> {
         last_batch_sequence: {
             type: 'integer',
             notNull: true,
-            default: 1,
-            check: 'last_batch_sequence > 0'
+            default: 0,
+            check: 'last_batch_sequence >= 0'
         },
         created_at: {
             type: 'timestamptz',
@@ -41,8 +41,7 @@ export async function up(pgm: MigrationBuilder): Promise<void> {
     pgm.createTable('raw_ingestion_batches', {
         id: {
             type: 'uuid',
-            primaryKey: true,
-            notNull: true
+            primaryKey: true
         },
         ingestion_series_id: {
             type: 'uuid',
