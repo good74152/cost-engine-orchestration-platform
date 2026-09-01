@@ -1,13 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import Fastify from 'fastify';
+import { buildApp } from '../src/app.js';
 import { pool } from '../src/db/pool.js';
-import { rawIngestionRoutes } from '../src/modules/raw-ingestion/raw-ingestion.route.js';
 
 test('POST /raw-ingestion-batches: 20 concurrent requests should yield 1 success and 19 conflicts', async (t) => {
-  const app = Fastify();
-
-  await app.register(rawIngestionRoutes);
+  const app = await buildApp();
 
   t.after(async () => {
     await app.close();
@@ -51,13 +48,30 @@ test('POST /raw-ingestion-batches: 20 concurrent requests should yield 1 success
     assert.equal(body.message, 'An active raw ingestion batch already exists');
   });
 
-  const row = await pool.query<{ last_batch_sequence: number }>(
+  const seriesRow = await pool.query<{ last_batch_sequence: number }>(
     `SELECT last_batch_sequence
      FROM raw_ingestion_series
      WHERE domain = $1 AND business_key = $2`,
     [payload.domain, payload.businessKey],
   );
 
-  assert.equal(row.rows.length, 1, 'exactly one series should exist for this key');
-  assert.equal(row.rows[0].last_batch_sequence, 1, 'sequence should stay at 1 after the single success');
+  const batchRow = await pool.query<{ batch_count: number }>(
+    `SELECT COUNT(*)::int AS batch_count
+      FROM raw_ingestion_batches
+      WHERE ingestion_series_id = $1;`,
+    [successBody.ingestionSeriesId],
+  );
+
+    const activeBatchRow = await pool.query<{ active_batch_count: number }>(
+    `SELECT COUNT(*)::int AS active_batch_count
+      FROM raw_ingestion_batches
+      WHERE ingestion_series_id = $1
+      AND status IN ('LOADING', 'VALIDATING');`,
+    [successBody.ingestionSeriesId],
+  );
+
+  assert.equal(seriesRow.rows.length, 1, 'exactly one series should exist for this key');
+  assert.equal(seriesRow.rows[0].last_batch_sequence, 1, 'sequence should stay at 1 after the single success');
+  assert.equal(batchRow.rows[0].batch_count, 1, 'exactly one batch should exist for this series');
+  assert.equal(activeBatchRow.rows[0].active_batch_count, 1, 'exactly one active batch should exist for this series');
 });
