@@ -254,9 +254,9 @@ export async function failCalculationJobService(jobId: string) {
             }
             throw new CalculationJobStateConflictError(currentStatus, "RUNNING");
         }
-        const failed = await rejectDatasetIfValidating(client, datasetVersionId);
+        const failed = await failDatasetIfBuilding(client, datasetVersionId);
         if(!failed) {
-            throw new CalculationStateInvariantError(`Dataset ${datasetVersionId} must be RUNNING`)
+            throw new CalculationStateInvariantError(`Dataset ${datasetVersionId} must be BUILDING`)
         }
         return {
             jobId,
