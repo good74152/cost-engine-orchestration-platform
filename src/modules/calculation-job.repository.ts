@@ -82,11 +82,11 @@ export async function createCalculationDependencies(
     const sql = `
     INSERT INTO calculation_dependencies (calculation_job_id, dataset_version_id, dependency_type, policy)
     VALUES ($1, $2, $3, $4)
-    RETURNING id, created_at;
+    RETURNING id;
     `;
     for (const dependency of params.dependencies) {
         const result = await client.query(sql, [params.calculationJobId, dependency.datasetVersionId, dependency.dependencyType, dependency.policy]);
-        console.log(`Created calculation dependency with ID: ${result.rows[0].id}, created at: ${result.rows[0].created_at}`);
+        console.log(`Created calculation dependency with ID: ${result.rows[0].id}`);
     }
 }
 
@@ -359,7 +359,7 @@ export async function failJobIfRunning(
 
 export async function failDatasetIfBuilding(
   client: PoolClient,
-  datasetVersionId: string,
+  datasetVersionId: string
 ): Promise<boolean> {
   const result = await client.query(
     `
