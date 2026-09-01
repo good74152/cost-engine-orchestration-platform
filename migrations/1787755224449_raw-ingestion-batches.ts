@@ -18,10 +18,10 @@ export async function up(pgm: MigrationBuilder): Promise<void> {
             notNull: true
         },
         last_batch_sequence: {
-            type: 'bigint',
+            type: 'integer',
             notNull: true,
-            default: 0,
-            check: 'last_batch_sequence >= 0'
+            default: 1,
+            check: 'last_batch_sequence > 0'
         },
         created_at: {
             type: 'timestamptz',
@@ -51,7 +51,7 @@ export async function up(pgm: MigrationBuilder): Promise<void> {
             onDelete: 'RESTRICT'
         },
         batch_sequence: {
-            type: 'bigint',
+            type: 'integer',
             notNull: true,
             check: 'batch_sequence > 0'
         },
@@ -70,7 +70,7 @@ export async function up(pgm: MigrationBuilder): Promise<void> {
             notNull: false
         },
         source_row_count: {
-            type: 'bigint',
+            type: 'integer',
             notNull: false,
             check: 'source_row_count >= 0'
         },

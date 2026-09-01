@@ -1,16 +1,15 @@
 export type RawIngestionDomain = 
-    | 'FAB_COST'
-    | 'CAPEX'
-    | 'DPR';
+    | 'FAB_COST_RAW'
+    | 'CAPEX_RAW'
+    | 'DPR_RAW';
 
 export interface AllocateRawIngestionBatchInput {
-    ingestionSeriesId: string;
     domain: RawIngestionDomain;
     businessKey: string;
 }
 
 export interface AllocateRawIngestionBatchResult {
-    id: string;
+    batchId: string;
     ingestionSeriesId: string;
     batchSequence: number;
     status: 'LOADING';
