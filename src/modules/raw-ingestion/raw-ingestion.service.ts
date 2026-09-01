@@ -2,7 +2,7 @@ import { randomUUID } from "crypto";
 import { AllocateRawIngestionBatchInput, AllocateRawIngestionBatchResult } from "./raw-ingestion.types.js";
 import { allocateRawIngestionSeries, createRawIngestionBatch } from "./raw-ingestion.repository.js";
 import { withTransaction } from "../../db/transaction.js";
-import { ActiveRawIngestionBatchExistsError } from "../calculation-job.errors.js";
+import { ActiveRawIngestionBatchExistsError } from "./raw-ingestion.errors.js";
 
 export async function allocateRawIngestionBatch(
     input: AllocateRawIngestionBatchInput,
@@ -34,7 +34,7 @@ export async function allocateRawIngestionBatch(
     } catch (error: unknown) {
         if (isPostgresError(error) && 
             error.code === '23505' && 
-            error.constraint === 'uq_calculation_jobs_active_series'
+            error.constraint === 'uq_raw_ingestion_batches_active_series'
         ) {
             throw new ActiveRawIngestionBatchExistsError();
         }
