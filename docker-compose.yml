@@ -1,18 +1,17 @@
-version: '3.8'
 services:
   postgres_db:
-    image: postgres:latest
-    container_name: my_postgres
+    image: postgres:18
+    container_name: financial_platform_postgres
     environment:
-      POSTGRES_USER: admin           # 自訂資料庫使用者名稱
-      POSTGRES_PASSWORD: admin       # 自訂資料庫密碼
-      POSTGRES_DB: testdb            # 初始建立的資料庫名稱
+      POSTGRES_USER: ${POSTGRES_USER:-admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-admin}
+      POSTGRES_DB: ${POSTGRES_DB:-testdb}
+      PGDATA: /var/lib/postgresql/data
     ports:
-      - "5432:5432"                  # 將本機的 5432 埠對應到容器的 5432 埠
+      - "5432:5432"
     volumes:
-      - pg_data:/var/lib/postgresql/data/pgdata  # 將資料持久化，避免重啟後資料遺失
+      - pg_data:/var/lib/postgresql/data
     restart: unless-stopped
-    
 
 volumes:
   pg_data:
