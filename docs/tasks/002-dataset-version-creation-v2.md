@@ -4,6 +4,20 @@
 
 Implement the first application slice of the accepted Cost Engine Orchestration Platform v2 architecture: create one dataset version for a canonical reporting series and atomically snapshot all active calculation types for the domain into `PENDING` calculation jobs.
 
+## Required Reading
+
+Before implementation, read and treat these files as authoritative:
+
+1. `AGENTS.md`
+2. `docs/ARCHITECTURE.md`
+3. `docs/adr/0001-canonical-dataset-identity.md`
+4. `docs/adr/0002-dataset-version-publication-unit.md`
+5. `docs/adr/0004-series-serialization-and-lock-ordering.md`
+
+ADRs 0003 and 0005 describe later slices and must not be implemented as part of this task.
+
+If this task conflicts with an accepted ADR, stop and return the conflict for architecture review rather than silently changing the architecture.
+
 ## Context
 
 The v2 schema is introduced by:
