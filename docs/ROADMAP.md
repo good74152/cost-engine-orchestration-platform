@@ -44,6 +44,20 @@ POST /dataset-versions
 
 Must include real PostgreSQL concurrency tests.
 
+### Incremental Legacy Cleanup
+
+Legacy application code should be removed incrementally as each v2 replacement slice becomes authoritative.
+
+Rules:
+
+- delete only code that is fully superseded and has no remaining supported caller,
+- preserve code temporarily when a later, not-yet-migrated lifecycle still depends on it,
+- require replacement-path tests before deletion,
+- do not turn cleanup into an unrelated repository-wide refactor,
+- never treat application dead-code cleanup as permission to discard historical/audit database data.
+
+Cleanup work belongs in the bounded task that replaces the old behavior, not in a standalone architecture ADR unless a new architectural trade-off is discovered.
+
 ## Next
 
 ### Task 003 — First Run and Immutable Dataset Build Snapshot
