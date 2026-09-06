@@ -2,7 +2,7 @@
 
 ## Goal
 
-Implement the first application slice of the accepted orchestration v2 architecture: create one dataset version for a canonical reporting series and atomically snapshot all active calculation types for the domain into `PENDING` calculation jobs.
+Implement the first application slice of the accepted Cost Engine Orchestration Platform v2 architecture: create one dataset version for a canonical reporting series and atomically snapshot all active calculation types for the domain into `PENDING` calculation jobs.
 
 ## Context
 
@@ -20,6 +20,19 @@ The existing application still implements the old model:
 - job-driven dataset lifecycle transitions.
 
 This task starts the application migration to the accepted model. Do not preserve obsolete API semantics merely to keep the old implementation shape.
+
+The accepted domain catalog for this portfolio is:
+
+```text
+FAB_COST
+CAPEX
+DPR
+INSURANCE
+ONE_STD_COST
+COWOS_S
+```
+
+These are normalized machine identifiers. UI labels may differ (`FAB COST`, `ONE STD COST`, `COWOS-S`). Do not invent calculation types, dependency definitions, or Airflow DAG mappings for a domain unless explicitly configured in test/seed data.
 
 ## Existing Behavior
 
@@ -70,6 +83,13 @@ Response should identify the created dataset version and its calculation jobs.
   - `company_code`
   - `fiscal_year`
   - `period`
+- Validate `domain` against the accepted catalog:
+  - `FAB_COST`
+  - `CAPEX`
+  - `DPR`
+  - `INSURANCE`
+  - `ONE_STD_COST`
+  - `COWOS_S`
 - Allocate the next version through the locked `dataset_series` row.
 - Load `calculation_types WHERE domain = ? AND is_active = true`.
 - Create all calculation jobs for the new dataset version in the same transaction.
@@ -135,6 +155,8 @@ INVALID_DOMAIN
 INVALID_PERIOD
 ```
 
+`INVALID_DOMAIN` includes values outside the accepted domain catalog. Do not silently normalize arbitrary aliases or display labels such as `ONE STD COST` or `COWOS-S` at the API boundary.
+
 Do not return generic 500 for expected request errors.
 
 ### Unexpected database failure
@@ -182,6 +204,21 @@ no dataset_build_snapshot
 no execution_attempt
 ```
 
+### Domain catalog
+
+Each accepted domain identifier passes request validation when it has configured active calculation types:
+
+```text
+FAB_COST
+CAPEX
+DPR
+INSURANCE
+ONE_STD_COST
+COWOS_S
+```
+
+A value outside the catalog returns `400 INVALID_DOMAIN` before any dataset/version/job data is committed.
+
 ### Next version
 
 After the active dataset becomes terminal, the next create allocates the next monotonically increasing version. Rejected/abandoned version numbers are not reused.
@@ -213,6 +250,8 @@ Concurrent creates for different company/period/domain identities must not incor
 ## Required Tests
 
 - Route request validation.
+- Accepted-domain validation for all six domain identifiers.
+- Unknown domain returns `INVALID_DOMAIN` with no DB mutation.
 - Happy-path dataset creation.
 - All active calculation types are snapshotted into jobs.
 - Inactive calculation types are not included.
