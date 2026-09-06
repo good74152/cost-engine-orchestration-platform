@@ -81,6 +81,22 @@ See `docs/ARCHITECTURE.md` and ADRs for the full rules.
 - Migration `up` and `down` behavior must be explicit about irreversible cases.
 - Schema changes that enforce architecture invariants require PostgreSQL integration verification.
 
+## Legacy Code Cleanup
+
+Legacy code is not preserved solely for compatibility with architecture that has already been retired.
+
+During each bounded migration slice:
+
+- remove implementation paths, types, tests, scripts, and helpers that are fully superseded by the accepted architecture,
+- remove obsolete compatibility code once no supported caller, migration path, or not-yet-migrated lifecycle still requires it,
+- do not keep dead code merely because it previously worked,
+- do not delete historical database/audit data as part of application cleanup,
+- do not perform an unrelated repository-wide cleanup inside a bounded feature task.
+
+Before deleting legacy code, verify that the replacement path is covered by tests and search for remaining references/callers. If old code is still required by a later, not-yet-migrated lifecycle slice, leave it temporarily and document the deferred cleanup in the relevant task or roadmap.
+
+This is an implementation/migration policy, not a separate architecture decision; create an ADR only if cleanup reveals a genuine architectural choice.
+
 ## Testing Standard
 
 Critical behavior must be tested against real PostgreSQL, especially:
