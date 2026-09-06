@@ -1,16 +1,18 @@
-# Financial Calculation Platform
+# Cost Engine Orchestration Platform
 
-A production-style backend project for orchestrating long-running, versioned financial data calculations.
+A production-style backend project for orchestrating long-running, versioned cost and financial data calculations across Airflow/ETL workflows.
 
-The platform focuses on backend concerns around financial data processing: reproducibility, concurrency correctness, versioned datasets, asynchronous execution, failure recovery, auditability, and PostgreSQL reliability.
+The platform focuses on backend orchestration concerns around cost-engine data processing: reproducibility, concurrency correctness, versioned datasets, dependency management, asynchronous execution, failure recovery, auditability, and PostgreSQL reliability.
 
 > Status: In Progress
 
+> Portfolio truth boundary: this is a new implementation inspired by prior enterprise cost-calculation orchestration experience. It does not reproduce proprietary employer code, schemas, Airflow DAGs, SQL, data, or internal system details.
+
 ## Problem
 
-Financial data workflows are rarely one synchronous request. A quarterly dataset may require multiple calculation tasks, each task may depend on published upstream datasets, external execution can fail or time out, and the final dataset may still require manual validation before downstream consumers are allowed to use it.
+Enterprise cost workflows are rarely one synchronous request. A quarterly dataset may require multiple calculation tasks, each task may depend on published upstream datasets, external Airflow/ETL execution can fail or time out, and the final dataset may still require manual validation before downstream consumers are allowed to use it.
 
-This project models those concerns explicitly instead of treating a calculation as a single API call.
+This project models those concerns explicitly instead of treating a calculation as a single API call or implementing the financial calculation engine inside the Node.js backend.
 
 ## Tech Stack
 
@@ -19,6 +21,25 @@ This project models those concerns explicitly instead of treating a calculation 
 - PostgreSQL
 - Docker / Docker Compose
 - Airflow-compatible executor boundary (implementation in progress)
+
+## Representative Cost Domains
+
+The orchestration model is designed around multiple quarterly cost/financial domains rather than a hard-coded three-step pipeline.
+
+Canonical machine identifiers currently used by the portfolio are:
+
+```text
+FAB_COST
+CAPEX
+DPR
+INSURANCE
+ONE_STD_COST
+COWOS_S
+```
+
+Human-facing labels may be rendered as `FAB COST`, `ONE STD COST`, or `COWOS-S`, while APIs and database records use the normalized identifiers above.
+
+These domains share the same orchestration identity and lifecycle model. Their calculation types, dependency definitions, and Airflow DAG mappings are configuration owned by the platform and may differ by domain.
 
 ## Architecture Baseline
 
@@ -39,7 +60,7 @@ Dataset Version
                         └── External executor / Airflow DAG Run
 ```
 
-The backend owns orchestration. It does not own the financial calculation implementation itself. Airflow may execute Python, SQL, or other data-processing tasks; this service coordinates inputs, lifecycle, identity, retries, and publication state.
+The backend owns orchestration. It does not own the financial calculation implementation itself. Airflow may execute Python, SQL, or other data-processing tasks; this service coordinates inputs, lifecycle, identity, retries, reconciliation, and publication state.
 
 ## Canonical Dataset Identity
 
@@ -49,11 +70,15 @@ All calculation domains use the same quarterly reporting coordinates:
 (domain, company_code, fiscal_year, period)
 ```
 
-Example:
+Examples:
 
 ```text
-(CAPEX, TW01, 2026, Q3)
-(DPR,   TW01, 2026, Q3)
+(FAB_COST,     TW01, 2026, Q3)
+(CAPEX,        TW01, 2026, Q3)
+(DPR,          TW01, 2026, Q3)
+(INSURANCE,    TW01, 2026, Q3)
+(ONE_STD_COST, TW01, 2026, Q3)
+(COWOS_S,      TW01, 2026, Q3)
 ```
 
 `company_code`, `fiscal_year`, and `period` are immutable business identity dimensions. `business_key` is being retired from the orchestration model.
@@ -181,7 +206,7 @@ Definition v1:
 
 Definition v2:
 - CAPEX
-- DOMAIN_X
+- INSURANCE
 ```
 
 Definitions answer **what upstream domains are required**.
@@ -189,6 +214,14 @@ Definitions answer **what upstream domains are required**.
 The dataset build snapshot answers **which concrete upstream dataset versions this dataset build uses**.
 
 Historical jobs pin the dependency-definition version used by that dataset build, so dependency configuration changes are auditable instead of overwriting history.
+
+## Airflow / ETL Boundary
+
+The Cost Engine Orchestration Platform treats Airflow as an external execution engine.
+
+A `calculation_type` maps to an `airflow_dag_id`. One logical calculation job may have multiple immutable execution attempts when a failed execution is retried, and each accepted attempt corresponds to one Airflow DAG run.
+
+The platform does not require calculation logic to be Python. Airflow DAGs may execute Python code, large SQL transformations, or other ETL mechanisms. The orchestration backend tracks identity, configuration, inputs, execution state, retries, and publication; implementation details of the data-processing DAG remain outside this service.
 
 ## Concurrency Invariants
 
