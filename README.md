@@ -298,7 +298,6 @@ The repository currently contains the earlier orchestration implementation, incl
 - application-level calculation dependencies
 - transactional job/dataset state transitions
 - concurrency experiments and partial unique indexes
-- DPR performance/materialization experiments
 - versioned raw-ingestion allocation work
 
 The accepted orchestration architecture above intentionally changes several of those assumptions. In particular:
@@ -325,22 +324,6 @@ Implementation sequence:
 7. Required failure-path and concurrency integration tests.
 
 The migration is implemented as a forward migration rather than editing previously applied migration history. `legacy_business_key` is retained temporarily as a rollback bridge; new orchestration code must not use it.
-
-## Existing Performance Lab
-
-The repository also contains a PostgreSQL performance lab built around synthetic DPR data:
-
-- 4M raw financial rows
-- 250K assets
-- quarterly partitions
-- `EXPLAIN (ANALYZE, BUFFERS)` investigations
-- partition pruning
-- sequential/bitmap scans
-- hash joins
-- aggregation spill
-- calculation-ready materialization experiments
-
-This performance work is separate from the orchestration architecture and remains useful as a data-processing/backend performance exercise.
 
 ## Non-Goals for This Milestone
 
