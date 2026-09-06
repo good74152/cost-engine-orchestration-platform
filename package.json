@@ -1,7 +1,7 @@
 {
-  "name": "financial-calculation-platform",
+  "name": "cost-engine-orchestration-platform",
   "version": "1.0.0",
-  "description": "",
+  "description": "Backend orchestration platform for versioned cost-engine datasets and Airflow/ETL execution workflows.",
   "main": "index.js",
   "scripts": {
     "dev": "tsx watch src/server.ts",
@@ -12,7 +12,13 @@
     "test:concurrency-start-job": "tsx scripts/concurrency-start-job.ts",
     "test:raw-ingestion": "tsx --test scripts/raw-ingestion.route.test.ts"
   },
-  "keywords": [],
+  "keywords": [
+    "orchestration",
+    "airflow",
+    "etl",
+    "cost-engine",
+    "postgresql"
+  ],
   "author": "",
   "license": "ISC",
   "type": "module",
