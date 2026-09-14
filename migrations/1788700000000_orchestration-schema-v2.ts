@@ -79,6 +79,18 @@ export async function up(pgm: MigrationBuilder): Promise<void> {
 
       IF EXISTS (
         SELECT 1
+        FROM dataset_versions dv
+        LEFT JOIN calculation_jobs cj
+          ON cj.output_dataset_version_id = dv.id
+        GROUP BY dv.id
+        HAVING COUNT(cj.id) <> 1
+      ) THEN
+        RAISE EXCEPTION
+          'Cannot migrate legacy dataset_versions: every dataset version must have exactly one calculation job.';
+      END IF;
+
+      IF EXISTS (
+        SELECT 1
         FROM dataset_versions
         WHERE status = 'FAILED'
       ) THEN

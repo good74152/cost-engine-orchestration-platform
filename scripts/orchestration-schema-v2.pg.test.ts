@@ -405,6 +405,71 @@ async function createDependencyDefinition(
   return id;
 }
 
+async function readPublicSchemaState(client: Client): Promise<unknown> {
+  const tables = await client.query(
+    `SELECT table_name
+     FROM information_schema.tables
+     WHERE table_schema = 'public'
+     ORDER BY table_name`,
+  );
+  const columns = await client.query(
+    `SELECT
+       table_name,
+       column_name,
+       ordinal_position,
+       data_type,
+       udt_name,
+       is_nullable,
+       column_default
+     FROM information_schema.columns
+     WHERE table_schema = 'public'
+     ORDER BY table_name, ordinal_position`,
+  );
+  const constraints = await client.query(
+    `SELECT
+       constraint_record.conrelid::regclass::text AS table_name,
+       constraint_record.conname AS constraint_name,
+       constraint_record.contype AS constraint_type,
+       pg_get_constraintdef(constraint_record.oid, TRUE) AS definition
+     FROM pg_constraint constraint_record
+     JOIN pg_namespace namespace_record
+       ON namespace_record.oid = constraint_record.connamespace
+     WHERE namespace_record.nspname = 'public'
+     ORDER BY table_name, constraint_name`,
+  );
+  const indexes = await client.query(
+    `SELECT tablename, indexname, indexdef
+     FROM pg_indexes
+     WHERE schemaname = 'public'
+     ORDER BY tablename, indexname`,
+  );
+
+  return {
+    tables: tables.rows,
+    columns: columns.rows,
+    constraints: constraints.rows,
+    indexes: indexes.rows,
+  };
+}
+
+async function readLegacyOrchestrationData(client: Client): Promise<unknown> {
+  const series = await client.query(`SELECT * FROM dataset_series ORDER BY id`);
+  const versions = await client.query(`SELECT * FROM dataset_versions ORDER BY id`);
+  const jobs = await client.query(`SELECT * FROM calculation_jobs ORDER BY id`);
+  const dependencies = await client.query(
+    `SELECT * FROM calculation_dependencies ORDER BY id`,
+  );
+  const migrations = await client.query(`SELECT * FROM pgmigrations ORDER BY id`);
+
+  return {
+    series: series.rows,
+    versions: versions.rows,
+    jobs: jobs.rows,
+    dependencies: dependencies.rows,
+    migrations: migrations.rows,
+  };
+}
+
 async function assertLegacySchemaRemains(
   client: Client,
   expectedSeriesCount: number,
@@ -880,6 +945,53 @@ test(
       });
     });
 
+    await t.test(
+      'fails a zero-job legacy dataset version atomically',
+      async () => {
+        await withTemporaryDatabase(async (temporaryDatabaseUrl) => {
+          await migrateLegacyBaseline(temporaryDatabaseUrl);
+
+          let schemaBefore: unknown;
+          let dataBefore: unknown;
+          await withClient(temporaryDatabaseUrl, async (client) => {
+            const seriesId = await createLegacySeries(client, {
+              domain: 'DPR',
+              businessKey: 'TW01:2026:Q3:orphan-version',
+              lastVersion: 1,
+            });
+            await createLegacyDatasetVersion(client, seriesId, 1, 'DRAFT');
+
+            schemaBefore = await readPublicSchemaState(client);
+            dataBefore = await readLegacyOrchestrationData(client);
+          });
+
+          await expectMigrationFailure(
+            migrateV2Up(temporaryDatabaseUrl),
+            /every dataset version must have exactly one calculation job/,
+          );
+
+          await withClient(temporaryDatabaseUrl, async (client) => {
+            assert.deepEqual(await readPublicSchemaState(client), schemaBefore);
+            assert.deepEqual(await readLegacyOrchestrationData(client), dataBefore);
+            await assertLegacySchemaRemains(client, 1);
+
+            const v2Relations = await client.query<{
+              calculation_types: string | null;
+              execution_attempts: string | null;
+            }>(
+              `SELECT
+                 to_regclass('public.calculation_types')::text
+                   AS calculation_types,
+                 to_regclass('public.execution_attempts')::text
+                   AS execution_attempts`,
+            );
+            assert.equal(v2Relations.rows[0]!.calculation_types, null);
+            assert.equal(v2Relations.rows[0]!.execution_attempts, null);
+          });
+        });
+      },
+    );
+
     await t.test('fails canonical identity collision atomically', async () => {
       await withTemporaryDatabase(async (temporaryDatabaseUrl) => {
         await migrateLegacyBaseline(temporaryDatabaseUrl);
@@ -967,7 +1079,13 @@ test(
             businessKey: 'TW01:2026:Q1:failed-history',
             lastVersion: 1,
           });
-          await createLegacyDatasetVersion(client, seriesId, 1, 'FAILED');
+          const versionId = await createLegacyDatasetVersion(
+            client,
+            seriesId,
+            1,
+            'FAILED',
+          );
+          await createLegacyJob(client, seriesId, versionId, 'FAILED');
         });
 
         await expectMigrationFailure(
