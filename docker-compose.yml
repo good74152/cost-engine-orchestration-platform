@@ -1,7 +1,7 @@
 services:
   postgres_db:
     image: postgres:18
-    container_name: financial_platform_postgres
+    container_name: test_postgres
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-admin}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-admin}
