@@ -1,12 +1,3 @@
-export class ActiveCalculationJobExistsError extends Error {
-    readonly code = 'ACTIVE_CALCULATION_JOB_EXISTS';
-
-    constructor() {
-        super('An active calculation job already exists');
-        this.name = 'ActiveCalculationJobExistsError';
-    }
-}
-
 export class CalculationJobNotFoundError extends Error {
     readonly code = 'CALCULATION_JOB_NOT_FOUND';
 
