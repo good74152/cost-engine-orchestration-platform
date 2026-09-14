@@ -1,18 +1,6 @@
 import 'dotenv/config';
 import Fastify from 'fastify';
 import { pool } from './db/pool.js';
-import {
-  failCalculationJobRoutes,
-  publishCalculationJobRoutes,
-  rejectCalculationJobRoutes,
-  startCalculationJobRoutes,
-  submitCalculationForValidationRoutes,
-} from './modules/calculation-job.route.js';
-import {
-  CalculationJobNotFoundError,
-  CalculationJobNotStartableError,
-  CalculationJobStateConflictError,
-} from './modules/calculation-job.errors.js';
 import { DatasetVersionError } from './modules/dataset-version/dataset-version.errors.js';
 import { datasetVersionRoutes } from './modules/dataset-version/dataset-version.route.js';
 import { ActiveRawIngestionBatchExistsError } from './modules/raw-ingestion/raw-ingestion.errors.js';
@@ -26,27 +14,6 @@ export async function buildApp(options: { logger?: boolean } = {}) {
   app.setErrorHandler((error, request, reply) => {
     if (error instanceof DatasetVersionError) {
       return reply.status(error.statusCode).send({
-        message: error.message,
-        code: error.code,
-      });
-    }
-
-    if (error instanceof CalculationJobNotFoundError) {
-      return reply.status(404).send({
-        message: error.message,
-        code: error.code,
-      });
-    }
-
-    if (error instanceof CalculationJobNotStartableError) {
-      return reply.status(409).send({
-        message: error.message,
-        code: error.code,
-      });
-    }
-
-    if (error instanceof CalculationJobStateConflictError) {
-      return reply.code(409).send({
         message: error.message,
         code: error.code,
       });
@@ -91,11 +58,6 @@ export async function buildApp(options: { logger?: boolean } = {}) {
   });
 
   await app.register(datasetVersionRoutes);
-  await app.register(startCalculationJobRoutes);
-  await app.register(submitCalculationForValidationRoutes);
-  await app.register(publishCalculationJobRoutes);
-  await app.register(rejectCalculationJobRoutes);
-  await app.register(failCalculationJobRoutes);
   await app.register(rawIngestionRoutes);
 
   return app;

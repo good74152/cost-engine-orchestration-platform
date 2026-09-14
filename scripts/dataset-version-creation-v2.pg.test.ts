@@ -672,8 +672,20 @@ test(
         });
       });
 
-      await t.test('does not register the superseded calculation-job creation route', async () => {
-        const response = await app!.inject({
+      await t.test('does not register superseded calculation-job mutation routes', async () => {
+        await resetOrchestrationData(applicationPool!);
+        await createCalculationType(applicationPool!, 'DPR', 'PRIMARY');
+
+        const creation = await postDatasetVersion(app!, validPayload());
+        assert.equal(creation.statusCode, 201);
+        const { datasetVersionId, calculationJobs } = creation.json() as {
+          datasetVersionId: string;
+          calculationJobs: Array<{ jobId: string }>;
+        };
+        assert.equal(calculationJobs.length, 1);
+        const jobId = calculationJobs[0]!.jobId;
+
+        const legacyCreateResponse = await app!.inject({
           method: 'POST',
           url: '/calculation-jobs',
           payload: {
@@ -682,7 +694,47 @@ test(
             dependencies: [],
           },
         });
-        assert.equal(response.statusCode, 404);
+        assert.equal(legacyCreateResponse.statusCode, 404);
+
+        for (const action of [
+          'start',
+          'submit-validation',
+          'publish',
+          'reject',
+          'fail',
+        ]) {
+          const response = await app!.inject({
+            method: 'POST',
+            url: `/calculation-jobs/${jobId}/${action}`,
+          });
+          assert.equal(response.statusCode, 404, action);
+        }
+
+        const persistedState = await applicationPool!.query<{
+          dataset_status: string;
+          job_status: string;
+          snapshot_count: number;
+          attempt_count: number;
+        }>(
+          `SELECT
+             dv.status AS dataset_status,
+             cj.status AS job_status,
+             (SELECT COUNT(*)::int FROM dataset_build_snapshots)
+               AS snapshot_count,
+             (SELECT COUNT(*)::int FROM execution_attempts)
+               AS attempt_count
+           FROM dataset_versions dv
+           JOIN calculation_jobs cj
+             ON cj.output_dataset_version_id = dv.id
+           WHERE dv.id = $1`,
+          [datasetVersionId],
+        );
+        assert.deepEqual(persistedState.rows, [{
+          dataset_status: 'DRAFT',
+          job_status: 'PENDING',
+          snapshot_count: 0,
+          attempt_count: 0,
+        }]);
       });
     } finally {
       if (app) {
