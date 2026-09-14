@@ -6,33 +6,11 @@ Architecture decisions belong in `docs/adr/`; current architecture belongs in `d
 
 ## Now
 
-### Orchestration Schema v2
-
-Status: architecture accepted, migration drafted, PostgreSQL execution verification still required.
-
-Relevant files:
-
-- `migrations/1788700000000_orchestration-schema-v2.ts`
-- `docs/ARCHITECTURE.md`
-- `docs/adr/`
-
-Required before merge:
-
-- run migration `up` against a disposable PostgreSQL database,
-- verify expected tables/constraints/indexes,
-- verify migration failure behavior for incompatible legacy data,
-- verify `down` behavior or document guarded irreversible cases,
-- run TypeScript build after application code catches up with schema changes.
-
 ### Task 002 — Dataset Version Creation v2
 
-Status: ready for implementation.
+Status: merged to `main`.
 
-Task spec:
-
-- `docs/tasks/002-dataset-version-creation-v2.md`
-
-Goal:
+Implemented baseline:
 
 ```text
 POST /dataset-versions
@@ -42,7 +20,46 @@ POST /dataset-versions
 → snapshot active calculation types into PENDING jobs
 ```
 
-Must include real PostgreSQL concurrency tests.
+This is now the creation path Task 003 builds on.
+
+### Task 003 — First Run + Immutable Dataset Build Snapshot
+
+Status: architecture accepted; bounded implementation spec ready.
+
+Task spec:
+
+- `docs/tasks/003-first-run-immutable-build-snapshot.md`
+
+Relevant decisions:
+
+- `docs/adr/0002-dataset-version-publication-unit.md`
+- `docs/adr/0003-versioned-dependencies-and-build-snapshot.md`
+- `docs/adr/0004-series-serialization-and-lock-ordering.md`
+- `docs/adr/0005-execution-attempts-and-airflow-reconciliation.md`
+- `docs/adr/0006-first-run-lock-hierarchy.md`
+
+Goal:
+
+```text
+first prepared job for DRAFT dataset
+→ freeze one dependency-definition version per job
+→ freeze one concrete upstream version per required series
+→ create exactly one immutable dataset_build_snapshot
+→ DRAFT → BUILDING
+→ selected job remains PENDING
+→ selected job gets PREPARED execution_attempt
+```
+
+Preparing later jobs in the same `BUILDING` dataset must reuse the existing snapshot and must not refresh definitions or upstream versions.
+
+Task 003 must include real PostgreSQL concurrency coverage for:
+
+- same-job concurrent first preparation,
+- different-job concurrent first preparation,
+- upstream Publish-vs-freeze ordering,
+- dependency-definition Publish-vs-freeze ordering.
+
+Task 003 does not dispatch to Airflow/FakeExecutor.
 
 ### Incremental Legacy Cleanup
 
@@ -60,29 +77,19 @@ Cleanup work belongs in the bounded task that replaces the old behavior, not in 
 
 ## Next
 
-### Task 003 — First Run and Immutable Dataset Build Snapshot
-
-Planned scope:
-
-- freeze latest published dependency-definition version for every job,
-- union direct upstream domain requirements,
-- lock upstream dataset series in deterministic order,
-- resolve latest published upstream dataset versions,
-- create exactly one immutable dataset build snapshot,
-- transition `DRAFT → BUILDING`,
-- create the selected job's `PREPARED` execution attempt,
-- cover concurrent first-Run and upstream Publish-vs-freeze races.
-
 ### Task 004 — Execution Attempt Lifecycle and FakeExecutor
 
 Planned scope:
 
+- expose the final calculation-job Run/dispatch boundary,
+- consume/reuse the durable `PREPARED` attempt created by Task 003,
 - `PREPARED → DISPATCHING → ACCEPTED`,
 - definite `DISPATCH_FAILED`,
 - ambiguous dispatch outcome recovery,
 - stable Airflow `dag_run_id`,
 - one active attempt per calculation job,
-- FakeExecutor for deterministic tests/demo.
+- FakeExecutor for deterministic tests/demo,
+- atomically record executor acceptance with job `PENDING/FAILED → RUNNING`.
 
 ### Task 005 — Executor Reconciliation
 
@@ -93,7 +100,8 @@ Planned scope:
 - executor status as source of truth,
 - atomic attempt/job terminal transitions,
 - duplicate/stale reconciliation idempotency,
-- executor-unavailable behavior.
+- executor-unavailable behavior,
+- retry after a confirmed failed execution while preserving the frozen dataset snapshot.
 
 ### Task 006 — Validation and Dataset Terminal Decisions
 
@@ -105,6 +113,16 @@ Planned scope:
 - safe `DRAFT/BUILDING → ABANDONED`,
 - Publish-vs-Reject concurrency tests,
 - active-execution guard for abandonment.
+
+### Task 007 — End-to-End Hardening and Legacy Cleanup
+
+Planned scope:
+
+- full public error-contract coverage,
+- end-to-end happy/failure/retry scenarios,
+- concurrency regression suite,
+- final removal of fully superseded legacy application code,
+- README/architecture implementation-status synchronization.
 
 ## Later
 
