@@ -1,38 +1,48 @@
-export class CalculationJobNotFoundError extends Error {
-    readonly code = 'CALCULATION_JOB_NOT_FOUND';
-
-    constructor(jobId: string) {
-        super(`Calculation job not found: ${jobId}`);
-        this.name = 'CalculationJobNotFoundError';
-    }
+export abstract class CalculationJobPreparationError extends Error {
+  protected constructor(
+    message: string,
+    readonly code: string,
+  ) {
+    super(message);
+    this.name = new.target.name;
+  }
 }
 
-export class CalculationJobNotStartableError extends Error {
-    readonly code = 'CALCULATION_JOB_NOT_STARTABLE';
+export class CalculationJobNotFoundError extends CalculationJobPreparationError {
+  constructor(jobId: string) {
+    super(`Calculation job not found: ${jobId}`, 'CALCULATION_JOB_NOT_FOUND');
+  }
+}
 
-    constructor(status: string) {
-        super(`Calculation job not start from status: ${status}`);
-        this.name = 'CalculationJobNotStartableError';
-    }
+export class DependencyDefinitionNotReadyError extends CalculationJobPreparationError {
+  constructor(calculationTypeCodes: string[]) {
+    super(
+      `Published dependency definition is not ready for: ${calculationTypeCodes.join(', ')}`,
+      'DEPENDENCY_DEFINITION_NOT_READY',
+    );
+  }
+}
+
+export class DependencyNotReadyError extends CalculationJobPreparationError {
+  constructor(requiredDomains: string[]) {
+    super(
+      `Published upstream dataset is not ready for: ${requiredDomains.join(', ')}`,
+      'DEPENDENCY_NOT_READY',
+    );
+  }
+}
+
+export class JobNotRunnableError extends CalculationJobPreparationError {
+  constructor(jobId: string) {
+    super(`Calculation job is not runnable: ${jobId}`, 'JOB_NOT_RUNNABLE');
+  }
 }
 
 export class CalculationStateInvariantError extends Error {
-    readonly code = 'CALCULATION_STATE_INVARIANT_VIOLATION';
+  readonly code = 'CALCULATION_STATE_INVARIANT_VIOLATION';
 
-    constructor(message: string) {
-        super(message);
-        this.name = 'CalculationStateInvariantError';
-    }
-}
-
-export class CalculationJobStateConflictError extends Error {
-    readonly code = 'CALCULATION_JOB_STATE_CONFLICT';
-
-    constructor(
-        currentStatus:string,
-        expectedStatus: string
-    ){
-        super(`Expected calculation job status ${expectedStatus}, but current status is ${currentStatus}`);
-        this.name = 'CalculationJobStateConflictError';
-    }
+  constructor(message: string) {
+    super(message);
+    this.name = 'CalculationStateInvariantError';
+  }
 }
