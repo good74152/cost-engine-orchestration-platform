@@ -1,21 +1,11 @@
 import type { FastifyInstance } from 'fastify';
 import { 
-    createCalculationJobService,
     startCalculationJobService,
     submitCalculationForValidationService,
     publishCalculationJobService,
     rejectCalculationJobService,
     failCalculationJobService
 } from './calculation-job.service.js';
-import { CreateCalculationJobInput } from './calculation-job.types.js';
-
-export async function calculationJobRoutes(app: FastifyInstance): Promise<void> {
-    app.post<{ Body: CreateCalculationJobInput }>('/calculation-jobs', async (request, reply) => {
-        const input = request.body;
-        const result = await createCalculationJobService(input);
-        reply.status(201).send(result);
-    });
-}
 
 export async function startCalculationJobRoutes(app: FastifyInstance): Promise<void> {
     app.post<{
