@@ -67,6 +67,7 @@ export interface LockedSelectedJob {
   outputDatasetVersionId: string;
   status: CalculationJobStatus;
   calculationTypeId: string;
+  resolvedDependencyDefinitionVersionId: string | null;
   airflowDagId: string;
 }
 
@@ -421,6 +422,7 @@ export async function lockSelectedCalculationJob(
     output_dataset_version_id: string;
     status: CalculationJobStatus;
     calculation_type_id: string;
+    resolved_dependency_definition_version_id: string | null;
     airflow_dag_id: string;
   }>(
     `SELECT
@@ -428,6 +430,7 @@ export async function lockSelectedCalculationJob(
        cj.output_dataset_version_id,
        cj.status,
        cj.calculation_type_id,
+       cj.resolved_dependency_definition_version_id,
        ct.airflow_dag_id
      FROM calculation_jobs cj
      JOIN calculation_types ct
@@ -443,6 +446,8 @@ export async function lockSelectedCalculationJob(
         outputDatasetVersionId: row.output_dataset_version_id,
         status: row.status,
         calculationTypeId: row.calculation_type_id,
+        resolvedDependencyDefinitionVersionId:
+          row.resolved_dependency_definition_version_id,
         airflowDagId: row.airflow_dag_id,
       }
     : null;

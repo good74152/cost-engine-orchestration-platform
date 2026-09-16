@@ -10,6 +10,7 @@
     "migrate": "node-pg-migrate -j ts",
     "test:dataset-version-creation-v2": "tsx --test scripts/dataset-version-creation-v2.pg.test.ts",
     "test:first-run-immutable-build-snapshot": "tsx --test scripts/first-run-immutable-build-snapshot.pg.test.ts",
+    "test:execution-attempt-dispatch-fake-executor": "tsx --test scripts/execution-attempt-dispatch-fake-executor.pg.test.ts",
     "test:orchestration-schema-v2": "tsx --test scripts/orchestration-schema-v2.pg.test.ts",
     "test:raw-ingestion": "tsx --test scripts/raw-ingestion.route.test.ts"
   },

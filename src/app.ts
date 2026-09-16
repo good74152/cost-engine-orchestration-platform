@@ -1,17 +1,32 @@
 import 'dotenv/config';
 import Fastify from 'fastify';
 import { pool } from './db/pool.js';
+import type { CalculationExecutor } from './executors/calculation-executor.js';
+import { CalculationJobError } from './modules/calculation-job.errors.js';
+import { calculationJobRoutes } from './modules/calculation-job.route.js';
 import { DatasetVersionError } from './modules/dataset-version/dataset-version.errors.js';
 import { datasetVersionRoutes } from './modules/dataset-version/dataset-version.route.js';
 import { ActiveRawIngestionBatchExistsError } from './modules/raw-ingestion/raw-ingestion.errors.js';
 import { rawIngestionRoutes } from './modules/raw-ingestion/raw-ingestion.route.js';
 
-export async function buildApp(options: { logger?: boolean } = {}) {
+export interface BuildAppOptions {
+  logger?: boolean;
+  calculationExecutor?: CalculationExecutor;
+}
+
+export async function buildApp(options: BuildAppOptions = {}) {
   const app = Fastify({
     logger: options.logger ?? true,
   });
 
   app.setErrorHandler((error, request, reply) => {
+    if (error instanceof CalculationJobError) {
+      return reply.status(error.statusCode).send({
+        message: error.message,
+        code: error.code,
+      });
+    }
+
     if (error instanceof DatasetVersionError) {
       return reply.status(error.statusCode).send({
         message: error.message,
@@ -59,6 +74,9 @@ export async function buildApp(options: { logger?: boolean } = {}) {
 
   await app.register(datasetVersionRoutes);
   await app.register(rawIngestionRoutes);
+  if (options.calculationExecutor) {
+    await app.register(calculationJobRoutes(options.calculationExecutor));
+  }
 
   return app;
 }

@@ -24,3 +24,20 @@ export interface PreparedCalculationRun {
   airflowDagId: string;
   airflowDagRunId: string;
 }
+
+export type DispatchAttemptStatus = 'DISPATCHING' | 'ACCEPTED';
+export type RunDispatchOutcome = 'ACCEPTED' | 'ALREADY_EXISTS' | 'UNKNOWN';
+
+export interface CalculationJobRunResult {
+  datasetVersionId: string;
+  datasetStatus: 'BUILDING';
+  datasetBuildSnapshotId: string;
+  jobId: string;
+  jobStatus: CalculationJobStatus;
+  executionAttemptId: string;
+  attemptNumber: number;
+  attemptStatus: DispatchAttemptStatus;
+  airflowDagId: string;
+  airflowDagRunId: string;
+  dispatchOutcome: RunDispatchOutcome;
+}
