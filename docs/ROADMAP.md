@@ -20,28 +20,14 @@ POST /dataset-versions
 → snapshot active calculation types into PENDING jobs
 ```
 
-This is now the creation path Task 003 builds on.
-
 ### Task 003 — First Run + Immutable Dataset Build Snapshot
 
-Status: architecture accepted; bounded implementation spec ready.
+Status: merged to `main`.
 
-Task spec:
-
-- `docs/tasks/003-first-run-immutable-build-snapshot.md`
-
-Relevant decisions:
-
-- `docs/adr/0002-dataset-version-publication-unit.md`
-- `docs/adr/0003-versioned-dependencies-and-build-snapshot.md`
-- `docs/adr/0004-series-serialization-and-lock-ordering.md`
-- `docs/adr/0005-execution-attempts-and-airflow-reconciliation.md`
-- `docs/adr/0006-first-run-lock-hierarchy.md`
-
-Goal:
+Implemented baseline:
 
 ```text
-first prepared job for DRAFT dataset
+first preparation for DRAFT dataset
 → freeze one dependency-definition version per job
 → freeze one concrete upstream version per required series
 → create exactly one immutable dataset_build_snapshot
@@ -50,16 +36,44 @@ first prepared job for DRAFT dataset
 → selected job gets PREPARED execution_attempt
 ```
 
-Preparing later jobs in the same `BUILDING` dataset must reuse the existing snapshot and must not refresh definitions or upstream versions.
+Preparing later jobs in the same `BUILDING` dataset reuses the existing snapshot and does not refresh definitions or upstream versions.
 
-Task 003 must include real PostgreSQL concurrency coverage for:
+### Task 004 — Execution Attempt Dispatch + FakeExecutor
 
-- same-job concurrent first preparation,
-- different-job concurrent first preparation,
-- upstream Publish-vs-freeze ordering,
-- dependency-definition Publish-vs-freeze ordering.
+Status: architecture accepted; bounded implementation spec ready.
 
-Task 003 does not dispatch to Airflow/FakeExecutor.
+Task spec:
+
+- `docs/tasks/004-execution-attempt-dispatch-fake-executor.md`
+
+Relevant decisions:
+
+- `docs/adr/0003-versioned-dependencies-and-build-snapshot.md`
+- `docs/adr/0005-execution-attempts-and-airflow-reconciliation.md`
+- `docs/adr/0006-first-run-lock-hierarchy.md`
+
+Goal:
+
+```text
+POST /calculation-jobs/:jobId/run
+→ prepare/reuse durable execution_attempt
+→ PREPARED → DISPATCHING
+→ commit
+→ dispatch through FakeExecutor outside DB transaction
+→ ACCEPTED/ALREADY_EXISTS:
+     attempt → ACCEPTED
+     job PENDING/FAILED → RUNNING
+→ REJECTED:
+     attempt → DISPATCH_FAILED
+     job state unchanged
+→ UNKNOWN:
+     attempt remains DISPATCHING
+     same stable run identity is reused
+```
+
+Task 004 also owns retry-attempt preparation for a `FAILED` job while preserving the immutable dataset build snapshot.
+
+Task 004 does not reconcile executor terminal `SUCCESS/FAILED` state.
 
 ### Incremental Legacy Cleanup
 
@@ -77,20 +91,6 @@ Cleanup work belongs in the bounded task that replaces the old behavior, not in 
 
 ## Next
 
-### Task 004 — Execution Attempt Lifecycle and FakeExecutor
-
-Planned scope:
-
-- expose the final calculation-job Run/dispatch boundary,
-- consume/reuse the durable `PREPARED` attempt created by Task 003,
-- `PREPARED → DISPATCHING → ACCEPTED`,
-- definite `DISPATCH_FAILED`,
-- ambiguous dispatch outcome recovery,
-- stable Airflow `dag_run_id`,
-- one active attempt per calculation job,
-- FakeExecutor for deterministic tests/demo,
-- atomically record executor acceptance with job `PENDING/FAILED → RUNNING`.
-
 ### Task 005 — Executor Reconciliation
 
 Planned scope:
@@ -100,8 +100,16 @@ Planned scope:
 - executor status as source of truth,
 - atomic attempt/job terminal transitions,
 - duplicate/stale reconciliation idempotency,
-- executor-unavailable behavior,
-- retry after a confirmed failed execution while preserving the frozen dataset snapshot.
+- executor-unavailable behavior.
+
+Task 004 owns Run/Retry attempt creation; Task 005 will provide the natural path that turns an accepted execution failure into:
+
+```text
+attempt = FAILED
+job = FAILED
+```
+
+which can then be retried through the existing Task-004 Run endpoint.
 
 ### Task 006 — Validation and Dataset Terminal Decisions
 
