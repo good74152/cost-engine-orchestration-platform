@@ -318,6 +318,17 @@ Always determine the lock set, sort it, then acquire locks. Do not lock dependen
 
 Cross-lock-class ordering for First Run is defined by ADR-0006 and must not be inverted.
 
+### Execution-State Lock Ordering
+
+When one transaction mutates both logical job state and one execution attempt, acquire locks in:
+
+```text
+calculation_job
+→ execution_attempt
+```
+
+Task-004 dispatch-result recording and Task-005 reconciliation must use the same order. Callback paths that start from external attempt identity first resolve the owning job, then acquire mutation locks in this canonical order.
+
 ### Constraints as Backstops
 
 Important invariants are also protected by database constraints, including:
@@ -371,9 +382,13 @@ Airflow callbacks are reconciliation triggers, not authoritative success/failure
 
 The reconciliation service queries executor state using stored execution identity. Callback-triggered, manual, and future periodic reconciliation share the same state-mapping path.
 
-Executor availability failures do not convert a running financial calculation into `FAILED`.
+Executor lookup occurs outside PostgreSQL transactions. After lookup, local job/attempt state is locked and revalidated before any mutation.
 
-Only confirmed executor terminal state produces atomic terminal attempt/job transitions.
+Executor availability or not-found responses do not convert a running financial calculation into `FAILED` and do not convert ambiguous `DISPATCHING` into `DISPATCH_FAILED`.
+
+A `DISPATCHING` attempt may be recovered directly from executor truth: external RUNNING confirms local `ACCEPTED + RUNNING`; external terminal state may converge directly to local terminal state using the same attempt identity.
+
+Only confirmed executor terminal state produces atomic terminal attempt/job transitions. Stale callbacks for older terminal attempts must not overwrite a newer attempt's logical job state, and contradictory terminal observations are treated as reconciliation anomalies rather than history rewrites.
 
 ## 13. Validation and Publication
 
@@ -418,6 +433,8 @@ DATASET_NOT_READY_FOR_VALIDATION
 DATASET_HAS_ACTIVE_EXECUTION
 STATE_CONFLICT
 EXECUTOR_DISPATCH_FAILED
+EXECUTION_ATTEMPT_NOT_FOUND
+EXECUTION_NOT_RECONCILABLE
 EXECUTOR_STATUS_UNAVAILABLE
 ```
 
@@ -444,17 +461,17 @@ CalculationExecutor
 ```text
 1. Schema/migration and persistence invariants                         ✅
 2. Dataset version creation + calculation-type job snapshotting       ✅
-3. First Run + immutable build snapshot                               NOW
-4. Execution attempts + FakeExecutor                                  NEXT
-5. Reconciliation
-6. Validation / Publish / Reject / Abandon
+3. First Run + immutable build snapshot                               ✅
+4. Execution attempts + FakeExecutor                                  ✅
+5. Reconciliation                                                     NOW
+6. Validation / Publish / Reject / Abandon                            NEXT
 7. Full failure-path and concurrency acceptance suite
 ```
 
 The active bounded task is:
 
 ```text
-docs/tasks/003-first-run-immutable-build-snapshot.md
+docs/tasks/005-executor-reconciliation.md
 ```
 
 ## 17. Decision Records
