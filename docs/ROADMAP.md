@@ -40,19 +40,9 @@ Preparing later jobs in the same `BUILDING` dataset reuses the existing snapshot
 
 ### Task 004 — Execution Attempt Dispatch + FakeExecutor
 
-Status: architecture accepted; bounded implementation spec ready.
+Status: merged to `main`.
 
-Task spec:
-
-- `docs/tasks/004-execution-attempt-dispatch-fake-executor.md`
-
-Relevant decisions:
-
-- `docs/adr/0003-versioned-dependencies-and-build-snapshot.md`
-- `docs/adr/0005-execution-attempts-and-airflow-reconciliation.md`
-- `docs/adr/0006-first-run-lock-hierarchy.md`
-
-Goal:
+Implemented baseline:
 
 ```text
 POST /calculation-jobs/:jobId/run
@@ -73,7 +63,37 @@ POST /calculation-jobs/:jobId/run
 
 Task 004 also owns retry-attempt preparation for a `FAILED` job while preserving the immutable dataset build snapshot.
 
-Task 004 does not reconcile executor terminal `SUCCESS/FAILED` state.
+### Task 005 — Executor Reconciliation
+
+Status: architecture accepted; bounded implementation spec ready.
+
+Task spec:
+
+- `docs/tasks/005-executor-reconciliation.md`
+
+Relevant decision:
+
+- `docs/adr/0005-execution-attempts-and-airflow-reconciliation.md`
+
+Goal:
+
+```text
+manual Check Status / callback signal
+→ resolve exact durable execution_attempt
+→ executor status lookup outside DB transaction
+→ RUNNING:
+     recover/keep ACCEPTED + RUNNING
+→ SUCCEEDED:
+     attempt + job atomically SUCCEEDED
+→ FAILED:
+     attempt + job atomically FAILED
+→ NOT_FOUND/UNAVAILABLE:
+     preserve local state
+```
+
+Task 005 must also protect against stale callbacks from older attempts and terminal-state contradictions.
+
+Task 005 does not implement dataset validation/publication decisions or real Airflow integration.
 
 ### Incremental Legacy Cleanup
 
@@ -90,26 +110,6 @@ Rules:
 Cleanup work belongs in the bounded task that replaces the old behavior, not in a standalone architecture ADR unless a new architectural trade-off is discovered.
 
 ## Next
-
-### Task 005 — Executor Reconciliation
-
-Planned scope:
-
-- manual Check Status,
-- callback-triggered reconciliation,
-- executor status as source of truth,
-- atomic attempt/job terminal transitions,
-- duplicate/stale reconciliation idempotency,
-- executor-unavailable behavior.
-
-Task 004 owns Run/Retry attempt creation; Task 005 will provide the natural path that turns an accepted execution failure into:
-
-```text
-attempt = FAILED
-job = FAILED
-```
-
-which can then be retried through the existing Task-004 Run endpoint.
 
 ### Task 006 — Validation and Dataset Terminal Decisions
 
