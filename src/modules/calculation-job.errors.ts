@@ -2,7 +2,7 @@ export abstract class CalculationJobError extends Error {
   protected constructor(
     message: string,
     readonly code: string,
-    readonly statusCode: 404 | 409 | 502,
+    readonly statusCode: 404 | 409 | 502 | 503,
   ) {
     super(message);
     this.name = new.target.name;
@@ -49,6 +49,46 @@ export class ExecutorDispatchFailedError extends CalculationJobError {
       `Executor rejected dispatch for calculation job: ${jobId}`,
       'EXECUTOR_DISPATCH_FAILED',
       502,
+    );
+  }
+}
+
+export class ExecutionAttemptNotFoundError extends CalculationJobError {
+  constructor(identity: string) {
+    super(
+      `Execution attempt not found: ${identity}`,
+      'EXECUTION_ATTEMPT_NOT_FOUND',
+      404,
+    );
+  }
+}
+
+export class ExecutionNotReconcilableError extends CalculationJobError {
+  constructor(jobId: string) {
+    super(
+      `Calculation job has no reconcilable execution attempt: ${jobId}`,
+      'EXECUTION_NOT_RECONCILABLE',
+      409,
+    );
+  }
+}
+
+export class ExecutorStatusUnavailableError extends CalculationJobError {
+  constructor() {
+    super(
+      'Executor status is currently unavailable',
+      'EXECUTOR_STATUS_UNAVAILABLE',
+      503,
+    );
+  }
+}
+
+export class FakeExecutionNotFoundError extends CalculationJobError {
+  constructor(airflowDagRunId: string) {
+    super(
+      `Fake external execution not found: ${airflowDagRunId}`,
+      'FAKE_EXECUTION_NOT_FOUND',
+      404,
     );
   }
 }

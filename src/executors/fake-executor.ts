@@ -2,6 +2,8 @@ import type {
   CalculationExecutor,
   DispatchCalculationCommand,
   DispatchResult,
+  ExecutionIdentity,
+  ExecutorExecutionStatus,
 } from './calculation-executor.js';
 
 export type FakeDispatchBehavior =
@@ -14,23 +16,27 @@ export interface FakeExternalExecution {
   airflowDagId: string;
   airflowDagRunId: string;
   command: DispatchCalculationCommand;
-  state: 'RUNNING';
+  state: FakeExecutionState;
 }
+
+export type FakeExecutionState = 'RUNNING' | 'SUCCEEDED' | 'FAILED';
 
 export interface FakeExecutorOptions {
   defaultBehavior?: FakeDispatchBehavior;
   scriptedBehaviors?: FakeDispatchBehavior[];
 }
 
-function executionKey(command: DispatchCalculationCommand): string {
-  return `${command.airflowDagId}\u0000${command.airflowDagRunId}`;
+function executionKey(identity: ExecutionIdentity): string {
+  return `${identity.airflowDagId}\u0000${identity.airflowDagRunId}`;
 }
 
 export class FakeExecutor implements CalculationExecutor {
   private readonly externalExecutions = new Map<string, FakeExternalExecution>();
   private readonly dispatchHistory: DispatchCalculationCommand[] = [];
+  private readonly statusLookupHistory: ExecutionIdentity[] = [];
   private readonly scriptedBehaviors: FakeDispatchBehavior[];
   private defaultBehavior: FakeDispatchBehavior;
+  private statusLookupUnavailableMessage: string | null = null;
 
   constructor(options: FakeExecutorOptions = {}) {
     this.defaultBehavior = options.defaultBehavior ?? 'ACCEPT';
@@ -51,6 +57,44 @@ export class FakeExecutor implements CalculationExecutor {
 
   getExternalExecutions(): readonly FakeExternalExecution[] {
     return [...this.externalExecutions.values()];
+  }
+
+  getStatusLookupHistory(): readonly ExecutionIdentity[] {
+    return this.statusLookupHistory;
+  }
+
+  setStatusLookupUnavailable(message: string): void {
+    this.statusLookupUnavailableMessage = message;
+  }
+
+  clearStatusLookupUnavailable(): void {
+    this.statusLookupUnavailableMessage = null;
+  }
+
+  setExecutionState(
+    identity: ExecutionIdentity,
+    state: FakeExecutionState,
+  ): boolean {
+    const execution = this.externalExecutions.get(executionKey(identity));
+    if (!execution) {
+      return false;
+    }
+    execution.state = state;
+    return true;
+  }
+
+  setExecutionStateByDagRunId(
+    airflowDagRunId: string,
+    state: FakeExecutionState,
+  ): FakeExternalExecution | null {
+    const matches = [...this.externalExecutions.values()].filter(
+      (execution) => execution.airflowDagRunId === airflowDagRunId,
+    );
+    if (matches.length !== 1) {
+      return null;
+    }
+    matches[0]!.state = state;
+    return matches[0]!;
   }
 
   async dispatch(command: DispatchCalculationCommand): Promise<DispatchResult> {
@@ -88,5 +132,25 @@ export class FakeExecutor implements CalculationExecutor {
       };
     }
     return { kind: 'ACCEPTED' };
+  }
+
+  async getExecutionStatus(
+    identity: ExecutionIdentity,
+  ): Promise<ExecutorExecutionStatus> {
+    this.statusLookupHistory.push({ ...identity });
+    if (this.statusLookupUnavailableMessage !== null) {
+      return {
+        kind: 'UNAVAILABLE',
+        message: this.statusLookupUnavailableMessage,
+      };
+    }
+    const execution = this.externalExecutions.get(executionKey(identity));
+    if (!execution) {
+      return { kind: 'NOT_FOUND' };
+    }
+    if (execution.state === 'FAILED') {
+      return { kind: 'FAILED' };
+    }
+    return { kind: execution.state };
   }
 }
