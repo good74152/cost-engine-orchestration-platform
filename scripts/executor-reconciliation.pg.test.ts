@@ -282,6 +282,34 @@ class BlockingStatusExecutor implements CalculationExecutor {
   }
 }
 
+class StaleRunningStatusExecutor extends FakeExecutor {
+  private firstLookup = true;
+  private enter!: () => void;
+  private release!: () => void;
+  readonly entered = new Promise<void>((resolve) => {
+    this.enter = resolve;
+  });
+  private readonly released = new Promise<void>((resolve) => {
+    this.release = resolve;
+  });
+
+  override async getExecutionStatus(identity: ExecutionIdentity): Promise<ExecutorExecutionStatus> {
+    if (!this.firstLookup) {
+      return super.getExecutionStatus(identity);
+    }
+    this.firstLookup = false;
+    const observation = await super.getExecutionStatus(identity);
+    assert.equal(observation.kind, 'RUNNING');
+    this.enter();
+    await this.released;
+    return observation;
+  }
+
+  releaseRunningObservation(): void {
+    this.release();
+  }
+}
+
 test(
   'executor reconciliation PostgreSQL integration and concurrency',
   { concurrency: false },
@@ -482,6 +510,80 @@ test(
             assert.equal(second.statusCode, 200);
             assert.equal(second.json().attemptStatus, terminal);
             assert.deepEqual(await readLocalState(pool, scenario), afterFirst);
+          });
+        }
+      });
+
+      for (const initialStatus of ['ACCEPTED', 'DISPATCHING'] as const) {
+        for (const terminalStatus of ['SUCCEEDED', 'FAILED'] as const) {
+          await t.test(`stale RUNNING observation from ${initialStatus} returns durable ${terminalStatus}`, async () => {
+            await resetOrchestrationData(pool);
+            const scenario = await createScenario(pool, createDatasetVersion);
+            const executor = new StaleRunningStatusExecutor({
+              defaultBehavior: initialStatus === 'ACCEPTED' ? 'ACCEPT' : 'ACCEPT_THEN_UNKNOWN',
+            });
+            await withApp(buildApp, executor, async (app) => {
+              const run = await postRun(app, scenario.jobId);
+              assert.equal(run.statusCode, initialStatus === 'ACCEPTED' ? 200 : 202);
+              const initialState = await readLocalState(pool, scenario);
+              assert.equal(initialState.attempts[0]!.status, initialStatus);
+              assert.equal(initialState.jobStatus, initialStatus === 'ACCEPTED' ? 'RUNNING' : 'PENDING');
+              const attempt = initialState.attempts[0]!;
+
+              const requestA = postReconcile(app, scenario.jobId);
+              try {
+                await executor.entered;
+                assert.equal(executor.setExecutionState(identityOf(attempt), terminalStatus), true);
+                const responseB = await postReconcile(app, scenario.jobId);
+                assert.equal(responseB.statusCode, 200);
+                assert.equal(responseB.json().executionAttemptId, attempt.id);
+                assert.equal(responseB.json().attemptStatus, terminalStatus);
+                assert.equal(responseB.json().jobStatus, terminalStatus);
+
+                // A is still inside executor lookup; B has committed before A can
+                // enter Phase B. Preserve this state, including its timestamps.
+                const committedState = await readLocalState(pool, scenario);
+                assert.equal(committedState.attempts.length, 1);
+                assert.equal(committedState.attempts[0]!.status, terminalStatus);
+                assert.equal(committedState.jobStatus, terminalStatus);
+                assert.equal(committedState.datasetStatus, 'BUILDING');
+                assert.equal(committedState.snapshotId, initialState.snapshotId);
+
+                executor.releaseRunningObservation();
+                const responseA = await requestA;
+                assert.equal(responseA.statusCode, 200);
+                assert.equal(responseA.json().executorStatus, terminalStatus);
+                assert.deepEqual(responseA.json(), responseB.json());
+                assert.deepEqual(await readLocalState(pool, scenario), committedState);
+                assert.equal(executor.getStatusLookupHistory().length, 2);
+                assert.deepEqual(executor.getStatusLookupHistory(), [identityOf(attempt), identityOf(attempt)]);
+                assert.equal(executor.getDispatchHistory().length, 1);
+                assert.equal(executor.getExternalExecutions().length, 1);
+              } finally {
+                executor.releaseRunningObservation();
+                await requestA;
+              }
+            });
+          });
+        }
+      }
+
+      await t.test('Phase A already terminal plus executor RUNNING remains an internal anomaly', async () => {
+        for (const terminalStatus of ['SUCCEEDED', 'FAILED'] as const) {
+          await resetOrchestrationData(pool);
+          const scenario = await createScenario(pool, createDatasetVersion);
+          const fake = new FakeExecutor();
+          await createAcceptedRun(buildApp, fake, scenario);
+          const attempt = (await readLocalState(pool, scenario)).attempts[0]!;
+          assert.equal(fake.setExecutionState(identityOf(attempt), terminalStatus), true);
+          await withApp(buildApp, fake, async (app) => {
+            assert.equal((await postReconcile(app, scenario.jobId)).statusCode, 200);
+            const terminalState = await readLocalState(pool, scenario);
+            assert.equal(fake.setExecutionState(identityOf(attempt), 'RUNNING'), true);
+            const response = await postReconcile(app, scenario.jobId);
+            assert.equal(response.statusCode, 500);
+            assert.equal(response.json().code, 'INTERNAL_SERVER_ERROR');
+            assert.deepEqual(await readLocalState(pool, scenario), terminalState);
           });
         }
       });

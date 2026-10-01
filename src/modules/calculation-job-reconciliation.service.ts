@@ -151,7 +151,14 @@ async function applyReconciliation(
     );
 
     if (isTerminalAttemptStatus(attempt.status)) {
-      if (executorStatus !== attempt.status) {
+      // A non-terminal Phase A can be overtaken by another reconciliation while
+      // executor lookup is in flight. Its RUNNING observation is then stale.
+      const isStaleRunningObservation = executorStatus === 'RUNNING'
+        && (
+          phaseAContext.attemptStatus === 'DISPATCHING'
+          || phaseAContext.attemptStatus === 'ACCEPTED'
+        );
+      if (executorStatus !== attempt.status && !isStaleRunningObservation) {
         invariant(
           `Terminal reconciliation contradiction: ${reconciliationDiagnostic(
             phaseAContext,
@@ -173,7 +180,7 @@ async function applyReconciliation(
         context: phaseAContext,
         jobStatus: job.jobStatus,
         attemptStatus: attempt.status,
-        executorStatus,
+        executorStatus: attempt.status,
       });
     }
 
