@@ -65,7 +65,7 @@ Task 004 also owns retry-attempt preparation for a `FAILED` job while preserving
 
 ### Task 005 — Executor Reconciliation
 
-Status: architecture accepted; bounded implementation spec ready.
+Status: implementation/code review accepted after stale-observation fix; merge to `main` still required before Task 006 implementation begins.
 
 Task spec:
 
@@ -113,14 +113,36 @@ Cleanup work belongs in the bounded task that replaces the old behavior, not in 
 
 ### Task 006 — Validation and Dataset Terminal Decisions
 
-Planned scope:
+Status: architecture accepted; ADR and bounded implementation spec ready. Implementation is blocked until Task 005 is merged to `main`.
 
-- Submit Validation only when all required jobs are `SUCCEEDED`,
-- `VALIDATING → PUBLISHED`,
-- `VALIDATING → REJECTED`,
-- safe `DRAFT/BUILDING → ABANDONED`,
-- Publish-vs-Reject concurrency tests,
-- active-execution guard for abandonment.
+Task spec:
+
+- `docs/tasks/006-validation-and-dataset-terminal-decisions.md`
+
+Relevant decision:
+
+- `docs/adr/0007-dataset-terminal-decisions-and-publication-serialization.md`
+
+Goal:
+
+```text
+BUILDING + all jobs SUCCEEDED
+→ explicit VALIDATING
+
+VALIDATING → PUBLISHED / REJECTED
+
+DRAFT / safe BUILDING
+→ ABANDONED
+```
+
+Key correctness boundaries:
+
+- Submit Validation locks dataset_version then all jobs before checking readiness.
+- Publish/Reject/Abandon serialize through dataset_series → dataset_version.
+- PREPARED/DISPATCHING/ACCEPTED attempts block abandonment.
+- same-target repeated lifecycle commands are idempotent 200.
+- no executor cancellation is introduced.
+- Task-005 terminal reconciliation remains idempotent after dataset lifecycle advancement.
 
 ### Task 007 — End-to-End Hardening and Legacy Cleanup
 
