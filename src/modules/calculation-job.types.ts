@@ -41,3 +41,26 @@ export interface CalculationJobRunResult {
   airflowDagRunId: string;
   dispatchOutcome: RunDispatchOutcome;
 }
+
+export type ReconciliationAttemptStatus =
+  | 'ACCEPTED'
+  | 'SUCCEEDED'
+  | 'FAILED';
+
+export type ReconciliationExecutorStatus =
+  | 'RUNNING'
+  | 'SUCCEEDED'
+  | 'FAILED';
+
+export interface CalculationJobReconciliationResult {
+  datasetVersionId: string;
+  datasetStatus: 'BUILDING';
+  jobId: string;
+  jobStatus: CalculationJobStatus;
+  executionAttemptId: string;
+  attemptNumber: number;
+  attemptStatus: ReconciliationAttemptStatus;
+  airflowDagId: string;
+  airflowDagRunId: string;
+  executorStatus: ReconciliationExecutorStatus;
+}

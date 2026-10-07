@@ -2,16 +2,20 @@ import 'dotenv/config';
 import Fastify from 'fastify';
 import { pool } from './db/pool.js';
 import type { CalculationExecutor } from './executors/calculation-executor.js';
+import { FakeExecutor } from './executors/fake-executor.js';
 import { CalculationJobError } from './modules/calculation-job.errors.js';
 import { calculationJobRoutes } from './modules/calculation-job.route.js';
 import { DatasetVersionError } from './modules/dataset-version/dataset-version.errors.js';
 import { datasetVersionRoutes } from './modules/dataset-version/dataset-version.route.js';
+import { executorCallbackRoutes } from './modules/executor-callback.route.js';
+import { fakeExecutorControlRoutes } from './modules/fake-executor-control.route.js';
 import { ActiveRawIngestionBatchExistsError } from './modules/raw-ingestion/raw-ingestion.errors.js';
 import { rawIngestionRoutes } from './modules/raw-ingestion/raw-ingestion.route.js';
 
 export interface BuildAppOptions {
   logger?: boolean;
   calculationExecutor?: CalculationExecutor;
+  nodeEnvironment?: string;
 }
 
 export async function buildApp(options: BuildAppOptions = {}) {
@@ -76,6 +80,14 @@ export async function buildApp(options: BuildAppOptions = {}) {
   await app.register(rawIngestionRoutes);
   if (options.calculationExecutor) {
     await app.register(calculationJobRoutes(options.calculationExecutor));
+    await app.register(executorCallbackRoutes(options.calculationExecutor));
+    const nodeEnvironment = options.nodeEnvironment ?? process.env.NODE_ENV;
+    if (
+      options.calculationExecutor instanceof FakeExecutor
+      && nodeEnvironment?.toLowerCase() !== 'production'
+    ) {
+      await app.register(fakeExecutorControlRoutes(options.calculationExecutor));
+    }
   }
 
   return app;

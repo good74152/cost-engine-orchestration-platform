@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import type { CalculationExecutor } from '../executors/calculation-executor.js';
+import { reconcileCalculationJobService } from './calculation-job-reconciliation.service.js';
 import { runCalculationJobService } from './calculation-job-run.service.js';
 
 export function calculationJobRoutes(executor: CalculationExecutor) {
@@ -15,6 +16,17 @@ export function calculationJobRoutes(executor: CalculationExecutor) {
         );
         return reply.status(result.attemptStatus === 'DISPATCHING' ? 202 : 200)
           .send(result);
+      },
+    );
+
+    app.post<{ Params: { jobId: string } }>(
+      '/calculation-jobs/:jobId/reconcile',
+      async (request, reply) => {
+        const result = await reconcileCalculationJobService(
+          request.params.jobId,
+          executor,
+        );
+        return reply.status(200).send(result);
       },
     );
   };

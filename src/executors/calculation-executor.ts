@@ -28,6 +28,21 @@ export type DispatchResult =
   | { kind: 'REJECTED'; message: string }
   | { kind: 'UNKNOWN'; message: string };
 
+export interface ExecutionIdentity {
+  airflowDagId: string;
+  airflowDagRunId: string;
+}
+
+export type ExecutorExecutionStatus =
+  | { kind: 'RUNNING' }
+  | { kind: 'SUCCEEDED' }
+  | { kind: 'FAILED'; message?: string }
+  | { kind: 'NOT_FOUND' }
+  | { kind: 'UNAVAILABLE'; message: string };
+
 export interface CalculationExecutor {
   dispatch(command: DispatchCalculationCommand): Promise<DispatchResult>;
+  getExecutionStatus(
+    identity: ExecutionIdentity,
+  ): Promise<ExecutorExecutionStatus>;
 }
