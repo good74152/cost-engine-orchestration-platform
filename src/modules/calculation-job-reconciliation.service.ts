@@ -75,9 +75,12 @@ function resultFromDurableState(params: {
   attemptStatus: ReconciliationAttemptStatus;
   executorStatus: ReconciliationExecutorStatus;
 }): CalculationJobReconciliationResult {
+  if (params.context.datasetStatus === 'DRAFT') {
+    invariant(`Reconciled attempt belongs to DRAFT dataset ${params.context.datasetVersionId}`);
+  }
   return {
     datasetVersionId: params.context.datasetVersionId,
-    datasetStatus: 'BUILDING',
+    datasetStatus: params.context.datasetStatus,
     jobId: params.context.jobId,
     jobStatus: params.jobStatus,
     executionAttemptId: params.context.executionAttemptId,
@@ -134,15 +137,10 @@ async function applyReconciliation(
         )}`,
       );
     }
-    if (job.datasetStatus !== 'BUILDING') {
-      invariant(
-        `Reconciliation attempted outside BUILDING: ${reconciliationDiagnostic(
-          phaseAContext,
-          attempt.status,
-          executorStatus,
-        )}`,
-      );
-    }
+    // Reload after acquiring the job/attempt locks: a waiting SELECT with a
+    // joined dataset can otherwise retain its pre-wait lifecycle observation.
+    const currentContext = await loadReconciliationAttemptContext(client, attempt.id);
+    if (!currentContext) invariant(`Locked attempt disappeared: ${attempt.id}`);
 
     const newerAttemptExists = await hasNewerExecutionAttempt(
       client,
@@ -151,6 +149,9 @@ async function applyReconciliation(
     );
 
     if (isTerminalAttemptStatus(attempt.status)) {
+      if (currentContext.datasetStatus === 'DRAFT') {
+        invariant(`Terminal attempt ${attempt.id} belongs to DRAFT dataset ${job.datasetVersionId}`);
+      }
       // A non-terminal Phase A can be overtaken by another reconciliation while
       // executor lookup is in flight. Its RUNNING observation is then stale.
       const isStaleRunningObservation = executorStatus === 'RUNNING'
@@ -177,11 +178,21 @@ async function applyReconciliation(
         );
       }
       return resultFromDurableState({
-        context: phaseAContext,
+        context: currentContext,
         jobStatus: job.jobStatus,
         attemptStatus: attempt.status,
         executorStatus: attempt.status,
       });
+    }
+
+    if (currentContext.datasetStatus !== 'BUILDING') {
+      invariant(
+        `Reconciliation attempted outside BUILDING: ${reconciliationDiagnostic(
+          currentContext,
+          attempt.status,
+          executorStatus,
+        )}`,
+      );
     }
 
     if (newerAttemptExists) {
@@ -214,7 +225,7 @@ async function applyReconciliation(
           invariant(`Could not atomically recover DISPATCHING attempt ${attempt.id}`);
         }
         return resultFromDurableState({
-          context: phaseAContext,
+          context: currentContext,
           jobStatus: 'RUNNING',
           attemptStatus: 'ACCEPTED',
           executorStatus,
@@ -235,7 +246,7 @@ async function applyReconciliation(
         invariant(`Could not atomically terminalize DISPATCHING attempt ${attempt.id}`);
       }
       return resultFromDurableState({
-        context: phaseAContext,
+        context: currentContext,
         jobStatus: executorStatus,
         attemptStatus: executorStatus,
         executorStatus,
@@ -254,7 +265,7 @@ async function applyReconciliation(
       }
       if (executorStatus === 'RUNNING') {
         return resultFromDurableState({
-          context: phaseAContext,
+          context: currentContext,
           jobStatus: 'RUNNING',
           attemptStatus: 'ACCEPTED',
           executorStatus,
@@ -275,7 +286,7 @@ async function applyReconciliation(
         invariant(`Could not atomically terminalize ACCEPTED attempt ${attempt.id}`);
       }
       return resultFromDurableState({
-        context: phaseAContext,
+        context: currentContext,
         jobStatus: executorStatus,
         attemptStatus: executorStatus,
         executorStatus,
@@ -322,7 +333,10 @@ export async function reconcileExecutionAttemptService(
   if (!isExecutorBackedAttemptStatus(context.attemptStatus)) {
     throw new ExecutionNotReconcilableError(context.jobId);
   }
-  if (context.datasetStatus !== 'BUILDING') {
+  if (
+    context.datasetStatus !== 'BUILDING'
+    && (!isTerminalAttemptStatus(context.attemptStatus) || context.datasetStatus === 'DRAFT')
+  ) {
     invariant(
       `Execution attempt is outside BUILDING dataset: ${reconciliationDiagnostic(
         context,

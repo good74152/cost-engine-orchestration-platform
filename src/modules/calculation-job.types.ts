@@ -54,7 +54,7 @@ export type ReconciliationExecutorStatus =
 
 export interface CalculationJobReconciliationResult {
   datasetVersionId: string;
-  datasetStatus: 'BUILDING';
+  datasetStatus: Exclude<DatasetVersionStatus, 'DRAFT'>;
   jobId: string;
   jobStatus: CalculationJobStatus;
   executionAttemptId: string;

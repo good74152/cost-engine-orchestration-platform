@@ -1,3 +1,5 @@
+import type { DatasetVersionStatus } from '../calculation-job.types.js';
+
 export const DATASET_DOMAINS = [
   'FAB_COST',
   'CAPEX',
@@ -11,6 +13,13 @@ export const DATASET_PERIODS = ['Q1', 'Q2', 'Q3', 'Q4'] as const;
 
 export type DatasetDomain = (typeof DATASET_DOMAINS)[number];
 export type DatasetPeriod = (typeof DATASET_PERIODS)[number];
+
+export interface DatasetLifecycleResult {
+  datasetSeriesId: string;
+  datasetVersionId: string;
+  version: number;
+  datasetStatus: DatasetVersionStatus;
+}
 
 export interface CreateDatasetVersionInput {
   domain: DatasetDomain;

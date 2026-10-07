@@ -6,6 +6,12 @@ import {
 } from './dataset-version.errors.js';
 import { createDatasetVersionService } from './dataset-version.service.js';
 import {
+  abandonDatasetVersionService,
+  publishDatasetVersionService,
+  rejectDatasetVersionService,
+  submitDatasetValidationService,
+} from './dataset-version-lifecycle.service.js';
+import {
   DATASET_DOMAINS,
   DATASET_PERIODS,
 } from './dataset-version.types.js';
@@ -84,4 +90,20 @@ export async function datasetVersionRoutes(app: FastifyInstance): Promise<void> 
     const result = await createDatasetVersionService(input);
     return reply.status(201).send(result);
   });
+
+  const lifecycleCommands = {
+    'submit-validation': submitDatasetValidationService,
+    publish: publishDatasetVersionService,
+    reject: rejectDatasetVersionService,
+    abandon: abandonDatasetVersionService,
+  };
+  for (const [command, service] of Object.entries(lifecycleCommands)) {
+    app.post<{ Params: { datasetVersionId: string } }>(
+      `/dataset-versions/:datasetVersionId/${command}`,
+      async (request, reply) => {
+        const result = await service(request.params.datasetVersionId);
+        return reply.status(200).send(result);
+      },
+    );
+  }
 }
