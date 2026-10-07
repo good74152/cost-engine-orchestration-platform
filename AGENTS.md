@@ -127,8 +127,10 @@ Do not put employer-specific Airflow DAG code, SQL, proprietary schemas, or conf
 
 ## Current Implementation Task
 
-The current bounded task is documented in:
+Task 005 reconciliation is review-accepted but must be merged to `main` before Task 006 implementation begins.
 
-`docs/tasks/002-dataset-version-creation-v2.md`
+The next bounded implementation task is:
 
-Its non-goals are binding. Do not implement later lifecycle slices as part of Task 002.
+`docs/tasks/006-validation-and-dataset-terminal-decisions.md`
+
+Its non-goals are binding. In particular, do not add executor cancellation, automatic validation/publication, real Airflow integration, or Task-007 cleanup as part of Task 006.
