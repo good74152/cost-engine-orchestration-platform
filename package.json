@@ -14,6 +14,7 @@
     "test:executor-reconciliation": "tsx --test scripts/executor-reconciliation.pg.test.ts",
     "test:dataset-version-terminal-lifecycle": "tsx --test scripts/dataset-version-terminal-lifecycle.pg.test.ts",
     "test:cross-workflow-concurrency-investigation": "tsx --test scripts/cross-workflow-concurrency-investigation.pg.test.ts",
+    "test:task-007b1-late-dispatch-reconciliation": "tsx --test scripts/task-007b1-late-dispatch-reconciliation.pg.test.ts",
     "test:orchestration-schema-v2": "tsx --test scripts/orchestration-schema-v2.pg.test.ts",
     "test:raw-ingestion": "tsx --test scripts/raw-ingestion.route.test.ts"
   },
