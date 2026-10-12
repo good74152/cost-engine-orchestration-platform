@@ -50,8 +50,8 @@ job/attempt:     calculation_job → execution_attempt
 
 | Package | Bounded purpose | Status |
 |---|---|---|
-| 007A | Deterministic proof/classification of cross-workflow dispatch races | Next; investigation only |
-| 007B | Conditional bounded correction of proven concurrency defect(s) | BLOCKED on 007A evidence + owner review |
+| 007A | Deterministic proof/classification of cross-workflow dispatch races | Evidence complete on unmerged 007A branch |
+| 007B | CON-01 bounded late-response correction; CON-02 identity guarantee design | 007B-1 spec ready; 007B-2 architecture decision pending |
 | 007C | HTTP validation and public error contract hardening | Ready after concurrency gate |
 | 007D | Complete E2E acceptance + reproducible PostgreSQL milestone test command | After concurrency and API stabilise |
 | 007E | Safe legacy application cleanup and truthful documentation | Last, after replacement paths protected by tests |
@@ -59,11 +59,13 @@ job/attempt:     calculation_job → execution_attempt
 Subtask specifications:
 - docs/tasks/007a-cross-workflow-concurrency-investigation.md
 - docs/tasks/007b-conditional-concurrency-remediation.md
+- docs/tasks/007b1-late-dispatch-terminal-reconciliation.md
+- docs/tasks/007b2-definite-rejection-semantics-review.md
 - docs/tasks/007c-api-contract-hardening.md
 - docs/tasks/007d-end-to-end-verification-gate.md
 - docs/tasks/007e-legacy-and-documentation-cleanup.md
 
-Only 007A is an immediate handoff candidate. 007B is deliberately NOT Codex-ready until proven defects and the intended HTTP outcome are reviewed. Red regression tests may be reviewed on an unmerged PR; no failing PR is merged. After correction, merge only with green gates. A package may close as NOT NEEDED if its premise is disproved.
+Task 007A investigation evidence is available on feature/task-007a-concurrency-investigation (currently unmerged and containing intentionally red regression tests). CON-01 and CON-02 were reproduced on real PostgreSQL. 007B-1 has a bounded spec for the valid late-acceptance case; 007B-2 remains blocked pending the system owner's decision on the permanent identity scope of definite rejection. Do not merge a red suite or treat CON-01 resolution as complete Task 007B.
 
 ## 1. API contract gap inventory
 
