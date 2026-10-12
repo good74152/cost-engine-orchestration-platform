@@ -26,8 +26,8 @@ Agreed order and independent review packages:
 
 1. **007A — Cross-workflow concurrency investigation (NEXT).**
    Deterministically test dispatch-result-vs-terminal-reconciliation (CON-01), and same-identity conflicting dispatch results (CON-02). Classify valid executor behavior vs adapter contract violation vs local bug. No production fix yet.
-2. **007B — Conditional concurrency remediation (BLOCKED).**
-   Only implement after 007A evidence and system-owner approval. If a supported-behavior defect is not found, no speculative correction.
+2. **007B — Evidence-grounded concurrency remediation (IN DESIGN).**
+   007A confirmed CON-01 as a valid late-response HTTP 500 and CON-02 as a current-FakeExecutor external/local identity split. 007B-1 is bounded for CON-01 after owner review; 007B-2 needs an explicit design decision on the identity-wide meaning of definite REJECTED. Do not treat the 007B-1 fix as full milestone closure.
 3. **007C — API contract hardening.**
    Validate job UUIDs, bound callback identity fields, validate supported raw ingestion at runtime, ensure dev/test-only FakeExecutor controls, verify actual public error codes/shape.
 4. **007D — Complete E2E and reproducible PostgreSQL test gate.**
@@ -35,7 +35,7 @@ Agreed order and independent review packages:
 5. **007E — Safe dead-code cleanup and documentation sync.**
    Remove only proven-unused application artifacts; update README, AGENTS, ARCHITECTURE and ROADMAP. Do not change historical migration/data.
 
-Task definitions are available under docs/tasks/007a through 007e.
+Task definitions are available under docs/tasks/007a through 007e. Specific Task 007B follow-ups are docs/tasks/007b1-late-dispatch-terminal-reconciliation.md and docs/tasks/007b2-definite-rejection-semantics-review.md. The 007A red evidence suite and investigation artifacts currently exist only on feature/task-007a-concurrency-investigation, not main.
 
 ### Retained scope
 
