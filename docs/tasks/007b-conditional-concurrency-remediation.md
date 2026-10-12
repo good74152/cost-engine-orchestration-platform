@@ -1,53 +1,67 @@
-# Task 007B — Conditional Concurrency Remediation
+# Task 007B — Evidence-Grounded Cross-Workflow Remediation
 
-- Status: BLOCKED — not Codex-ready.
-- Precondition: Task 007A evidence reviewed by system owner.
-- Purpose: one bounded correction for each **proven, supported-behavior** cross-workflow defect.
+- Status: IN PROGRESS (design/spec); production implementation not started.
+- Investigated baseline: main 85479c723090de8dc96cdb0a13472f3156b5e8f9.
+- Evidence source: feature/task-007a-concurrency-investigation, docs/tasks/007a-investigation-results.md and docs/tasks/007a-investigation-evidence.json.
+- Verification harness: scripts/cross-workflow-concurrency-investigation.pg.test.ts on the Task 007A branch.
+- User authorized starting Task 007B based on actual 007A evidence. This authorization does NOT imply a decision about CON-02 executor semantics.
 
-## Why this is conditional
+## 007A confirmed facts
 
-The current architecture fixes:
-- the durable execution-attempt identity and status machine,
-- the distinction between a definite no-run rejection and ambiguous dispatch,
-- executor status lookup as reconciliation truth,
-- terminal attempt immutability,
-- no external call inside a PostgreSQL transaction,
-- calculation_job → execution_attempt lock order.
+### CON-01 — legitimate dispatch response overtaken by terminal reconciliation
 
-Task 007A must determine if CON-01 and CON-02 are defects under those contracts before changing implementation. An inconsistent mock executor is not permission to invent new production semantics.
+Sequence:
+1. /run commits PREPARED → DISPATCHING; external FakeExecutor processes and creates one run; response ACCEPTED is blocked.
+2. /reconcile observes external SUCCEEDED and commits attempt/job SUCCEEDED/SUCCEEDED.
+3. Original /run receives its delayed ACCEPTED response.
+4. Observed original /run: HTTP 500 INTERNAL_SERVER_ERROR; reconciliation: 200; local terminal history correct, one attempt/external run/snapshot.
 
-## Scope once unblocked
+Cause: recordDispatchOutcome() rejects the already-terminal locked attempt because it expects DISPATCHING plus PENDING/FAILED for an ACCEPTED response.
 
-For each confirmed bug, the system owner must first record:
-1. exact failing deterministic interleaving and database/executor facts;
-2. invariant violated;
-3. intended HTTP/result behavior under an already terminal attempt;
-4. minimal production functions to change;
-5. why the correction preserves existing accepted ADRs;
-6. exact regression tests expected to become green.
+Classification: **confirmed backend API/concurrency defect under contract-conforming FakeExecutor behavior**.
 
-Then create one coherent Codex change, preferably one PR per independently confirmed bug. Do not include API general refactoring, docs cleanup, migration, new states, or a new executor adapter.
+### CON-02 — overlapping same-identity REJECTED/ACCEPTED
 
-## Baseline expected invariants
+Valid **current FakeExecutor** sequence:
+1. A dispatch of identity X returns REJECTED when zero external X runs exist.
+2. Overlapping B dispatch of X subsequently creates the run and returns ACCEPTED.
+3. If A records DISPATCH_FAILED before B records acceptance: A 502, B 500; attempt 1 DISPATCH_FAILED; job PENDING; external X RUNNING.
+4. Manual/callback reconciliation of X returns 409 EXECUTION_NOT_RECONCILABLE.
+5. Another /run creates attempt 2 with different identity Y; a second external run may start, while X remains orphaned.
 
-- Never overwrite SUCCEEDED/FAILED attempt history.
-- Never create another attempt merely because dispatch response is lost.
-- Never convert a merely unavailable executor lookup into calculation failure or definite dispatch failure.
-- Never let an acknowledged run become orphaned behind a local DISPATCH_FAILED under supported executor semantics.
-- Never hold DB locks while waiting on external dispatch or status.
-- Job and attempt transitions representing one executor fact remain atomic.
-- Do not change dataset build snapshot, definition pins, or publication lifecycle.
+Reversing local recording order is safe: B writes ACCEPTED/RUNNING first; A later observes the accepted state. Actual FakeExecutor checking a previously existing identity also returns ALREADY_EXISTS and is safe. An intentionally lying executor fixture is a separate contract violation; it is not evidence of an additional legal backend race.
 
-## Stop/review condition
+Classification: **confirmed split under current FakeExecutor per-call rejection semantics; long-term guarantee undecided**.
 
-If resolving CON-02 requires a lasting rule for contradictory external acceptance/rejection outcomes, new attempt state, or executor guarantee different from ADR-0005, stop and return to architecture review. Author a separate ADR if justified; do NOT silently implement precedence here.
+CON-02 demonstrates a critical milestone blocker. Do not merge a claimed Task 007B completion that leaves this supported sequence unresolved.
 
-## Required tests and acceptance
+## Work split and status
 
-- Exact 007A deterministic failing reproduction is fixed and green.
-- Reverse interleaving is green.
-- Existing Task-002–006 PostgreSQL suites remain green.
-- No introduced deadlock, identity split, attempt duplication, terminal rewrite, or generic 500 on legal races.
-- Recorded review explains why fix is bounded and consistent with accepted protocols.
+- **007B-1 (READY for owner-reviewed bounded implementation):** Fix CON-01 late dispatch response handling without modifying history or lock protocols. Spec: docs/tasks/007b1-late-dispatch-terminal-reconciliation.md.
+- **007B-2 (ARCHITECTURE DECISION REQUIRED):** Resolve identity scope of definite rejection and same-identity concurrent dispatch contract before bounded implementation. Decision brief: docs/tasks/007b2-definite-rejection-semantics-review.md.
 
-If investigation finds no real defect, mark the relevant remediation as NOT REQUIRED; do not create speculative production changes.
+These are separate PRs; the first does not pretend to fix CON-02. Do not delegate 007B-2 until the system owner approves its contract choice.
+
+## Grounded runtime evidence
+
+007A report states Node v24.18.0, PostgreSQL 18.6, owned disposable PostgreSQL database migrated with all six checked-in migrations. Investigation command exited 1 with 7 pass / 3 fail / 0 skip (two intentionally red scenario regressions plus parent). Existing separate Task 004 and Task 005 suites passed; Task 006 suite passed on independent rerun after an initial parallel teardown failure. No tests have been rerun in Task 007B at this point.
+
+Never label red investigation tests as green. No production fixes or migrations were delivered by 007A.
+
+## Non-negotiable boundaries
+
+- Preserve ADR-0005 attempt identity, state machine and terminal attempt immutability.
+- Preserve Task 004/005 job → attempt locking and all existing dataset-series protocols.
+- Executor calls remain outside DB transactions.
+- No new attempt on response loss; no snapshot/definition pin refresh.
+- Do not 'repair' CON-02 by rewriting DISPATCH_FAILED into ACCEPTED or SUCCEEDED without a new architecture decision.
+- No speculative multi-process in-memory mutex as the sole safety guarantee.
+- No introduction of messaging systems, real Airflow, cancellation, or schema changes during 007B-1.
+
+## Merge and completion gates
+
+007B-1 may be reviewed and merged independently only after its deterministic regression and all relevant real PostgreSQL suites are green. When importing the 007A investigation test harness, do not blindly merge its red evidence commit into main; retain the historical evidence report, convert assertions to accepted behavior, and ensure the integrated test suite is green before merge.
+
+Task 007B overall cannot be marked complete until CON-02 contract is resolved and the verified design either eliminates the supported identity split or explicitly proves the sequence impossible under an enforced adapter guarantee. A green CON-01 suite alone is insufficient.
+
+System owner reviews Codex output first; then architecture challenge, fixes, verification, merge. Document final commands, exit codes and runtime versions.
