@@ -22,6 +22,7 @@ If a decision changes materially, prefer a new ADR that supersedes the old one i
 - [ADR-0004 — Dataset-Series Serialization and Deterministic Lock Ordering](0004-series-serialization-and-lock-ordering.md)
 - [ADR-0005 — Execution Attempts, Airflow Idempotency, and Reconciliation](0005-execution-attempts-and-airflow-reconciliation.md)
 - [ADR-0006 — First-Run Lock Hierarchy Across Configuration, Series, and Build State](0006-first-run-lock-hierarchy.md)
+- [ADR-0007 — Dataset Terminal Decisions and Publication Serialization](0007-dataset-terminal-decisions-and-publication-serialization.md)
 
 ## Truth Boundary
 

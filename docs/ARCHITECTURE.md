@@ -390,17 +390,27 @@ A `DISPATCHING` attempt may be recovered directly from executor truth: external 
 
 Only confirmed executor terminal state produces atomic terminal attempt/job transitions. Stale callbacks for older terminal attempts must not overwrite a newer attempt's logical job state, and contradictory terminal observations are treated as reconciliation anomalies rather than history rewrites.
 
-## 13. Validation and Publication
+## 13. Validation and Dataset Terminal Decisions
 
-Current portfolio scope uses explicit Submit Validation:
+Job execution completion does not automatically advance dataset publication state.
+
+Explicit Submit Validation is required:
 
 ```text
 BUILDING
-+ all required jobs SUCCEEDED
++ one or more calculation_jobs
++ every calculation_job SUCCEEDED
 → VALIDATING
 ```
 
-If any job is `PENDING`, `RUNNING`, or `FAILED`, validation submission is rejected.
+Submit Validation serializes on:
+
+```text
+dataset_version
+→ calculation_jobs ordered by id
+```
+
+Eligibility is checked only after those locks are held. This gives deterministic ordering against Task-005 reconciliation of the final job.
 
 From `VALIDATING`:
 
@@ -409,9 +419,57 @@ Publish → PUBLISHED
 Reject  → REJECTED
 ```
 
-Concurrent Publish/Reject requests use compare-and-set semantics. Exactly one can win.
+Publish, Reject, and Abandon use the series terminal-decision protocol:
 
-`BUILDING → ABANDONED` is allowed only when no active executor attempt can still be running. Airflow cancellation is not part of the current milestone.
+```text
+dataset_series
+→ dataset_version
+```
+
+Publish participates in this protocol because it changes which version downstream First Run operations can resolve as latest `PUBLISHED`. Reject and Abandon also use it because they release the one-active-version slot and must serialize with next-version creation.
+
+Publish-vs-Reject has exactly one terminal winner.
+
+Abandon allows only:
+
+```text
+DRAFT    → ABANDONED
+BUILDING → ABANDONED
+```
+
+Before abandonment, lock:
+
+```text
+dataset_series
+→ dataset_version
+→ calculation_jobs ordered by id
+→ execution_attempts ordered by (calculation_job_id, attempt_number)
+```
+
+Any attempt in:
+
+```text
+PREPARED
+DISPATCHING
+ACCEPTED
+```
+
+blocks abandonment. Terminal attempt states do not.
+
+Task 006 does not cancel external execution. If an external run exists, local state must first converge to a terminal attempt through normal reconciliation.
+
+Lifecycle commands use same-target idempotency:
+
+```text
+already VALIDATING + submit-validation → 200 current state
+already PUBLISHED  + publish           → 200 current state
+already REJECTED   + reject            → 200 current state
+already ABANDONED  + abandon           → 200 current state
+```
+
+Conflicting terminal decisions return `STATE_CONFLICT` and never rewrite terminal history.
+
+After dataset lifecycle advancement, duplicate reconciliation of an already-terminal attempt remains idempotent when executor truth matches the local terminal result. Non-terminal attempts under a non-`BUILDING` dataset are invariant violations.
 
 ## 14. API Error Model
 
@@ -429,6 +487,7 @@ CALCULATION_TYPE_NOT_CONFIGURED
 DEPENDENCY_DEFINITION_NOT_READY
 DEPENDENCY_NOT_READY
 JOB_NOT_RUNNABLE
+DATASET_VERSION_NOT_FOUND
 DATASET_NOT_READY_FOR_VALIDATION
 DATASET_HAS_ACTIVE_EXECUTION
 STATE_CONFLICT
@@ -463,15 +522,15 @@ CalculationExecutor
 2. Dataset version creation + calculation-type job snapshotting       ✅
 3. First Run + immutable build snapshot                               ✅
 4. Execution attempts + FakeExecutor                                  ✅
-5. Reconciliation                                                     NOW
-6. Validation / Publish / Reject / Abandon                            NEXT
-7. Full failure-path and concurrency acceptance suite
+5. Reconciliation                                                     REVIEW ACCEPTED / MERGE PENDING
+6. Validation / Publish / Reject / Abandon                            DESIGN ACCEPTED / SPEC READY
+7. Full failure-path and concurrency acceptance suite                 NEXT
 ```
 
 The active bounded task is:
 
 ```text
-docs/tasks/005-executor-reconciliation.md
+docs/tasks/006-validation-and-dataset-terminal-decisions.md
 ```
 
 ## 17. Decision Records
