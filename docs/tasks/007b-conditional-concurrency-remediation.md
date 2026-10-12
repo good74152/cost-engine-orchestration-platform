@@ -4,7 +4,7 @@
 - Investigated baseline: main 85479c723090de8dc96cdb0a13472f3156b5e8f9.
 - Evidence source: feature/task-007a-concurrency-investigation, docs/tasks/007a-investigation-results.md and docs/tasks/007a-investigation-evidence.json.
 - Verification harness: scripts/cross-workflow-concurrency-investigation.pg.test.ts on the Task 007A branch.
-- User authorized starting Task 007B based on actual 007A evidence. This authorization does NOT imply a decision about CON-02 executor semantics.
+- User authorized Task 007B on actual 007A evidence and explicitly accepted Option A for CON-02: the identity-wide permanent REJECTED contract in ADR-0008. Bounded implementation specs are ready; no production code has been changed.
 
 ## 007A confirmed facts
 
@@ -31,14 +31,14 @@ Valid **current FakeExecutor** sequence:
 
 Reversing local recording order is safe: B writes ACCEPTED/RUNNING first; A later observes the accepted state. Actual FakeExecutor checking a previously existing identity also returns ALREADY_EXISTS and is safe. An intentionally lying executor fixture is a separate contract violation; it is not evidence of an additional legal backend race.
 
-Classification: **confirmed split under current FakeExecutor per-call rejection semantics; long-term guarantee undecided**.
+Classification: **confirmed split under pre-ADR-0008 FakeExecutor per-call semantics; identity-wide permanent rejection is now accepted by ADR-0008**.
 
 CON-02 demonstrates a critical milestone blocker. Do not merge a claimed Task 007B completion that leaves this supported sequence unresolved.
 
 ## Work split and status
 
 - **007B-1 (READY for owner-reviewed bounded implementation):** Fix CON-01 late dispatch response handling without modifying history or lock protocols. Spec: docs/tasks/007b1-late-dispatch-terminal-reconciliation.md.
-- **007B-2 (ARCHITECTURE DECISION REQUIRED):** Resolve identity scope of definite rejection and same-identity concurrent dispatch contract before bounded implementation. Decision brief: docs/tasks/007b2-definite-rejection-semantics-review.md.
+- **007B-2 (ARCHITECTURE ACCEPTED; BOUNDED IMPLEMENTATION SPEC READY):** Implement ADR-0008 contract enforcement in FakeExecutor and deterministic real PostgreSQL regressions. Spec: docs/tasks/007b2-definite-rejection-semantics-review.md.
 
 These are separate PRs; the first does not pretend to fix CON-02. Do not delegate 007B-2 until the system owner approves its contract choice.
 
@@ -54,7 +54,7 @@ Never label red investigation tests as green. No production fixes or migrations 
 - Preserve Task 004/005 job → attempt locking and all existing dataset-series protocols.
 - Executor calls remain outside DB transactions.
 - No new attempt on response loss; no snapshot/definition pin refresh.
-- Do not 'repair' CON-02 by rewriting DISPATCH_FAILED into ACCEPTED or SUCCEEDED without a new architecture decision.
+- Do not 'repair' CON-02 by rewriting DISPATCH_FAILED into ACCEPTED or SUCCEEDED. ADR-0008 resolves the contract through identity-wide permanent rejection, not a history rewrite.
 - No speculative multi-process in-memory mutex as the sole safety guarantee.
 - No introduction of messaging systems, real Airflow, cancellation, or schema changes during 007B-1.
 
@@ -62,6 +62,6 @@ Never label red investigation tests as green. No production fixes or migrations 
 
 007B-1 may be reviewed and merged independently only after its deterministic regression and all relevant real PostgreSQL suites are green. When importing the 007A investigation test harness, do not blindly merge its red evidence commit into main; retain the historical evidence report, convert assertions to accepted behavior, and ensure the integrated test suite is green before merge.
 
-Task 007B overall cannot be marked complete until CON-02 contract is resolved and the verified design either eliminates the supported identity split or explicitly proves the sequence impossible under an enforced adapter guarantee. A green CON-01 suite alone is insufficient.
+Task 007B overall cannot be marked complete until both 007B-1 and 007B-2 are implemented and independently reviewed, and real PostgreSQL tests prove that the accepted identity-wide guarantee eliminates the previously observed external/local split. A green CON-01 suite alone is insufficient.
 
 System owner reviews Codex output first; then architecture challenge, fixes, verification, merge. Document final commands, exit codes and runtime versions.
