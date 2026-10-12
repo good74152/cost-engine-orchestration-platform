@@ -19,6 +19,12 @@ export class InvalidDatasetVersionRequestError extends DatasetVersionError {
   }
 }
 
+export class InvalidDatasetVersionIdError extends DatasetVersionError {
+  constructor() {
+    super('datasetVersionId path parameter must be a valid UUID', 'INVALID_REQUEST', 400);
+  }
+}
+
 export class InvalidDatasetDomainError extends DatasetVersionError {
   constructor() {
     super('Dataset domain is not supported', 'INVALID_DOMAIN', 400);

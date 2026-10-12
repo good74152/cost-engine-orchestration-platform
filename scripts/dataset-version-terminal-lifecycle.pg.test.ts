@@ -305,6 +305,35 @@ test('dataset validation and terminal lifecycle PostgreSQL integration and concu
       });
     }
 
+    await t.test('lifecycle routes validate UUID path parameters before reaching persistence', async () => {
+      await reset();
+      await configure('DPR', 1);
+      const dataset = await create();
+      const before = await readState(dataset.datasetVersionId);
+      const countsQuery = `SELECT (SELECT COUNT(*)::int FROM dataset_series) AS series_count,
+        (SELECT COUNT(*)::int FROM dataset_versions) AS version_count`;
+      const countsBefore = (await pool.query(countsQuery)).rows;
+
+      const malformedIds = [
+        'not-a-uuid',
+        'undefined',
+        'null',
+        ' ',
+        '00000000-0000-0000-0000-00000000000',
+        '00000000000000000000000000000000',
+      ];
+      for (const action of ['submit-validation', 'publish', 'reject', 'abandon'] as const) {
+        for (const invalidId of malformedIds) {
+          const response = await command(encodeURIComponent(invalidId), action);
+          expectError(response, 400, 'INVALID_REQUEST');
+          assert.match(response.json().message, /datasetVersionId.*path parameter.*UUID/i);
+        }
+        expectError(await command(randomUUID(), action), 404, 'DATASET_VERSION_NOT_FOUND');
+      }
+      assert.deepEqual(await readState(dataset.datasetVersionId), before);
+      assert.deepEqual((await pool.query(countsQuery)).rows, countsBefore);
+    });
+
     await t.test('route error contracts cover every invalid source state and unknown ids', async () => {
       for (const action of ['submit-validation', 'publish', 'reject', 'abandon'] as const) {
         expectError(await command(randomUUID(), action), 404, 'DATASET_VERSION_NOT_FOUND');
