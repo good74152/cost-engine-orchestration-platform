@@ -127,10 +127,17 @@ Do not put employer-specific Airflow DAG code, SQL, proprietary schemas, or conf
 
 ## Current Implementation Task
 
-Task 005 reconciliation is review-accepted but must be merged to `main` before Task 006 implementation begins.
+Tasks 002–006 are merged into main. The active milestone is Task 007 — End-to-End Hardening and Legacy Cleanup.
 
-The next bounded implementation task is:
+Master scope and acceptance gates:
 
-`docs/tasks/006-validation-and-dataset-terminal-decisions.md`
+docs/tasks/007-end-to-end-hardening-and-legacy-cleanup.md
 
-Its non-goals are binding. In particular, do not add executor cancellation, automatic validation/publication, real Airflow integration, or Task-007 cleanup as part of Task 006.
+Task 007A investigation evidence (including intentionally red tests) is available on the unmerged branch feature/task-007a-concurrency-investigation. The system owner has accepted the Task 007B architecture response to its findings.
+
+Active bounded implementation specs:
+
+- docs/tasks/007b1-late-dispatch-terminal-reconciliation.md
+- docs/tasks/007b2-definite-rejection-semantics-review.md
+
+Executor REJECTED is an irrevocable identity-wide no-run guarantee (ADR-0008), not a per-call observation. Implement 007B-1 and 007B-2 as independently reviewable PRs. Do not merge the intentionally red investigation branch without replacing failing regressions with verified green tests. Do not delegate speculative fixes outside these specs. Retain raw-ingestion API and historical migrations. Do not redesign accepted lifecycle/locking protocols.
