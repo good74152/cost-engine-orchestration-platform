@@ -1,87 +1,202 @@
-# Task 007B-2 — CON-02 Definite-Rejection Identity Guarantee (Architecture Decision Required)
+# Task 007B-2 — Identity-Scoped Rejection Contract and FakeExecutor Hardening
 
-- Status: **BLOCKED for Codex implementation** until the system owner selects a contract and accepts an ADR if the executor guarantee changes.
-- Evidence: docs/tasks/007a-investigation-results.md and 007a-investigation-evidence.json on feature/task-007a-concurrency-investigation.
-- Severity: high under the currently implemented FakeExecutor behavior.
-- This is NOT an implementation spec. It records the decision that implementation must not make by itself.
+- Status: Architecture accepted; bounded implementation spec READY for system-owner review.
+- Decision: ADR-0008 — Identity-Scoped Definite Dispatch Rejection.
+- Evidence: Task 007A investigation report and machine-readable evidence on `feature/task-007a-concurrency-investigation`.
+- Implementation: NOT STARTED.
+- Dependency: Task 007B-1 is independently reviewable. Coordinate test-harness import/merge to avoid conflicts; do not silently mix CON-01 and CON-02 fixes.
 
-## Proven incident (not a hypothetical adversarial executor)
+## Goal
 
-Two concurrent /run requests dispatch the same durable execution attempt X with the same DAG/run identity.
+Eliminate the exact CON-02 external/local execution identity split proven by Task 007A **under the now-accepted executor contract**:
 
-The existing unmodified FakeExecutor can process A as REJECTED with zero runs, then B as ACCEPTED creating external X. With responses recorded A-first:
-~~~text
-external:
-A REJECTED, no X existed at A processing time
-B ACCEPTED, X exists
+`REJECTED` means irrevocable **identity-wide** no-run for `(airflow_dag_id, airflow_dag_run_id)`, including overlapping and future same-identity dispatches.
 
-database:
-A records attempt 1 DISPATCH_FAILED, job PENDING
-B attempts to record ACCEPTED, receives HTTP 500
-attempt 1 stays DISPATCH_FAILED; job remains PENDING
-external X is RUNNING
-~~~
+Today the FakeExecutor rejects only one request at the moment no external run exists; another same-identity request can subsequently create that run. A local DISPATCH_FAILED attempt may then coexist with an external RUNNING execution, which is unreconcilable and can lead to duplicate work on retry.
 
-Manual/callback reconciliation of X fails 409 EXECUTION_NOT_RECONCILABLE. A new /run allocates attempt 2 with a new identity Y, potentially creating a second external execution. Exactly these outcomes were captured with deterministic barriers and real PostgreSQL in 007A.
+Fix the FakeExecutor's contract compliance, not the accepted execution-attempt state machine.
 
-In contrast, when B's ACCEPTED record wins the race, the existing path handles late rejection idempotently; and when X already exists at executor processing time, FakeExecutor returns ALREADY_EXISTS. Separate tests with a *lying* executor returning REJECTED for an already-created X are explicitly contract violations and do not establish the supported path.
+## Required Reading
 
-## Why a local conditional UPDATE is insufficient
+- AGENTS.md
+- docs/ARCHITECTURE.md
+- docs/adr/0005-execution-attempts-and-airflow-reconciliation.md
+- docs/adr/0008-identity-scoped-definite-dispatch-rejection.md
+- docs/tasks/007-end-to-end-hardening-and-legacy-cleanup.md
+- docs/tasks/007b-conditional-concurrency-remediation.md
+- docs/tasks/007b1-late-dispatch-terminal-reconciliation.md
+- docs/tasks/007a-investigation-results.md and docs/tasks/007a-investigation-evidence.json on the 007A branch
+- src/executors/calculation-executor.ts
+- src/executors/fake-executor.ts
+- src/modules/calculation-job-run.service.ts
+- existing Task-004/Task-005 PostgreSQL test suites
 
-- DISPATCH_FAILED is terminal and means the platform has definitive no-run evidence.
-- Changing DISPATCH_FAILED to ACCEPTED after receiving B's success would rewrite terminal execution history and contradict the accepted state machine/ADR-0005.
-- Ignoring B's acceptance or returning 200 while leaving DISPATCH_FAILED would strand a real external run.
-- Suppressing concurrent Run through an in-memory mutex would fail across processes and process restarts.
-- Querying executor NOT_FOUND immediately before A commits DISPATCH_FAILED does not rule out B creating the run a moment later (TOCTOU).
-- The external call cannot be wrapped in the database transaction/row lock that owns orchestration state.
+Confirm the 007A evidence artifacts and the deterministic harness before editing tests or implementation.
 
-Therefore choose and document a guarantee before coding.
+## Bounded Production Scope
 
-## Design option A — Identity-scoped permanent definite rejection (recommendation for current FakeExecutor milestone)
+### Executor interface semantics
 
-Interpret REJECTED for X as an identity-wide, irrevocable assurance: **no execution exists for X, and no subsequent dispatch of the same identity X can create one**. This is stronger than today's per-call FakeExecutor behavior and must be explicitly accepted as a new executor-adapter contract (separate ADR).
+Clarify the `DispatchResult` contract in `src/executors/calculation-executor.ts` or an adjacent concise comment/documented type:
 
-Expected FakeExecutor behavior:
-- A first REJECTED for X is durably remembered by the FakeExecutor as a rejection tombstone for identity X.
-- Any future dispatch of X, including an overlapping delayed or repeated call, also returns REJECTED and never creates X.
-- If X was accepted/created first, subsequent calls return ALREADY_EXISTS, regardless of scripted later REJECT behavior.
-- UNKNOWN_WITHOUT_CREATION does not set a rejection tombstone; the same identity may be safely redispatched.
-- New execution attempt Y after a genuine terminal DISPATCH_FAILED uses a new identity; it may be accepted.
-- The result must be deterministic under concurrent calls and documented in CalculationExecutor contract.
+- `REJECTED`: permanent guarantee that this exact identity never existed and will never be created by same-identity dispatch.
+- `ACCEPTED`: this identity was created/confirmed.
+- `ALREADY_EXISTS`: this identity already exists, treated as accepted identity.
+- `UNKNOWN`: no irrevocable identity decision; use same identity to recover/retry/lookup.
 
-Positive: preserves existing attempt states, terminal immutability, lock ordering, DB schema, and the Task-004 Run/Retry flow. Negative: strengthens adapter requirements; not every real executor rejection/transport error can be classified REJECTED. A future real Airflow adapter must return UNKNOWN unless it can uphold this identity-wide guarantee. The FakeExecutor tombstone itself is per in-memory FakeExecutor instance; do NOT claim this proves a distributed production Airflow adapter guarantee.
+Do not introduce a new dispatch outcome enum member or change public HTTP response contracts.
 
-## Design option B — Durable cross-request dispatch arbitration
+### FakeExecutor permanent rejection marker
 
-Keep REJECTED as a per-request no-run fact but ensure no overlapping/late dispatch of the same identity can create X after local terminal rejection.
+Introduce a private identity-scoped permanent rejection set (or equivalent) using the same full execution key as the existing `externalExecutions` map.
 
-This requires a durable multi-process single-flight/lease or an equivalent arbitration protocol that survives crash/retry and handles ambiguous outcomes without holding DB transactions through external calls. It likely requires new durable state/columns, liveness rules and an ADR; it is outside a minimal hardening patch.
+Dispatch logic must:
 
-Positive: weaker demands on real executor behavior. Negative: substantially greater engineering scope and failure modes; cannot silently piggyback Task 007B-1.
+1. Check whether an external run already exists. If yes, return `ALREADY_EXISTS` even if the next scripted behavior would have been REJECT.
+2. Check whether the identity is permanently rejected. If yes, return `REJECTED` without creating a run or consuming the next scripted behavior.
+3. For a previously unseen identity, consume the scripted/default behavior.
+4. On configured `REJECT`, record the identity as permanently rejected **before** returning `REJECTED`.
+5. On `ACCEPT` and `ACCEPT_THEN_UNKNOWN`, create exactly one external run.
+6. On `UNKNOWN_WITHOUT_CREATION`, do not mark rejection; future same-identity dispatch may create a run.
+7. Preserve `getExecutionStatus`, `setExecutionState`, lookup history, and existing fake control routes.
 
-## Design option C — Redesign DISPATCH_FAILED terminal semantics
+A useful invariant within one FakeExecutor instance:
 
-Permit compensating transition/retraction after subsequent confirmed acceptance, add a new decision state, or defer terminal rejection until concurrency certainty is established.
+```text
+rejectedIdentities ∩ externalExecutionKeys = ∅
+```
 
-Rejected as a bounded Task 007B tactic: rewrites accepted terminal-history/state-machine semantics and introduces difficult crash/retry invariants. Only consider via a separate architecture initiative and migration review.
+The decision/check/update must be atomic with respect to same-instance concurrent `dispatch()` invocations. The current in-memory synchronous region can achieve this if no `await` occurs between the identity checks and decision. Do not add an in-memory mutex as a substitute for a cross-process guarantee.
 
-## Recommendation and decision gate
+**Scope honesty:** This tombstone exists only for the lifetime of that FakeExecutor instance. It is not a persisted or cross-process rejection registry. FakeExecutor is not an actual production Airflow adapter; future adapters must independently uphold ADR-0008 or classify results as UNKNOWN.
 
-For a portfolio milestone using only a FakeExecutor, **Option A** is the most bounded and consistent with existing transaction/state-machine protocols, provided the system owner explicitly accepts that REJECTED becomes an identity-wide irrevocable guarantee for adapters.
+### Durable orchestration remains unchanged
 
-If the goal is realistic cross-process behavior without imposing that guarantee on a future Airflow adapter, choose Option B and treat CON-02 as a separate architecture milestone, not a silent Task 007B change. In either case, zero-known-critical-regressions acceptance remains blocked until the supported combination is safe.
+Under the now-valid rejection guarantee, the backend may continue to use the existing Task-004 path:
 
-The system owner must decide:
+```text
+attempt DISPATCHING → DISPATCH_FAILED
+job remains PENDING or FAILED
+HTTP 502 EXECUTOR_DISPATCH_FAILED
+```
 
-1. Is REJECTED allowed only when the executor/adapter can guarantee permanent no-run for the exact DAG/run identity, even under concurrent/repeated calls?
-2. If yes, record new ADR and bound implementation to FakeExecutor + contract semantics and tests; no production Airflow integration.
-3. If no, authorize a separate design review for a durable dispatch arbitration mechanism, rather than asking Codex to improvise.
+Repeated same-identity REJECTED results must converge on one immutable DISPATCH_FAILED attempt; they do not create any external execution.
 
-## Tests required after decision (not yet authorized)
+A later independent `/run` after the rejection has been persisted may create attempt 2 with a *new* identity; this is valid because X is permanently rejected. The new identity can be accepted and run.
 
-- Deterministic REJECT-first and ACCEPT-first concurrent same-identity dispatch under chosen semantics.
-- No external/local identity split and no duplicate external execution on retry.
-- All accepted recovery paths remain safe (ACCEPT_THEN_UNKNOWN, ALREADY_EXISTS, retry after terminal rejection).
-- If option A: tombstone suppresses later same-identity creation; new attempt identity can be accepted; UNKNOWN never tombstones.
-- Historical 007A evidence retained, but regression expectations updated to **accepted** contract — do not encode pre-fix behavior as normal or hide red tests with skip/TODO.
-- Real PostgreSQL acceptance, transaction-boundary and lock-order assertions preserved.
+Do not implement:
+- DISPATCH_FAILED → ACCEPTED (forbidden terminal rewrite),
+- acceptance-overrides-rejection precedence,
+- a new attempt status,
+- new database columns or migrations,
+- executor cancellation,
+- real Airflow integration,
+- distributed mutex/lease/queue,
+- Task 007C/007D/007E cleanup.
+
+Do not change Task 005 reconciliation selection rules merely to accommodate a rejected attempt; under ADR-0008 there must never be a real external execution for that rejected identity.
+
+## Mandatory Deterministic Tests
+
+Use a real disposable PostgreSQL database with migrations, Fastify.inject, and the FakeExecutor (or a response-delaying wrapper that delegates *actual external processing* unchanged). Explicit barriers must control external processing and DB recording order; timeouts only serve as failure watchdogs.
+
+### 1. CON-02: rejection processed and recorded first
+
+Two overlapping `POST /calculation-jobs/:id/run` calls share **exactly the same** attempt ID and DAG/run identity X.
+
+Fake configured first call REJECT then subsequent ACCEPT:
+
+- First processed response must be REJECTED, with zero external X.
+- Second processed response for X **must also be REJECTED**, regardless of scripted ACCEPT; X never exists.
+- When first response is recorded before second, both HTTP requests return 502 (definite rejection) or exactly the stable existing contract under review; no generic 500.
+- Local attempt 1 DISPATCH_FAILED; job PENDING; external X count 0.
+- No new attempt is created by either overlapping request itself.
+
+Then a new independent /run may create attempt 2 with new identity Y; it may succeed. Assert only Y exists externally and snapshot/definition/upstream pins are unchanged.
+
+### 2. CON-02: rejection processed but response order reversed
+
+Same Fake external results as above; second HTTP response returns to backend first.
+
+Both requests must converge on the same rejected attempt with no external X. No internal error or terminal rewrite.
+
+### 3. ACCEPT-first, ALREADY_EXISTS second
+
+Script ACCEPT then REJECT for same X.
+
+- First response ACCEPTED and creates X.
+- Second returns ALREADY_EXISTS; configured REJECT must not override X.
+- Recording orders both converge to attempt ACCEPTED, job RUNNING, one X.
+
+### 4. UNKNOWN_WITHOUT_CREATION does not tombstone
+
+An unknown response without creation leaves X eligible for a later same-identity retry/dispatch. The later call may create X exactly once, returning ACCEPTED; DB records same attempt identity, not Attempt 2.
+
+### 5. ACCEPT_THEN_UNKNOWN recovery unchanged
+
+The Fake creates X but reports UNKNOWN. Repeated same identity reports ALREADY_EXISTS; DB recovery stays on same attempt. No duplicate X or snapshot refresh.
+
+### 6. Permanent tombstone and scripted-behavior isolation
+
+After X is REJECTED:
+
+- repeated dispatch of X returns REJECTED;
+- no additional scripted behavior is consumed;
+- a fresh identity Y still consumes the next configured behavior and can be accepted;
+- the exact key includes both airflowDagId and airflowDagRunId, not run ID alone;
+- test a parallel distinct-identity dispatch to show no global fake serialization is introduced.
+
+### 7. Invalid adapter fixture isolation
+
+Preserve a separate test confirming that an intentionally dishonest adapter that reports REJECTED for an already-created run violates ADR-0008. Do not ask the backend to rewrite DISPATCH_FAILED or silently suppress contradiction to make this invalid test pass.
+
+### 8. Existing regression suites
+
+Run existing Task-004 Run/Retry, Task-005 reconciliation, Task-006 lifecycle and relevant Task-003 snapshot PostgreSQL suites, plus CON-01 tests after Task 007B-1 integration.
+
+Confirm job → attempt lock ordering and that executor calls are outside DB transactions.
+
+## 007A Harness Integration Rule
+
+The original Task-007A CON-02 FakeExecutor sequence expecting REJECTED→ACCEPTED was correct **under the old fake semantics**, but is no longer a valid expected result after ADR-0008.
+
+- Preserve original docs/tasks/007a-investigation-results.md and JSON evidence as historical reproduction evidence.
+- Replace the intentionally red expectation with the newly accepted contract behavior, using an explicit comment pointing to ADR-0008.
+- Do not `skip`, `todo`, weaken assertions, or fabricate green results.
+- Avoid merging a red 007A branch directly to main. Coordinate with Task 007B-1 so the same investigation suite is not imported or rewritten independently in two competing branches.
+
+## Likely Files
+
+- src/executors/calculation-executor.ts (contract comment)
+- src/executors/fake-executor.ts (private rejection marker and dispatch guard)
+- scripts/cross-workflow-concurrency-investigation.pg.test.ts and/or a focused new Task-007B-2 PG regression suite
+- scripts/execution-attempt-dispatch-fake-executor.pg.test.ts, only for relevant backward compatibility tests
+- package.json only for a test command that is actually needed
+
+No application route, schema migration, repository-layer, snapshot, dataset lifecycle, or external adapter implementation changes.
+
+## Stop Conditions
+
+Stop and escalate if:
+
+- A valid new FakeExecutor behavior still produces an external X with local X=DISPATCH_FAILED.
+- A proposed fix requires changing the Task-004/005 state machine or retroactively altering terminal history.
+- A broader requirement emerges for rejection durability across multiple real executors, machines, or process restarts.
+- A real Airflow adapter is requested to return REJECTED without a provable permanent identity-wide guarantee.
+
+Do not hide unsupported distributed guarantees behind passing in-process FakeExecutor tests.
+
+## Acceptance Criteria
+
+- [ ] Same-identity permanent REJECTED can never be followed by an external run for that identity in FakeExecutor.
+- [ ] No double external execution or orphaned run under accepted FakeExecutor behavior.
+- [ ] Concurrent rejection-first and acceptance-first tests deterministic and green on real PostgreSQL.
+- [ ] No 500 during legal same-identity dispatch interleavings; expected HTTP codes verified.
+- [ ] UNKNOWN and ALREADY_EXISTS recovery unchanged.
+- [ ] Retry after DISPATCH_FAILED uses a fresh attempt/identity and the same frozen dataset contract.
+- [ ] Terminal attempt history and job → attempt lock order unchanged.
+- [ ] 007A historical evidence retained without merging red tests.
+- [ ] Relevant Task-002–006 PostgreSQL suites green, exact commands/versions/exit codes recorded.
+- [ ] System owner reviews implementation and explains why instance-local tombstones do **not** prove a distributed production executor guarantee.
+
+This task is not complete on a green FakeExecutor unit test alone. The real PostgreSQL cross-workflow regression and existing Run/Retry/Reconciliation tests are mandatory.
