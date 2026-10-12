@@ -51,7 +51,7 @@ job/attempt:     calculation_job → execution_attempt
 | Package | Bounded purpose | Status |
 |---|---|---|
 | 007A | Deterministic proof/classification of cross-workflow dispatch races | Evidence complete on unmerged 007A branch |
-| 007B | CON-01 bounded late-response correction; CON-02 identity guarantee design | 007B-1 spec ready; 007B-2 architecture decision pending |
+| 007B | CON-01 bounded late-response correction; CON-02 identity-scoped rejection contract | ADR-0008 accepted; 007B-1/007B-2 bounded specs ready, implementation pending |
 | 007C | HTTP validation and public error contract hardening | Ready after concurrency gate |
 | 007D | Complete E2E acceptance + reproducible PostgreSQL milestone test command | After concurrency and API stabilise |
 | 007E | Safe legacy application cleanup and truthful documentation | Last, after replacement paths protected by tests |
@@ -61,6 +61,7 @@ Subtask specifications:
 - docs/tasks/007b-conditional-concurrency-remediation.md
 - docs/tasks/007b1-late-dispatch-terminal-reconciliation.md
 - docs/tasks/007b2-definite-rejection-semantics-review.md
+- docs/adr/0008-identity-scoped-definite-dispatch-rejection.md
 - docs/tasks/007c-api-contract-hardening.md
 - docs/tasks/007d-end-to-end-verification-gate.md
 - docs/tasks/007e-legacy-and-documentation-cleanup.md
