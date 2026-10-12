@@ -1,186 +1,72 @@
 # Roadmap
 
-This file tracks implementation order for the accepted Cost Engine Orchestration Platform architecture.
+The Cost Engine Orchestration Platform is a new portfolio backend. Accepted decisions live in docs/adr/, current implementation invariants in docs/ARCHITECTURE.md, and bounded execution specifications in docs/tasks/.
 
-Architecture decisions belong in `docs/adr/`; current architecture belongs in `docs/ARCHITECTURE.md`; bounded implementation work belongs in `docs/tasks/`.
+## Completed and merged on main
 
-## Now
+Verified baseline: 85479c723090de8dc96cdb0a13472f3156b5e8f9.
 
-### Task 002 — Dataset Version Creation v2
+| Task | Implemented capability | Status |
+|---|---|---|
+| 002 | Canonical dataset identity; atomic DRAFT version allocation and snapshot of active types into jobs | Merged |
+| 003 | First Run freezes dataset-wide definitions/upstream versions; selected PREPARED attempt | Merged |
+| 004 | Run/Retry, stable dispatch identity, FakeExecutor, ambiguous dispatch handling | Merged |
+| 005 | Executor status reconciliation, stale callback protection, terminal attempt/job updates | Merged |
+| 006 | Explicit Submit Validation; Publish/Reject/Abandon with series coordination and active-attempt guard | Merged |
 
-Status: merged to `main`.
+These merges are implementation status, not evidence that the final combined milestone has passed its full end-to-end verification gate.
 
-Implemented baseline:
+## Current milestone: Task 007 — End-to-End Hardening and Legacy Cleanup
 
-```text
-POST /dataset-versions
-→ canonical series identity
-→ atomic version allocation
-→ DRAFT dataset version
-→ snapshot active calculation types into PENDING jobs
-```
+**Status: design priorities accepted; implementation and independent PostgreSQL verification pending.**
 
-### Task 003 — First Run + Immutable Dataset Build Snapshot
+Master scope: docs/tasks/007-end-to-end-hardening-and-legacy-cleanup.md
 
-Status: merged to `main`.
+Agreed order and independent review packages:
 
-Implemented baseline:
+1. **007A — Cross-workflow concurrency investigation (NEXT).**
+   Deterministically test dispatch-result-vs-terminal-reconciliation (CON-01), and same-identity conflicting dispatch results (CON-02). Classify valid executor behavior vs adapter contract violation vs local bug. No production fix yet.
+2. **007B — Conditional concurrency remediation (BLOCKED).**
+   Only implement after 007A evidence and system-owner approval. If a supported-behavior defect is not found, no speculative correction.
+3. **007C — API contract hardening.**
+   Validate job UUIDs, bound callback identity fields, validate supported raw ingestion at runtime, ensure dev/test-only FakeExecutor controls, verify actual public error codes/shape.
+4. **007D — Complete E2E and reproducible PostgreSQL test gate.**
+   Cover successful publication, failure/retry, response loss/recovery, rejection, safe abandonment and late callbacks. Run all existing v2 suites and raw ingestion via one documented command; record real test evidence.
+5. **007E — Safe dead-code cleanup and documentation sync.**
+   Remove only proven-unused application artifacts; update README, AGENTS, ARCHITECTURE and ROADMAP. Do not change historical migration/data.
 
-```text
-first preparation for DRAFT dataset
-→ freeze one dependency-definition version per job
-→ freeze one concrete upstream version per required series
-→ create exactly one immutable dataset_build_snapshot
-→ DRAFT → BUILDING
-→ selected job remains PENDING
-→ selected job gets PREPARED execution_attempt
-```
+Task definitions are available under docs/tasks/007a through 007e.
 
-Preparing later jobs in the same `BUILDING` dataset reuses the existing snapshot and does not refresh definitions or upstream versions.
+### Retained scope
 
-### Task 004 — Execution Attempt Dispatch + FakeExecutor
+The raw-ingestion endpoint and module remain **supported** in this milestone. They are not dead code. Preserve their test, schema, applied migrations, and any historical data.
 
-Status: merged to `main`.
+Legacy cleanup rules:
+- verify zero remaining supported callers before application code deletion;
+- keep v1/v2 migration files immutable and retain historical/audit data;
+- no broad refactor or dependency upgrade sweep;
+- no new technology just for portfolio breadth.
 
-Implemented baseline:
+## Completion gate
 
-```text
-POST /calculation-jobs/:jobId/run
-→ prepare/reuse durable execution_attempt
-→ PREPARED → DISPATCHING
-→ commit
-→ dispatch through FakeExecutor outside DB transaction
-→ ACCEPTED/ALREADY_EXISTS:
-     attempt → ACCEPTED
-     job PENDING/FAILED → RUNNING
-→ REJECTED:
-     attempt → DISPATCH_FAILED
-     job state unchanged
-→ UNKNOWN:
-     attempt remains DISPATCHING
-     same stable run identity is reused
-```
+Do not mark Task 007 or the Orchestration Core v2 milestone COMPLETE until:
 
-Task 004 also owns retry-attempt preparation for a `FAILED` job while preserving the immutable dataset build snapshot.
+- CON-01/CON-02 are proven or ruled out with deterministic PostgreSQL/executor evidence, and verified fixes for real regressions;
+- all documented public error contracts and malformed input paths are covered;
+- cross-service lifecycle E2E scenarios pass with immutable snapshot/attempt history;
+- a single reproducible PostgreSQL test command runs build and all existing six v2 suites plus supported raw-ingestion and new E2E tests;
+- captured environment/command/exit-code and test results prove green on a real PostgreSQL instance;
+- zero known critical lifecycle/concurrency regressions remain;
+- historical migration/data are preserved and developer docs accurately represent current code;
+- system owner independently reviews and approves the evidence.
 
-### Task 005 — Executor Reconciliation
+Test files existing on disk do not alone satisfy this gate.
 
-Status: implementation/code review accepted after stale-observation fix; merge to `main` still required before Task 006 implementation begins.
+## Deferred until a concrete requirement
 
-Task spec:
-
-- `docs/tasks/005-executor-reconciliation.md`
-
-Relevant decision:
-
-- `docs/adr/0005-execution-attempts-and-airflow-reconciliation.md`
-
-Goal:
-
-```text
-manual Check Status / callback signal
-→ resolve exact durable execution_attempt
-→ executor status lookup outside DB transaction
-→ RUNNING:
-     recover/keep ACCEPTED + RUNNING
-→ SUCCEEDED:
-     attempt + job atomically SUCCEEDED
-→ FAILED:
-     attempt + job atomically FAILED
-→ NOT_FOUND/UNAVAILABLE:
-     preserve local state
-```
-
-Task 005 must also protect against stale callbacks from older attempts and terminal-state contradictions.
-
-Task 005 does not implement dataset validation/publication decisions or real Airflow integration.
-
-### Incremental Legacy Cleanup
-
-Legacy application code should be removed incrementally as each v2 replacement slice becomes authoritative.
-
-Rules:
-
-- delete only code that is fully superseded and has no remaining supported caller,
-- preserve code temporarily when a later, not-yet-migrated lifecycle still depends on it,
-- require replacement-path tests before deletion,
-- do not turn cleanup into an unrelated repository-wide refactor,
-- never treat application dead-code cleanup as permission to discard historical/audit database data.
-
-Cleanup work belongs in the bounded task that replaces the old behavior, not in a standalone architecture ADR unless a new architectural trade-off is discovered.
-
-## Next
-
-### Task 006 — Validation and Dataset Terminal Decisions
-
-Status: architecture accepted; ADR and bounded implementation spec ready. Implementation is blocked until Task 005 is merged to `main`.
-
-Task spec:
-
-- `docs/tasks/006-validation-and-dataset-terminal-decisions.md`
-
-Relevant decision:
-
-- `docs/adr/0007-dataset-terminal-decisions-and-publication-serialization.md`
-
-Goal:
-
-```text
-BUILDING + all jobs SUCCEEDED
-→ explicit VALIDATING
-
-VALIDATING → PUBLISHED / REJECTED
-
-DRAFT / safe BUILDING
-→ ABANDONED
-```
-
-Key correctness boundaries:
-
-- Submit Validation locks dataset_version then all jobs before checking readiness.
-- Publish/Reject/Abandon serialize through dataset_series → dataset_version.
-- PREPARED/DISPATCHING/ACCEPTED attempts block abandonment.
-- same-target repeated lifecycle commands are idempotent 200.
-- no executor cancellation is introduced.
-- Task-005 terminal reconciliation remains idempotent after dataset lifecycle advancement.
-
-### Task 007 — End-to-End Hardening and Legacy Cleanup
-
-Planned scope:
-
-- full public error-contract coverage,
-- end-to-end happy/failure/retry scenarios,
-- concurrency regression suite,
-- final removal of fully superseded legacy application code,
-- README/architecture implementation-status synchronization.
-
-## Later
-
-Only introduce these when a concrete requirement justifies them:
-
-- automatic dependency-ready scheduling,
-- periodic reconciliation worker,
-- Airflow cancellation,
-- job-to-job dependency graph inside one dataset version,
-- RabbitMQ/Kafka/Redis,
-- Kubernetes deployment,
-- additional reporting grains beyond the current quarterly identity model.
-
-Do not add technologies solely for portfolio breadth.
-
-## Completion Gate for the Orchestration Milestone
-
-The milestone is complete only when the implementation demonstrates:
-
-- canonical dataset identity,
-- monotonic version allocation,
-- one active dataset version per series,
-- multi-job dataset versions,
-- versioned dependency definitions,
-- one immutable dataset-wide input snapshot,
-- retry through immutable execution attempts,
-- Airflow dispatch idempotency/recovery semantics,
-- reconciliation-based executor state updates,
-- validation/publication/rejection/abandonment lifecycle,
-- documented public error contracts,
-- real PostgreSQL failure-path and concurrency tests.
+- actual Airflow HTTP integration and cancellation,
+- automatic/periodic reconciliation workers,
+- downstream job scheduling or job-to-job graphs,
+- RabbitMQ, Redis, Kafka, Kubernetes,
+- retirement of raw-ingestion or historical DPR tables,
+- a new reporting identity grain beyond current quarterly model.
