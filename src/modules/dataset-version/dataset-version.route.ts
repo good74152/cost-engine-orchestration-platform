@@ -2,9 +2,16 @@ import type { FastifyInstance } from 'fastify';
 import {
   InvalidDatasetDomainError,
   InvalidDatasetPeriodError,
+  InvalidDatasetVersionIdError,
   InvalidDatasetVersionRequestError,
 } from './dataset-version.errors.js';
 import { createDatasetVersionService } from './dataset-version.service.js';
+import {
+  abandonDatasetVersionService,
+  publishDatasetVersionService,
+  rejectDatasetVersionService,
+  submitDatasetValidationService,
+} from './dataset-version-lifecycle.service.js';
 import {
   DATASET_DOMAINS,
   DATASET_PERIODS,
@@ -14,6 +21,15 @@ import type {
   DatasetDomain,
   DatasetPeriod,
 } from './dataset-version.types.js';
+
+const UUID_PATTERN = /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
+
+function parseDatasetVersionId(value: string): string {
+  if (!UUID_PATTERN.test(value)) {
+    throw new InvalidDatasetVersionIdError();
+  }
+  return value;
+}
 
 const requestKeys = new Set([
   'domain',
@@ -84,4 +100,21 @@ export async function datasetVersionRoutes(app: FastifyInstance): Promise<void> 
     const result = await createDatasetVersionService(input);
     return reply.status(201).send(result);
   });
+
+  const lifecycleCommands = {
+    'submit-validation': submitDatasetValidationService,
+    publish: publishDatasetVersionService,
+    reject: rejectDatasetVersionService,
+    abandon: abandonDatasetVersionService,
+  };
+  for (const [command, service] of Object.entries(lifecycleCommands)) {
+    app.post<{ Params: { datasetVersionId: string } }>(
+      `/dataset-versions/:datasetVersionId/${command}`,
+      async (request, reply) => {
+        const datasetVersionId = parseDatasetVersionId(request.params.datasetVersionId);
+        const result = await service(datasetVersionId);
+        return reply.status(200).send(result);
+      },
+    );
+  }
 }

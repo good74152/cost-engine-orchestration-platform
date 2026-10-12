@@ -12,6 +12,7 @@
     "test:first-run-immutable-build-snapshot": "tsx --test scripts/first-run-immutable-build-snapshot.pg.test.ts",
     "test:execution-attempt-dispatch-fake-executor": "tsx --test scripts/execution-attempt-dispatch-fake-executor.pg.test.ts",
     "test:executor-reconciliation": "tsx --test scripts/executor-reconciliation.pg.test.ts",
+    "test:dataset-version-terminal-lifecycle": "tsx --test scripts/dataset-version-terminal-lifecycle.pg.test.ts",
     "test:orchestration-schema-v2": "tsx --test scripts/orchestration-schema-v2.pg.test.ts",
     "test:raw-ingestion": "tsx --test scripts/raw-ingestion.route.test.ts"
   },
