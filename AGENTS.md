@@ -133,8 +133,11 @@ Master scope and acceptance gates:
 
 docs/tasks/007-end-to-end-hardening-and-legacy-cleanup.md
 
-First bounded task: 007A cross-workflow concurrency investigation.
+Task 007A investigation evidence (including intentionally red tests) is available on the unmerged branch feature/task-007a-concurrency-investigation. The system owner has accepted the Task 007B architecture response to its findings.
 
-docs/tasks/007a-cross-workflow-concurrency-investigation.md
+Active bounded implementation specs:
 
-Task 007B (conditional remediation) is blocked until 007A evidence and system-owner design review. Do not delegate speculative fixes. Raw-ingestion API and applied migration history are retained in this milestone. Do not add new executor technology or redesign accepted lifecycle/locking protocols.
+- docs/tasks/007b1-late-dispatch-terminal-reconciliation.md
+- docs/tasks/007b2-definite-rejection-semantics-review.md
+
+Executor REJECTED is an irrevocable identity-wide no-run guarantee (ADR-0008), not a per-call observation. Implement 007B-1 and 007B-2 as independently reviewable PRs. Do not merge the intentionally red investigation branch without replacing failing regressions with verified green tests. Do not delegate speculative fixes outside these specs. Retain raw-ingestion API and historical migrations. Do not redesign accepted lifecycle/locking protocols.
