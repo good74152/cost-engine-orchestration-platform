@@ -518,20 +518,22 @@ CalculationExecutor
 ## 16. Current Implementation Sequence
 
 ```text
-1. Schema/migration and persistence invariants                         ✅
-2. Dataset version creation + calculation-type job snapshotting       ✅
-3. First Run + immutable build snapshot                               ✅
-4. Execution attempts + FakeExecutor                                  ✅
-5. Reconciliation                                                     REVIEW ACCEPTED / MERGE PENDING
-6. Validation / Publish / Reject / Abandon                            DESIGN ACCEPTED / SPEC READY
-7. Full failure-path and concurrency acceptance suite                 NEXT
+1. Schema/migration and persistence invariants                         MERGED
+2. Dataset version creation + calculation-type job snapshotting       MERGED
+3. First Run + immutable build snapshot                               MERGED
+4. Execution attempts + FakeExecutor                                  MERGED
+5. Reconciliation                                                     MERGED
+6. Validation / Publish / Reject / Abandon                            MERGED
+7. End-to-End Hardening and Legacy Cleanup                            DESIGN ACCEPTED / NOT IMPLEMENTED
 ```
 
-The active bounded task is:
+The active milestone specification is:
 
 ```text
-docs/tasks/006-validation-and-dataset-terminal-decisions.md
+docs/tasks/007-end-to-end-hardening-and-legacy-cleanup.md
 ```
+
+Task 007A (concurrency evidence first) is next. Task 007B remediation is blocked on owner-reviewed evidence. Tasks 002–006 accepted lifecycle and lock protocols remain unchanged.
 
 ## 17. Decision Records
 
