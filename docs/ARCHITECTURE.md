@@ -359,12 +359,15 @@ DB transaction: prepare/fetch durable attempt and mark DISPATCHING
 
 ### Dispatch Outcomes
 
-Definite rejection, with certainty that no executor run was created:
+Definite rejection is **identity-scoped and irrevocable** under ADR-0008. For the exact `(airflow_dag_id, airflow_dag_run_id)`, REJECTED guarantees that no external execution exists **and none can be created later by another same-identity dispatch**. It is not merely a per-request no-run observation. An executor/adapter unable to enforce this guarantee must return UNKNOWN instead.
 
 ```text
-attempt → DISPATCH_FAILED
-job remains PENDING or FAILED
+definite identity-wide REJECTED
+→ attempt DISPATCH_FAILED
+→ job remains PENDING or FAILED
 ```
+
+The FakeExecutor demonstrates this contract via a rejection tombstone keyed by full execution identity within one fake instance. It is **not** cross-process persistence or a real Airflow guarantee. The accepted executor semantics remain independent of whether a future adapter can implement definite rejection.
 
 Unknown outcome, such as timeout/response loss:
 
@@ -533,7 +536,7 @@ The active milestone specification is:
 docs/tasks/007-end-to-end-hardening-and-legacy-cleanup.md
 ```
 
-Task 007A (concurrency evidence first) is next. Task 007B remediation is blocked on owner-reviewed evidence. Tasks 002–006 accepted lifecycle and lock protocols remain unchanged.
+Task 007A has recorded real PostgreSQL evidence for CON-01 and CON-02 on an unmerged investigation branch. Task 007B-1 is the bounded late-response correction; ADR-0008 accepts the identity-wide rejection contract and Task 007B-2 specifies FakeExecutor compliance. Both need implementation, system-owner review and green PostgreSQL regressions. Tasks 002–006 state machines and locking protocols remain unchanged.
 
 ## 17. Decision Records
 
