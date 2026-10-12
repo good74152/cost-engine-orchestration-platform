@@ -127,10 +127,14 @@ Do not put employer-specific Airflow DAG code, SQL, proprietary schemas, or conf
 
 ## Current Implementation Task
 
-Task 005 reconciliation is review-accepted but must be merged to `main` before Task 006 implementation begins.
+Tasks 002–006 are merged into main. The active milestone is Task 007 — End-to-End Hardening and Legacy Cleanup.
 
-The next bounded implementation task is:
+Master scope and acceptance gates:
 
-`docs/tasks/006-validation-and-dataset-terminal-decisions.md`
+docs/tasks/007-end-to-end-hardening-and-legacy-cleanup.md
 
-Its non-goals are binding. In particular, do not add executor cancellation, automatic validation/publication, real Airflow integration, or Task-007 cleanup as part of Task 006.
+First bounded task: 007A cross-workflow concurrency investigation.
+
+docs/tasks/007a-cross-workflow-concurrency-investigation.md
+
+Task 007B (conditional remediation) is blocked until 007A evidence and system-owner design review. Do not delegate speculative fixes. Raw-ingestion API and applied migration history are retained in this milestone. Do not add new executor technology or redesign accepted lifecycle/locking protocols.
