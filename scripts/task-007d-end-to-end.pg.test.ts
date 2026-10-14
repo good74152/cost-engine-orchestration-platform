@@ -97,9 +97,9 @@ test('Task 007D integrated PostgreSQL E2E: public orchestration flows A–F', { 
       import('../src/db/pool.js'), import('../src/app.js'),
     ]);
     applicationPool = pool;
-    const version = await pool.query<{ version: string }>('SHOW server_version');
+    const version = await pool.query<{ server_version: string }>('SHOW server_version');
     console.log(`E2E_RUNTIME ${JSON.stringify({ node: process.version,
-      postgres: version.rows[0]!.version,
+      postgres: version.rows[0]!.server_version,
       database: 'owned task_007d_e2e_* database with all checked-in migrations' })}`);
     const definitionByType = new Map<string, string>();
 
@@ -382,7 +382,10 @@ test('Task 007D integrated PostgreSQL E2E: public orchestration flows A–F', { 
       assert.equal(v3.version, 3);
       assert.equal(v3.datasetSeriesId, v1.datasetSeriesId);
       assert.equal((await state(v3.datasetVersionId)).dataset.status, 'DRAFT');
-      assert.deepEqual(await state(v2.datasetVersionId), rejected);
+      // The rejected version's history is immutable, but its shared series
+      // allocation counter must advance when v3 is created. Assert both facts.
+      assert.deepEqual(await state(v2.datasetVersionId), { ...rejected,
+        series: { ...rejected.series, last_allocated_version: 3 } });
       assert.equal((await latestPublished(v3.datasetSeriesId))!.id, v1.datasetVersionId);
       console.log('E2E_FLOW', JSON.stringify({ flow: 'D', versions: [1, 2, 3],
         rejectedVersion: 2, latestPublished: 1 }));

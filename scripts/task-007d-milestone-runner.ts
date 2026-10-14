@@ -19,7 +19,7 @@ const suites = [
 ] as const satisfies readonly MilestoneSuite[];
 
 const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
-const nodeEnvironment = { ...process.env, NODE_ENV: 'test' };
+const nodeEnvironment: NodeJS.ProcessEnv = { ...process.env, NODE_ENV: 'test' };
 
 async function execute({ label, command, kind }: MilestoneSuite): Promise<ProcessResult> {
   // npm supplies its CLI path. Invoke it via Node rather than executing .cmd

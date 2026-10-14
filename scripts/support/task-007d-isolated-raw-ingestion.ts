@@ -31,8 +31,8 @@ try {
     dir: fileURLToPath(new URL('../../migrations/', import.meta.url)),
     migrationsTable: 'pgmigrations', direction: 'up', singleTransaction: true,
     checkOrder: true, logger: { debug() {}, info() {}, warn() {}, error() {} } });
-  const server = await admin.query<{ version: string }>('SHOW server_version');
-  console.log(`RAW_ISOLATED_DB ${JSON.stringify({ name, version: server.rows[0]!.version,
+  const server = await admin.query<{ server_version: string }>('SHOW server_version');
+  console.log(`RAW_ISOLATED_DB ${JSON.stringify({ name, version: server.rows[0]!.server_version,
     setup: 'owned temporary database; all migrations applied' })}`);
   const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
   const npmCli = process.env.npm_execpath;
