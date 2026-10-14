@@ -7,6 +7,7 @@ import type {
 } from '../executors/calculation-executor.js';
 import { pool } from '../db/pool.js';
 import { withTransaction } from '../db/transaction.js';
+import { hasNewerExecutionAttempt } from './calculation-job-reconciliation.repository.js';
 import {
   allocateNextAttemptNumber,
   findActiveExecutionAttempt,
@@ -445,6 +446,19 @@ async function recordDispatchOutcome(
       }
       if (outcome.kind === 'REJECTED') {
         invariant(`Definite rejection contradicts terminal attempt ${attempt.id} (${attempt.status})`);
+      }
+      // A historical terminal attempt may differ from the current job only if
+      // a newer retry owns that logical job. Job/attempt locks serialize this
+      // read with Task-004 retry creation and Task-005 reconciliation.
+      const newerAttemptExists = await hasNewerExecutionAttempt(
+        client, context.jobId, attempt.attemptNumber,
+      );
+      if (!newerAttemptExists && context.jobStatus !== attempt.status) {
+        invariant(
+          `Terminal attempt/job state is inconsistent during late dispatch: `
+          + `jobId=${context.jobId}, attemptId=${attempt.id}, `
+          + `attemptStatus=${attempt.status}, jobStatus=${context.jobStatus}`,
+        );
       }
       // Reconciliation owns terminal truth. This is read-only even when a newer
       // retry owns the current logical job state; identity remains this attempt.

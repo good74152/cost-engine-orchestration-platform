@@ -223,6 +223,52 @@ test('Task 007B-1 late dispatch PostgreSQL regression and lock boundaries', { co
       try { await held.client.query('ROLLBACK'); } finally { held.client.release(); }
     }
 
+    // Deliberate test-only SQL corruption happens after a successful terminal
+    // reconciliation and before the original blocked dispatch response returns.
+    // A terminal attempt cannot justify a different job state without a retry.
+    for (const scenario of [
+      { terminal: 'SUCCEEDED', jobStatus: 'PENDING', expectedStatus: 500 },
+      { terminal: 'FAILED', jobStatus: 'RUNNING', expectedStatus: 500 },
+      { terminal: 'SUCCEEDED', jobStatus: 'SUCCEEDED', expectedStatus: 200 },
+      { terminal: 'FAILED', jobStatus: 'FAILED', expectedStatus: 200 },
+    ] as const) {
+      await t.test(
+        `CON-01-TERMINAL_JOB_INVARIANT: ${scenario.terminal} attempt / ${scenario.jobStatus} job / no retry`,
+        async () => {
+          const executor = new DelayedExecutor();
+          const { dataset, jobId } = await fixture(executor);
+          const requestA = run(jobId);
+          try {
+            const { command } = await bounded(executor.entered, 'terminal/job invariant dispatch');
+            const dispatching = await state(dataset.datasetVersionId);
+            assert.equal(dispatching.attempts.length, 1);
+            const terminalized = await terminalize(executor, command, scenario.terminal);
+            assert.equal(terminalized.jobs.find((job) => job.id === jobId)!.status, scenario.terminal);
+            if (scenario.jobStatus !== scenario.terminal) {
+              await pool.query('UPDATE calculation_jobs SET status = $2 WHERE id = $1',
+                [jobId, scenario.jobStatus]);
+            }
+            const before = await state(dataset.datasetVersionId);
+            assert.equal(before.attempts.length, 1, 'No newer retry attempt exists');
+            assert.equal(before.attempts[0]!.status, scenario.terminal);
+            assert.equal(before.jobs.find((job) => job.id === jobId)!.status, scenario.jobStatus);
+            executor.release();
+            const responseA = await requestA;
+            assert.equal(responseA.statusCode, scenario.expectedStatus, responseA.body);
+            if (scenario.expectedStatus === 500) {
+              assert.equal(responseA.json().code, 'INTERNAL_SERVER_ERROR');
+            } else {
+              assertResponse(responseA, command, before, 'ACCEPTED');
+            }
+            assert.deepEqual(await state(dataset.datasetVersionId), before,
+              'Late response must not mutate corrupted or valid terminal history');
+            assertFrozen(dispatching, before);
+            assert.equal(executor.fake.getExternalExecutions().length, 1);
+          } finally { executor.release(); await Promise.allSettled([requestA]); }
+        },
+      );
+    }
+
     // Exact CON-01 barrier: creation + committed DISPATCHING, executor response held,
     // B reconciles and commit is queried, then A is released. No production helpers invoked directly.
     for (const outcome of ['ACCEPTED', 'ALREADY_EXISTS', 'UNKNOWN'] as const) {
@@ -318,6 +364,9 @@ test('Task 007B-1 late dispatch PostgreSQL regression and lock boundaries', { co
         const committed = await state(dataset.datasetVersionId);
         assert.equal(committed.attempts.length, 2);
         assert.deepEqual(committed.attempts[0], failed.attempts[0]);
+        assert.equal(committed.attempts.find((attempt) => attempt.id === command.executionAttemptId)!.status, 'FAILED');
+        assert.equal(committed.attempts.find((attempt) => attempt.id === retry.json().executionAttemptId)!.status, 'ACCEPTED');
+        assert.equal(committed.jobs.find((job) => job.id === jobId)!.status, 'RUNNING');
         executor.release();
         const responseA = await requestA;
         assert.deepEqual(await state(dataset.datasetVersionId), committed);
