@@ -35,14 +35,20 @@ try {
   console.log(`RAW_ISOLATED_DB ${JSON.stringify({ name, version: server.rows[0]!.version,
     setup: 'owned temporary database; all migrations applied' })}`);
   const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+  const npmCli = process.env.npm_execpath;
   childExit = await new Promise<number>((resolve) => {
-    const child = spawn(npm, ['run', 'test:raw-ingestion'], {
+    const child = spawn(npmCli ? process.execPath : npm,
+      [...(npmCli ? [npmCli] : []), 'run', 'test:raw-ingestion'], {
       stdio: 'inherit',
       env: { ...process.env, DATABASE_URL: urlFor(name),
         TEST_DATABASE_URL: urlFor(name), NODE_ENV: 'test' },
     });
-    child.once('error', (error) => { console.error('RAW_TEST_SPAWN_ERROR', error.message); resolve(1); });
-    child.once('close', (code) => resolve(code ?? 1));
+    let spawnFailed = false;
+    child.once('error', (error) => { console.error('RAW_TEST_SPAWN_ERROR', error.message); spawnFailed = true; });
+    child.once('close', (code, signal) => {
+      if (signal) console.error('RAW_TEST_SIGNAL', signal);
+      resolve(spawnFailed || signal ? 1 : code ?? 1);
+    });
   });
 } finally {
   try {

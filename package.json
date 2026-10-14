@@ -19,7 +19,8 @@
     "test:raw-ingestion": "tsx --test scripts/raw-ingestion.route.test.ts",
     "test:task-007c-api-contract": "tsx --test scripts/task-007c-api-contract.pg.test.ts",
     "test:task-007d-end-to-end": "tsx --test scripts/task-007d-end-to-end.pg.test.ts",
-    "test:milestone": "tsx scripts/task-007d-milestone-runner.ts"
+    "test:milestone": "tsx scripts/task-007d-milestone-runner.ts",
+    "test:milestone-runner": "tsx --test scripts/task-007d-milestone-runner.test.ts"
   },
   "keywords": [
     "orchestration",
