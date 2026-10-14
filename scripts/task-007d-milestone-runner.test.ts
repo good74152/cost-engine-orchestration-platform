@@ -134,6 +134,9 @@ test('actual Node TAP with nested tests, CRLF/whitespace, and arbitrary totals i
   // A subprocess inside node:test must not inherit its parent's internal
   // child-v8 reporter context; this fixture deliberately requests plain TAP.
   delete childEnvironment.NODE_TEST_CONTEXT;
+  // This fixture selects its own reporter on the CLI. Do not select it twice
+  // when the enclosing milestone already requested TAP through NODE_OPTIONS.
+  delete childEnvironment.NODE_OPTIONS;
   const stdout = execFileSync(process.execPath, ['--test-reporter=tap', '--input-type=module', '-e',
     'import test from "node:test"; test("parent", async t => { await t.test("child", () => {}); });'],
   { encoding: 'utf8', env: childEnvironment });
