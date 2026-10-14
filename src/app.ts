@@ -22,6 +22,9 @@ export interface BuildAppOptions {
 export async function buildApp(options: BuildAppOptions = {}) {
   const app = Fastify({
     logger: options.logger ?? true,
+    // Permit realistically oversized IDs to reach route-level UUID validation.
+    // The router's default parameter limit would otherwise return 404 first.
+    maxParamLength: 1024,
   });
 
   app.setErrorHandler((error, request, reply) => {
