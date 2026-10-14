@@ -30,6 +30,10 @@ function parseExecutionIdentity(body: unknown): ExecutionIdentity {
     || typeof record.airflowDagRunId !== 'string'
     || record.airflowDagId.length === 0
     || record.airflowDagRunId.length === 0
+    || record.airflowDagId.length > 250
+    || record.airflowDagRunId.length > 250
+    || record.airflowDagId.includes('\u0000')
+    || record.airflowDagRunId.includes('\u0000')
   ) {
     throw invalidRequest();
   }

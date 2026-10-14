@@ -83,6 +83,7 @@ export function parseCreateDatasetVersionInput(
   if (
     companyCode.length === 0
     || companyCode.length > 20
+    || companyCode.includes('\u0000')
     || companyCode.trim() !== companyCode
     || !Number.isInteger(fiscalYear)
     || fiscalYear <= 0

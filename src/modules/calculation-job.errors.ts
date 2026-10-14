@@ -2,10 +2,16 @@ export abstract class CalculationJobError extends Error {
   protected constructor(
     message: string,
     readonly code: string,
-    readonly statusCode: 404 | 409 | 502 | 503,
+    readonly statusCode: 400 | 404 | 409 | 502 | 503,
   ) {
     super(message);
     this.name = new.target.name;
+  }
+}
+
+export class InvalidCalculationJobIdError extends CalculationJobError {
+  constructor() {
+    super('jobId path parameter must be a valid UUID', 'INVALID_REQUEST', 400);
   }
 }
 

@@ -1,8 +1,9 @@
 import 'dotenv/config';
-import Fastify from 'fastify';
+import Fastify, { errorCodes } from 'fastify';
 import { pool } from './db/pool.js';
 import type { CalculationExecutor } from './executors/calculation-executor.js';
 import { FakeExecutor } from './executors/fake-executor.js';
+import { isApprovedFakeExecutorEnvironment } from './executors/executor-factory.js';
 import { CalculationJobError } from './modules/calculation-job.errors.js';
 import { calculationJobRoutes } from './modules/calculation-job.route.js';
 import { DatasetVersionError } from './modules/dataset-version/dataset-version.errors.js';
@@ -21,6 +22,9 @@ export interface BuildAppOptions {
 export async function buildApp(options: BuildAppOptions = {}) {
   const app = Fastify({
     logger: options.logger ?? true,
+    // Fastify v5 passes param limits via routerOptions. Otherwise its default
+    // 100-character cap returns 404 before UUID validation can reject the input.
+    routerOptions: { maxParamLength: 1024 },
   });
 
   app.setErrorHandler((error, request, reply) => {
@@ -42,6 +46,22 @@ export async function buildApp(options: BuildAppOptions = {}) {
       return reply.code(409).send({
         message: error.message,
         code: error.code,
+      });
+    }
+
+    // Recognize concrete Fastify parser failures instead of trusting an
+    // arbitrary application's statusCode as a framework client error.
+    if (error instanceof errorCodes.FST_ERR_CTP_BODY_TOO_LARGE) {
+      return reply.status(413).send({
+        message: 'Invalid request',
+        code: 'INVALID_REQUEST',
+      });
+    }
+
+    if (error instanceof errorCodes.FST_ERR_CTP_INVALID_MEDIA_TYPE) {
+      return reply.status(415).send({
+        message: 'Invalid request',
+        code: 'INVALID_REQUEST',
       });
     }
 
@@ -81,10 +101,9 @@ export async function buildApp(options: BuildAppOptions = {}) {
   if (options.calculationExecutor) {
     await app.register(calculationJobRoutes(options.calculationExecutor));
     await app.register(executorCallbackRoutes(options.calculationExecutor));
-    const nodeEnvironment = options.nodeEnvironment ?? process.env.NODE_ENV;
     if (
       options.calculationExecutor instanceof FakeExecutor
-      && nodeEnvironment?.toLowerCase() !== 'production'
+      && isApprovedFakeExecutorEnvironment(options.nodeEnvironment)
     ) {
       await app.register(fakeExecutorControlRoutes(options.calculationExecutor));
     }
