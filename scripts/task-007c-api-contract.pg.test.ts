@@ -81,6 +81,50 @@ test('Task 007C API contract: real migrated PostgreSQL', { concurrency: false },
       return (await pool!.query(query)).rows[0];
     }
 
+    await t.test('Fastify parser client errors remain 400/413/415, not generic 500', async () => {
+      const before = await countRows();
+      const cases = [
+        { name: 'malformed JSON', contentType: 'application/json',
+          body: '{"domain":"DPR_RAW","businessKey":', expected: 400 },
+        { name: 'body exceeds Fastify 1 MiB limit', contentType: 'application/json',
+          body: JSON.stringify({ domain: 'DPR_RAW', businessKey: 'x'.repeat(1_100_000) }), expected: 413 },
+        { name: 'unsupported media type', contentType: 'application/xml',
+          body: '<raw-ingestion/>', expected: 415 },
+      ] as const;
+      for (const scenario of cases) {
+        const response = await app!.inject({
+          method: 'POST', url: '/raw-ingestion-batches',
+          headers: { 'content-type': scenario.contentType },
+          payload: scenario.body,
+        });
+        expectError(response, scenario.expected, 'INVALID_REQUEST');
+      }
+      assert.deepEqual(await countRows(), before, 'Framework parser must reject before persistence');
+      assert.equal(fake.getDispatchHistory().length, 0);
+      assert.equal(fake.getStatusLookupHistory().length, 0);
+    });
+
+    await t.test('NUL in either callback identity is rejected without lookup or mutation', async () => {
+      const before = await countRows();
+      const lookupsBefore = fake.getStatusLookupHistory().length;
+      for (const identity of [
+        { airflowDagId: 'dag\u0000invalid', airflowDagRunId: 'run-123' },
+        { airflowDagId: 'dag-valid', airflowDagRunId: 'run\u0000invalid' },
+      ]) {
+        expectError(await jsonPost('/executor-callbacks/airflow', identity), 400, 'INVALID_REQUEST');
+      }
+      assert.equal(fake.getStatusLookupHistory().length, lookupsBefore);
+      assert.deepEqual(await countRows(), before);
+    });
+
+    await t.test('NUL in raw-ingestion businessKey is rejected without persistence', async () => {
+      const before = await countRows();
+      expectError(await jsonPost('/raw-ingestion-batches', {
+        domain: 'DPR_RAW', businessKey: 'ABC\u0000DEF',
+      }), 400, 'INVALID_REQUEST');
+      assert.deepEqual(await countRows(), before);
+    });
+
     await t.test('Run and Reconcile malformed job UUID 400; valid unknown UUID 404', async () => {
       const before = await countRows();
       const malformed = [

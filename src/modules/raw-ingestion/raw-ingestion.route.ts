@@ -36,6 +36,7 @@ function parseAllocateRawIngestionBatchInput(body: unknown): AllocateRawIngestio
     || typeof record.businessKey !== 'string'
     || record.businessKey.length === 0
     || record.businessKey.length > 255
+    || record.businessKey.includes('\u0000')
   ) {
     throw invalidRequest();
   }

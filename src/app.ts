@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import Fastify from 'fastify';
+import Fastify, { errorCodes } from 'fastify';
 import { pool } from './db/pool.js';
 import type { CalculationExecutor } from './executors/calculation-executor.js';
 import { FakeExecutor } from './executors/fake-executor.js';
@@ -46,6 +46,22 @@ export async function buildApp(options: BuildAppOptions = {}) {
       return reply.code(409).send({
         message: error.message,
         code: error.code,
+      });
+    }
+
+    // Recognize concrete Fastify parser failures instead of trusting an
+    // arbitrary application's statusCode as a framework client error.
+    if (error instanceof errorCodes.FST_ERR_CTP_BODY_TOO_LARGE) {
+      return reply.status(413).send({
+        message: 'Invalid request',
+        code: 'INVALID_REQUEST',
+      });
+    }
+
+    if (error instanceof errorCodes.FST_ERR_CTP_INVALID_MEDIA_TYPE) {
+      return reply.status(415).send({
+        message: 'Invalid request',
+        code: 'INVALID_REQUEST',
       });
     }
 

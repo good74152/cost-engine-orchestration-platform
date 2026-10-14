@@ -32,6 +32,8 @@ function parseExecutionIdentity(body: unknown): ExecutionIdentity {
     || record.airflowDagRunId.length === 0
     || record.airflowDagId.length > 250
     || record.airflowDagRunId.length > 250
+    || record.airflowDagId.includes('\u0000')
+    || record.airflowDagRunId.includes('\u0000')
   ) {
     throw invalidRequest();
   }

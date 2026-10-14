@@ -14,6 +14,9 @@ Routes: `POST /dataset-versions`, four `POST /dataset-versions/:datasetVersionId
 | Route/source | Trigger | HTTP / public code | Existing route-level tests | Task 007C added tests |
 |---|---|---|---|---|
 | Dataset create | Invalid JSON shape/type/keys | 400 `INVALID_REQUEST` | `dataset-version-creation-v2` | — |
+| Registered JSON POST | Malformed JSON parser input | 400 `INVALID_REQUEST` | Existing parser-error handling | Explicit Fastify.inject malformed JSON, no DB mutation |
+| Registered POST | Payload above 1 MiB Fastify default body limit | 413 `INVALID_REQUEST` | **Gap** | Explicit oversized request, no DB mutation |
+| Registered POST | Unsupported content type (XML) | 415 `INVALID_REQUEST` | **Gap** | Explicit XML request, no DB mutation |
 | Dataset create | Unsupported domain | 400 `INVALID_DOMAIN` | `dataset-version-creation-v2` | — |
 | Dataset create | Unsupported reporting period | 400 `INVALID_PERIOD` | `dataset-version-creation-v2` | — |
 | Dataset lifecycle | Malformed datasetVersionId | 400 `INVALID_REQUEST` | `dataset-version-terminal-lifecycle` | All four routes retain 400 |
@@ -33,8 +36,10 @@ Routes: `POST /dataset-versions`, four `POST /dataset-versions/:datasetVersionId
 | Job Run | Executor confirms permanent rejection | 502 `EXECUTOR_DISPATCH_FAILED` | `execution-attempt-dispatch-fake-executor` | — |
 | Job Reconcile / Callback | Executor status unavailable | 503 `EXECUTOR_STATUS_UNAVAILABLE` | `executor-reconciliation` | — |
 | Executor callback | Invalid body, keys, types, empty or oversized identity | 400 `INVALID_REQUEST` | `executor-reconciliation` (partial) | Null, array, missing/extra fields, invalid types, 251-char boundary, forged status |
+| Executor callback | NUL in airflowDagId or airflowDagRunId | 400 `INVALID_REQUEST` | **Gap** | Both identity fields; no executor lookup or DB mutation |
 | Fake controls (test/development only) | Valid route; unknown dag run identity | 404 `FAKE_EXECUTION_NOT_FOUND` | `executor-reconciliation` | Environment registration matrix |
 | Raw ingestion | Invalid body/domain/businessKey length | 400 `INVALID_REQUEST` | **Gap** | Body shape, 255/256-char boundary, no mutation |
+| Raw ingestion | NUL in businessKey | 400 `INVALID_REQUEST` | **Gap** | U+0000 value, no series/batch mutation |
 | Raw ingestion | Concurrent active batch | 409 `ACTIVE_RAW_INGESTION_BATCH_EXISTS` | `raw-ingestion` | Rechecked on isolated migrated PG with 20 requests |
 | App error handler | Impossible internal lifecycle/invariant corruption | 500 `INTERNAL_SERVER_ERROR` | `executor-reconciliation`, `dataset-version-terminal-lifecycle`, `task-007b1-late-dispatch-reconciliation` | — |
 
@@ -43,8 +48,9 @@ Routes: `POST /dataset-versions`, four `POST /dataset-versions/:datasetVersionId
 ## Boundary/compatibility notes
 
 - Job UUID validation matches the dataset lifecycle 8-4-4-4-12 hexadecimal UUID-shape policy. The existing distinct `404` domain error is unchanged.
-- Callback body must contain exactly `airflowDagId` and `airflowDagRunId`, with 1–250 characters each. Callback-supplied executor status is never treated as authoritative.
-- Raw-ingestion accepted domains: `FAB_COST_RAW`, `CAPEX_RAW`, `DPR_RAW`. The existing successful `201` DTO and allocation transaction are unchanged.
+- Callback body must contain exactly `airflowDagId` and `airflowDagRunId`, with 1–250 characters each and no U+0000. Callback-supplied executor status is never treated as authoritative.
+- Raw-ingestion accepted domains: `FAB_COST_RAW`, `CAPEX_RAW`, `DPR_RAW`. `businessKey` rejects U+0000 without normalization. The existing successful `201` DTO and allocation transaction are unchanged.
+- Framework parser errors are mapped by concrete Fastify error class: malformed JSON remains 400, body-too-large returns 413, unsupported media type returns 415. Other application errors are not reclassified by a broad 4xx status rule.
 - Fake controls require an actual `FakeExecutor` **and** explicitly approved `development` or `test` environment. Conflicting runtime `NODE_ENV` wins fail-closed over injected options. Production also retains its existing explicit factory rejection error.
 - No Task 007D end-to-end runner, Task 007E cleanup, schema migration, dependency upgrade, or state-machine/locking change was introduced.
 
