@@ -34,6 +34,12 @@ export function createConfiguredCalculationExecutor(
   if (executorType.toLowerCase() !== 'fake') {
     throw new Error(`Unsupported calculation executor type: ${executorType}`);
   }
+  if (
+    configuration.nodeEnvironment?.toLowerCase() === 'production'
+    || process.env.NODE_ENV?.toLowerCase() === 'production'
+  ) {
+    throw new Error('FakeExecutor cannot be enabled in production');
+  }
   if (!isApprovedFakeExecutorEnvironment(configuration.nodeEnvironment)) {
     throw new Error('FakeExecutor requires an explicit development or test environment');
   }
