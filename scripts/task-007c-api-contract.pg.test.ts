@@ -74,6 +74,7 @@ test('Task 007C API contract: real migrated PostgreSQL', { concurrency: false },
     async function countRows() {
       const query = `SELECT
         (SELECT COUNT(*)::int FROM dataset_versions) AS datasets,
+        (SELECT COUNT(*)::int FROM dataset_series) AS dataset_series,
         (SELECT COUNT(*)::int FROM calculation_jobs) AS jobs,
         (SELECT COUNT(*)::int FROM execution_attempts) AS attempts,
         (SELECT COUNT(*)::int FROM raw_ingestion_series) AS raw_series,
@@ -147,6 +148,22 @@ test('Task 007C API contract: real migrated PostgreSQL', { concurrency: false },
       assert.deepEqual(await countRows(), before);
       assert.equal(fake.getDispatchHistory().length, 0);
       assert.equal(fake.getStatusLookupHistory().length, 0);
+    });
+
+    await t.test('dataset creation rejects NUL companyCode without PostgreSQL mutation', async () => {
+      const beforeCounts = await countRows();
+      const beforeSeries = (await pool!.query('SELECT * FROM dataset_series ORDER BY id')).rows;
+      const response = await jsonPost('/dataset-versions', {
+        domain: 'DPR',
+        companyCode: 'TW\u0000ST',
+        fiscalYear: 2026,
+        period: 'Q3',
+      });
+      expectError(response, 400, 'INVALID_REQUEST');
+      assert.deepEqual(await countRows(), beforeCounts,
+        'Rejected companyCode must not insert dataset series, version, jobs, attempts, or raw batches');
+      assert.deepEqual((await pool!.query('SELECT * FROM dataset_series ORDER BY id')).rows, beforeSeries,
+        'Rejected companyCode must not modify existing dataset series');
     });
 
     await t.test('four dataset lifecycle paths retain UUID validation and unknown-ID contract', async () => {
