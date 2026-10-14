@@ -21,7 +21,7 @@ const suites = [
 const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 const nodeEnvironment = { ...process.env, NODE_ENV: 'test' };
 
-async function execute({ label, command }: MilestoneSuite): Promise<ProcessResult> {
+async function execute({ label, command, kind }: MilestoneSuite): Promise<ProcessResult> {
   // npm supplies its CLI path. Invoke it via Node rather than executing .cmd
   // directly on Windows (EINVAL), without a shell or shell-argument warnings.
   const npmCli = process.env.npm_execpath;
@@ -32,7 +32,11 @@ async function execute({ label, command }: MilestoneSuite): Promise<ProcessResul
   console.log(`\nMILESTONE_START ${label}`);
   const output: string[] = [];
   return new Promise<ProcessResult>((resolve) => {
-    const child = spawn(executable, args, { env: nodeEnvironment, stdio: ['inherit', 'pipe', 'pipe'] });
+    // Reporter defaults vary by Node/runtime output detection. Explicit TAP is
+    // inherited by npm/tsx and by the isolated raw launcher's child process.
+    const env = kind === 'test' ? { ...nodeEnvironment,
+      NODE_OPTIONS: `${nodeEnvironment.NODE_OPTIONS ?? ''} --test-reporter=tap`.trim() } : nodeEnvironment;
+    const child = spawn(executable, args, { env, stdio: ['inherit', 'pipe', 'pipe'] });
     let spawnError: string | null = null;
     child.stdout!.setEncoding('utf8');
     child.stderr!.setEncoding('utf8');
