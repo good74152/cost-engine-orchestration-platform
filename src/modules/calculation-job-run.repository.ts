@@ -255,6 +255,19 @@ export async function readDatasetBuildSnapshotIds(
   return result.rows.map((row) => row.id);
 }
 
+// Non-locking reload after canonical job/attempt locks. Do not reach backward
+// for a dataset-version/series lock from execution-state outcome recording.
+export async function readDatasetVersionStatus(
+  client: PoolClient,
+  datasetVersionId: string,
+): Promise<DatasetVersionStatus | null> {
+  const result = await client.query<{ status: DatasetVersionStatus }>(
+    'SELECT status FROM dataset_versions WHERE id = $1',
+    [datasetVersionId],
+  );
+  return result.rows[0]?.status ?? null;
+}
+
 export async function findRequiredDomainsForDefinition(
   client: PoolClient,
   definitionVersionId: string,

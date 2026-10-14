@@ -30,13 +30,13 @@ export type RunDispatchOutcome = 'ACCEPTED' | 'ALREADY_EXISTS' | 'UNKNOWN';
 
 export interface CalculationJobRunResult {
   datasetVersionId: string;
-  datasetStatus: 'BUILDING';
+  datasetStatus: Exclude<DatasetVersionStatus, 'DRAFT'>;
   datasetBuildSnapshotId: string;
   jobId: string;
   jobStatus: CalculationJobStatus;
   executionAttemptId: string;
   attemptNumber: number;
-  attemptStatus: DispatchAttemptStatus;
+  attemptStatus: DispatchAttemptStatus | 'SUCCEEDED' | 'FAILED';
   airflowDagId: string;
   airflowDagRunId: string;
   dispatchOutcome: RunDispatchOutcome;

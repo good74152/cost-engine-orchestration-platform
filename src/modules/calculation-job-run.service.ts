@@ -7,6 +7,7 @@ import type {
 } from '../executors/calculation-executor.js';
 import { pool } from '../db/pool.js';
 import { withTransaction } from '../db/transaction.js';
+import { hasNewerExecutionAttempt } from './calculation-job-reconciliation.repository.js';
 import {
   allocateNextAttemptNumber,
   findActiveExecutionAttempt,
@@ -34,6 +35,7 @@ import {
   markExecutionAttemptDispatchFailed,
   markExecutionAttemptDispatching,
   readDatasetBuildSnapshotIds,
+  readDatasetVersionStatus,
   recordUnknownDispatchDiagnostic,
 } from './calculation-job-run.repository.js';
 import type {
@@ -414,12 +416,6 @@ async function recordDispatchOutcome(
     if (!context) {
       invariant(`Calculation job ${command.jobId} disappeared after executor dispatch`);
     }
-    if (context.datasetStatus !== 'BUILDING') {
-      invariant(
-        `Dispatched attempt ${command.executionAttemptId} belongs to non-BUILDING `
-        + `dataset version ${context.datasetVersionId} (${context.datasetStatus})`,
-      );
-    }
     const attempt = await lockExecutionAttempt(client, command.executionAttemptId);
     if (!attempt || attempt.calculationJobId !== command.jobId) {
       invariant(`Execution attempt ${command.executionAttemptId} disappeared after dispatch`);
@@ -428,8 +424,67 @@ async function recordDispatchOutcome(
       attempt.airflowDagId !== command.airflowDagId
       || attempt.airflowDagRunId !== command.airflowDagRunId
       || attempt.attemptNumber !== command.attemptNumber
+      || context.datasetVersionId !== command.datasetVersionId
+      || context.calculationTypeId !== command.calculationTypeId
+      || context.resolvedDependencyDefinitionVersionId !== command.resolvedDependencyDefinitionVersionId
     ) {
       invariant(`Execution identity changed for attempt ${command.executionAttemptId}`);
+    }
+
+    // A joined dataset observation can be stale after waiting on execution locks.
+    // Read current lifecycle and verify the original frozen snapshot without
+    // taking any higher-level orchestration lock or re-resolving build inputs.
+    const datasetStatus = await readDatasetVersionStatus(client, command.datasetVersionId);
+    const snapshotIds = await readDatasetBuildSnapshotIds(client, command.datasetVersionId);
+    if (!datasetStatus || snapshotIds.length !== 1 || snapshotIds[0] !== command.datasetBuildSnapshotId) {
+      invariant(`Frozen dataset identity changed for attempt ${attempt.id}`);
+    }
+
+    if (attempt.status === 'SUCCEEDED' || attempt.status === 'FAILED') {
+      if (datasetStatus === 'DRAFT') {
+        invariant(`Terminal attempt ${attempt.id} belongs to DRAFT dataset ${command.datasetVersionId}`);
+      }
+      if (outcome.kind === 'REJECTED') {
+        invariant(`Definite rejection contradicts terminal attempt ${attempt.id} (${attempt.status})`);
+      }
+      // A historical terminal attempt may differ from the current job only if
+      // a newer retry owns that logical job. Job/attempt locks serialize this
+      // read with Task-004 retry creation and Task-005 reconciliation.
+      const newerAttemptExists = await hasNewerExecutionAttempt(
+        client, context.jobId, attempt.attemptNumber,
+      );
+      if (!newerAttemptExists && context.jobStatus !== attempt.status) {
+        invariant(
+          `Terminal attempt/job state is inconsistent during late dispatch: `
+          + `jobId=${context.jobId}, attemptId=${attempt.id}, `
+          + `attemptStatus=${attempt.status}, jobStatus=${context.jobStatus}`,
+        );
+      }
+      // Reconciliation owns terminal truth. This is read-only even when a newer
+      // retry owns the current logical job state; identity remains this attempt.
+      return {
+        kind: 'RESULT',
+        result: {
+          datasetVersionId: command.datasetVersionId,
+          datasetStatus,
+          datasetBuildSnapshotId: command.datasetBuildSnapshotId,
+          jobId: command.jobId,
+          jobStatus: context.jobStatus,
+          executionAttemptId: attempt.id,
+          attemptNumber: attempt.attemptNumber,
+          attemptStatus: attempt.status,
+          airflowDagId: attempt.airflowDagId,
+          airflowDagRunId: attempt.airflowDagRunId,
+          dispatchOutcome: outcome.kind,
+        },
+      };
+    }
+
+    if (datasetStatus !== 'BUILDING') {
+      invariant(
+        `Dispatched attempt ${attempt.id} belongs to non-BUILDING `
+        + `dataset version ${command.datasetVersionId} (${datasetStatus})`,
+      );
     }
 
     const durableAttempt = commandAttempt(command, context.jobStatus);
