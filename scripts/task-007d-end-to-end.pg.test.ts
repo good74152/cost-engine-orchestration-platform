@@ -311,7 +311,8 @@ test('Task 007D integrated PostgreSQL E2E: public orchestration flows A–F', { 
       stableBuild(failedState, beforePublish);
       assert.equal(beforePublish.attempts.length, 3);
       assert.deepEqual(beforePublish.attempts.find((row) => row.id === first.executionAttemptId), attempt1);
-      assertTerminal(beforePublish, target.jobId, 'FAILED');
+      assert.equal(beforePublish.attempts.find((row) => row.id === first.executionAttemptId)!.status, 'FAILED');
+      assert.equal(beforePublish.attempts.find((row) => row.id === retry.executionAttemptId)!.status, 'SUCCEEDED');
       assert.equal(beforePublish.jobs.find((job) => job.id === target.jobId)!.status, 'SUCCEEDED');
       await lifecycle(dpr.datasetVersionId, 'submit-validation', 'VALIDATING');
       await lifecycle(dpr.datasetVersionId, 'publish', 'PUBLISHED');
