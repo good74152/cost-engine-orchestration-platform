@@ -3,6 +3,7 @@ import Fastify from 'fastify';
 import { pool } from './db/pool.js';
 import type { CalculationExecutor } from './executors/calculation-executor.js';
 import { FakeExecutor } from './executors/fake-executor.js';
+import { isApprovedFakeExecutorEnvironment } from './executors/executor-factory.js';
 import { CalculationJobError } from './modules/calculation-job.errors.js';
 import { calculationJobRoutes } from './modules/calculation-job.route.js';
 import { DatasetVersionError } from './modules/dataset-version/dataset-version.errors.js';
@@ -81,10 +82,9 @@ export async function buildApp(options: BuildAppOptions = {}) {
   if (options.calculationExecutor) {
     await app.register(calculationJobRoutes(options.calculationExecutor));
     await app.register(executorCallbackRoutes(options.calculationExecutor));
-    const nodeEnvironment = options.nodeEnvironment ?? process.env.NODE_ENV;
     if (
       options.calculationExecutor instanceof FakeExecutor
-      && nodeEnvironment?.toLowerCase() !== 'production'
+      && isApprovedFakeExecutorEnvironment(options.nodeEnvironment)
     ) {
       await app.register(fakeExecutorControlRoutes(options.calculationExecutor));
     }
