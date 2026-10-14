@@ -1,6 +1,6 @@
 # Task 007C — Public API Error Contract Coverage
 
-Baseline: `main` 273eac6bf1931cbccc53a5eacc1595bc41df08ed.  
+Baseline: `main` 273eac6bf1931cbccc53a5eacc1595bc41df08ed.
 Status: **Coverage inventory and test additions; runtime verification pending.**
 
 ## Scope and response envelope
