@@ -1,95 +1,168 @@
 # Task 007D — Milestone Verification Report
 
-**Status: BLOCKED / NOT VERIFIED.** This report records implementation inventory and the actual verification environment. It does **not** claim a PostgreSQL suite passed.
+**Status: VERIFICATION PASSED — AWAITING SYSTEM OWNER REVIEW.**
 
-## Revisions and review gate
+Verified on 2026-10-15 (Asia/Taipei). These are executed results, not an inventory of implemented tests. System Owner approval remains pending; Task 007/007D is not marked merged or complete. Task 007E was not started.
+
+## Revisions and evidence boundary
 
 | Item | Value |
 |---|---|
-| Main baseline verified from GitHub | `58dd1b79ea4eb5cb3891e14c8111ba49c984f6c1` |
-| Feature branch | `feature/task-007d-e2e-verification-gate` |
-| Prepared test/runner source commit (not executed) | `f6d3061cadac618b37902e95da5c7da323e21cfa` |
-| Runtime-tested Git revision / tree | **NONE — NOT RUN** |
-| Report commit | Documentation-only descendant; **not** a tested revision |
-| Owner review | Pending |
-| Merged into main | No |
+| Repository | good74152/cost-engine-orchestration-platform |
+| Existing branch | feature/task-007d-e2e-verification-gate |
+| Reviewed starting HEAD | 4e0c93a94faa017c29f2d5cb8a30249027a18fa9 — matched exactly; working tree clean |
+| Main baseline | 58dd1b79ea4eb5cb3891e14c8111ba49c984f6c1 |
+| Exact final runtime-tested source commit | 831a2f1eca3419ed08a447fa9a2c19c32cd06ba3 |
+| Exact final runtime-tested Git tree | 41868ffb517ef68eb3a5d982531ad84ba5aea5f1 |
+| Report commit | Documentation-only descendant of the tested source commit; written after execution |
+| System Owner review | Pending |
+| Automatic merge | None |
 
-The integrated test code and milestone runner are committed but have **not** been executed in this environment. A future verified run must update this report with the **exact** tested Git SHA/tree before approval; do not infer proof from these unchecked test assertions.
+The final milestone ran with a clean working tree at the tested source commit. INVESTIGATION_METADATA independently printed that exact SHA. The later report-only commit is not claimed as a separately tested source revision. Compare the tested commit to the delivery commit to distinguish documentation from tested code.
 
-## Runtime and connection evidence
+The report at reviewed HEAD was BLOCKED / NOT VERIFIED: its Node 22/no-checkout environment had no PostgreSQL execution. That historical observation remains in Git history and is superseded by this real runtime verification, not retroactively relabelled PASS.
 
-| Parameter | Observation |
+## Actual environment and database safety
+
+| Parameter | Executed observation |
 |---|---|
-| Current assistant environment Node.js | `v22.16.0`; repository README requires Node.js 24+ |
-| Current assistant environment npm | `10.9.2` |
-| PostgreSQL server version | **NOT AVAILABLE** |
-| PostgreSQL test service URL | **NOT AVAILABLE** |
-| Database topology | Intended: `TEST_DATABASE_URL` or `DATABASE_URL` points to PostgreSQL test host; scripts connect to the maintenance `postgres` database and create independent owned temporary databases |
-| Database permissions required | `CREATE DATABASE`, `DROP DATABASE` on the test PostgreSQL service; migration DDL privileges within each owned temporary database |
-| Environment limitations | No repository checkout in the command environment; github.com DNS resolution failed; no PostgreSQL CLI/server or test DB connection; project Node dependencies unavailable |
-| Network check actually executed | `git ls-remote https://github.com/good74152/cost-engine-orchestration-platform.git HEAD` → exit `128`, DNS resolution failure |
-| Schema migrations modified in Task 007D | None |
-| Destructive operation on developer DB | None |
+| Checkout | Local Windows checkout; fetched and checked out the existing remote feature branch |
+| Node.js | v24.18.0 |
+| npm | 11.16.0 |
+| Dependencies | npm.cmd ls --depth=0 exited 0; declared direct dependencies available, including tsx and node-pg-migrate |
+| PostgreSQL | PostgreSQL 18.6 (Debian 18.6-1.pgdg13+2), x86_64, 64-bit |
+| Topology | Windows Node → localhost:5432 → repository Compose service postgres_db, container test_postgres, PostgreSQL 18 |
+| Configuration | TEST_DATABASE_URL, falling back to DATABASE_URL; credentials redacted and never printed |
+| Maintenance database | postgres; creates/drops only suite-owned disposable databases |
+| Role preflight | CREATEDB=true, SUPERUSER=true on this local test service; owned preflight database created from template0, ownership checked, and dropped |
+| Migrations | All six checked-in TypeScript migrations available, including 1788700000000_orchestration-schema-v2 |
+| Before/after DB inventory | Exactly postgres, template0, template1, testdb; no temporary databases remained |
 
-The GitHub connector allowed branch creation, source inspection, and commits; it is **not** an execution environment and cannot substantiate a test PASS.
+The test role is privileged: safety comes from the launchers' strict owned-database naming/targeting, not a least-privilege role sandbox. Do not point this gate at production. No permissions, infrastructure, persistent application schema or developer data were changed.
 
-## Designed E2E coverage (each case NOT RUN)
+Each PostgreSQL suite uses independent disposable databases and migrations. Fixture truncation is confined to those databases. The milestone waits for each child command and teardown before starting the next; it does not share an application pool/process between suites.
 
-| Flow | Checked-in assertions | Runtime result |
-|---|---|---|
-| A — CAPEX → DPR | Public CAPEX v1 publication; DPR v1 two jobs; immutable shared snapshot; both pinned definition versions; CAPEX v1 frozen; terminal timestamps; explicit validation/publication; latest published SQL | **NOT RUN** |
-| B — Failure and retry | Failed attempt 1 remains historically immutable; attempt 2 new identity and run ID; snapshot/dependencies/definitions preserved; final publication | **NOT RUN** |
-| C — Lost dispatch response | `ACCEPT_THEN_UNKNOWN`, HTTP 202, durable DISPATCHING, one external identity, reconciliation to SUCCEEDED, no extra attempt | **NOT RUN** |
-| D — Reject and next version | Published v1, rejected v2, new DRAFT v3 with monotonic version; latest published remains v1; rejected snapshot preserved | **NOT RUN** |
-| E — Abandonment | DRAFT success; BUILDING after failed attempt success; ACCEPTED and barrier-controlled DISPATCHING return 409; no mutation after conflict | **NOT RUN** |
-| F — Late callback | VALIDATING and repeated PUBLISHED callbacks trigger executor lookup; no terminal history/snapshot/timestamp rewrite | **NOT RUN** |
+Raw ingestion is run through the existing isolated launcher only. It creates a validated raw_milestone_test_* database, applies all migrations, passes child-scoped DATABASE_URL/TEST_DATABASE_URL, waits for the original regression process to close, drops only its own database, and closes the maintenance connection. Spawn/signal/cleanup failures propagate as failure. Raw business logic and its original regression test are unchanged.
 
-**PREPARED boundary:** The public `/run` route prepares and moves an attempt into DISPATCHING before its external call. There is no supported public API to leave a committed PREPARED attempt for an E2E assertion. The existing dataset terminal lifecycle PostgreSQL regression exercises the PREPARED guard using test-only preparation-service setup. This new E2E test does **not** claim to exercise PREPARED, and its specialized regression is still NOT RUN in the present environment.
+Final-run explicit cleanup evidence:
 
-## Milestone runner and isolation
+- RAW_ISOLATED_DB: raw_milestone_test_20716_a65c4d7ce722; PostgreSQL 18.6 (Debian 18.6-1.pgdg13+2); all migrations applied.
+- RAW_ISOLATED_TEARDOWN: that exact database dropped.
+- E2E_DB_TEARDOWN: task_007d_e2e_32808_77e42177ae9d dropped after closing Fastify/application pool.
+- Read-only postflight inventory matched preflight exactly. No cleanup or asynchronous connection-termination error occurred.
 
-Command: `npm run test:milestone`. Its script `scripts/task-007d-milestone-runner.ts` invokes suites one after another in separate processes, in the exact order below. Failure stops progression and marks later suites **NOT RUN**. TAP totals and exit codes are emitted as structured `MILESTONE_RESULT` and `MILESTONE_SUMMARY` lines; capture these results and actual PostgreSQL versions before editing this report to indicate success.
+## Runner correction and regression tests
 
-All regular PostgreSQL suites are designed to create independently named, migrated databases. The existing `test:raw-ingestion` is different: it uses the configured DB directly, so the milestone runner never calls it without `scripts/support/task-007d-isolated-raw-ingestion.ts`. That wrapper creates and migrates an owned `raw_milestone_test_*` database, passes only the owned database URL to the raw-ingestion test child process, waits for exit, closes the maintenance connection, and drops **only** its strictly validated owned database in `finally`. Child-scoped environment settings do not rewrite the user's parent `DATABASE_URL`.
+The reviewed runner treated process exit 0 as PASS. The corrected policy explicitly distinguishes kind=build from kind=test:
 
-The new Task 007D E2E suite creates/migrates an independent `task_007d_e2e_*` database, closes the Fastify application and PostgreSQL pool, and drops only its own validated database in `finally`. E2E SQL seeds configuration and reads durable state; dataset/job/attempt lifecycle status changes use public HTTP routes rather than direct SQL.
+- Build requires exit 0 without spawn failure or termination signal. TAP counters remain null/not applicable.
+- Tests require exit 0, a complete unambiguous Node TAP summary, pass > 0, and fail/skip/cancelled/TODO all zero.
+- All six counters (tests, pass, fail, skipped, cancelled, todo) must be present and nonnegative safe integers. Missing, malformed, duplicated or unsafe counters remain null, never fabricated zeros.
+- Totals must satisfy tests = pass + fail + skipped + cancelled + todo. Nested tests count toward Node totals; the top-level plan is not assumed equal to that total. No suite-specific pass counts are hard-coded.
+- Stdout is decoded as a stream and assembled after child close, then parsed once. Stderr remains visible but cannot supply stdout counters.
+- Test children explicitly select TAP through child-scoped NODE_OPTIONS rather than assuming a reporter default. npm's CLI is invoked through Node when npm supplies its path, avoiding Windows .cmd execution errors or a shell.
+- Failure stops progression. Remaining suites emit MILESTONE_RESULT with NOT RUN and null observations. MILESTONE_SUMMARY becomes FAIL and the process exits nonzero. If policy fails despite child exit 0, overall exit is 1 while the child observation remains 0.
 
-**Database teardown actual result:** NOT RUN; no temporary database was created in this environment.
+npm run test:milestone-runner imports only the small parser/classifier/sequential helper: it does not start PostgreSQL or the entire milestone. Its 20 deterministic passing cases cover requested A–N: success, process failure, all/partial skips, missing/zero/incomplete counters, cancellation, TODO, build success/failure, fail-fast progression, chunk-split summary and inconsistent totals. Additional checks cover malformed/duplicate/unsafe counters, contradictory exit/counter facts, spawn errors/signals, sequential barriers, empty plans, and actual nested Node TAP with CRLF/trailing whitespace. No real tests are skipped or TODO.
 
-## Mandatory command-by-command evidence
+## Final complete sequential execution
 
-No command below has been run against this branch in a PostgreSQL-capable checkout. Therefore no exit code or TAP pass/fail/skip counts exist. A dash is an unavailable observation, **not zero tests and not a PASS**.
+Exact top-level command: npm.cmd run test:milestone — **exit 0** at source commit 831a2f1eca3419ed08a447fa9a2c19c32cd06ba3.
 
-| Command | Exit code | Pass | Fail | Skip | Status |
-|---|---:|---:|---:|---:|---|
-| `npm run build` | — | — | — | — | NOT RUN |
-| `npm run test:orchestration-schema-v2` | — | — | — | — | NOT RUN |
-| `npm run test:dataset-version-creation-v2` | — | — | — | — | NOT RUN |
-| `npm run test:first-run-immutable-build-snapshot` | — | — | — | — | NOT RUN |
-| `npm run test:execution-attempt-dispatch-fake-executor` | — | — | — | — | NOT RUN |
-| `npm run test:executor-reconciliation` | — | — | — | — | NOT RUN |
-| `npm run test:dataset-version-terminal-lifecycle` | — | — | — | — | NOT RUN |
-| `npm run test:cross-workflow-concurrency-investigation` | — | — | — | — | NOT RUN |
-| `npm run test:task-007b1-late-dispatch-reconciliation` | — | — | — | — | NOT RUN |
-| `npm run test:task-007c-api-contract` | — | — | — | — | NOT RUN |
-| `npm run test:raw-ingestion` (isolated launcher) | — | — | — | — | NOT RUN |
-| `npm run test:task-007d-end-to-end` | — | — | — | — | NOT RUN |
-| **`npm run test:milestone`** | **—** | — | — | — | **NOT RUN** |
-| `git diff --check` | — | — | — | — | NOT RUN — local Git checkout unavailable |
+These child commands were executed in this exact order and printed structured MILESTONE_RESULT records. Windows uses the same npm CLI through Node. Raw ingestion is wrapped as described above.
 
-### Existing regression gate
+| Command | Exit | Pass | Fail | Skip | Cancelled | TODO | Status |
+|---|---:|---:|---:|---:|---:|---:|---|
+| npm run build | 0 | null | null | null | null | null | PASS (build policy) |
+| npm run test:milestone-runner | 0 | 20 | 0 | 0 | 0 | 0 | PASS |
+| npm run test:orchestration-schema-v2 | 0 | 30 | 0 | 0 | 0 | 0 | PASS |
+| npm run test:dataset-version-creation-v2 | 0 | 14 | 0 | 0 | 0 | 0 | PASS |
+| npm run test:first-run-immutable-build-snapshot | 0 | 19 | 0 | 0 | 0 | 0 | PASS |
+| npm run test:execution-attempt-dispatch-fake-executor | 0 | 11 | 0 | 0 | 0 | 0 | PASS |
+| npm run test:executor-reconciliation | 0 | 22 | 0 | 0 | 0 | 0 | PASS |
+| npm run test:dataset-version-terminal-lifecycle | 0 | 64 | 0 | 0 | 0 | 0 | PASS |
+| npm run test:cross-workflow-concurrency-investigation | 0 | 14 | 0 | 0 | 0 | 0 | PASS |
+| npm run test:task-007b1-late-dispatch-reconciliation | 0 | 32 | 0 | 0 | 0 | 0 | PASS |
+| npm run test:task-007c-api-contract | 0 | 11 | 0 | 0 | 0 | 0 | PASS |
+| npm run test:raw-ingestion (isolated launcher) | 0 | 1 | 0 | 0 | 0 | 0 | PASS |
+| npm run test:task-007d-end-to-end | 0 | 7 | 0 | 0 | 0 | 0 | PASS |
 
-- **CON-01 late ACCEPTED after terminal reconciliation:** NOT RUN this iteration. Checked-in assertions are included through both concurrency suites.
-- **CON-02 permanent same-identity rejection / FakeExecutor tombstone:** NOT RUN this iteration. The dishonest adapter fixture remains isolated as an intentional contract violation.
-- **Task 007C HTTP request validation / NUL / 400-413-415:** NOT RUN this iteration.
-- **Migration up/down, rollback guard, constraints, indexes:** NOT RUN this iteration; runner includes `test:orchestration-schema-v2` first after build.
-- **Raw-ingestion 20-way concurrency:** NOT RUN this iteration; isolated launcher designed, not yet demonstrated.
-- **Unexpected skips:** Unknown — no TAP output.
-- **Warnings:** Runtime dependencies and PostgreSQL unavailable; Node 22 is below documented Node 24+ requirement.
-- **Teardown failures:** None observed because tests were not launched; success also unverified.
+MILESTONE_SUMMARY: **overall PASS, exitCode 0**, 13 command records, every status PASS, signal/spawnError null, issues arrays empty.
 
-## Acceptance and next action
+Computed sum of test-suite counters: **245 pass / 0 fail / 0 skip / 0 cancelled / 0 TODO**. Counts include Node's enclosing/nested entries; E2E's seven entries mean six flows plus their parent, not seven flows.
 
-The System Owner should review the proposed test code, raw launcher safety, and runner fail-fast behavior before approving any merge. **Task 007D milestone is not verified.** Execute `npm run test:milestone` on Node.js 24+ with a disposable PostgreSQL-capable test service and `CREATE DATABASE` privileges. Capture the complete TAP, `MILESTONE_SUMMARY`, actual Git revision/tree and `git diff --check`; update this document with exact exit codes, suite pass/fail/skip counts, runtime versions, E2E A–F evidence, and teardown outcomes.
+## Executed E2E and regression outcomes
 
-If tests expose a production defect, stop and open a bounded follow-up; do not silently modify production lifecycle code. Task 007E remains blocked.
+| Flow | Actual result |
+|---|---|
+| A | PASS: CAPEX v1 published through HTTP; two-job DPR v1 shares one snapshot and CAPEX v1 pin; no automatic validation; explicit validation/publication succeeds |
+| B | PASS: original attempt remains FAILED, distinct retry SUCCEEDED, three DPR attempts for two jobs; original history/frozen build unchanged; final publication succeeds |
+| C | PASS: ACCEPT_THEN_UNKNOWN returns 202/DISPATCHING; reconciliation recovers the same attempt to SUCCEEDED; one external run for that identity, no hidden retry |
+| D | PASS: v1 remains latest published, v2 REJECTED, v3 DRAFT; series counter advances to 3 while rejected-version/job/attempt/snapshot fields stay unchanged |
+| E | PASS: DRAFT and safe BUILDING abandonment succeeds; ACCEPTED and barrier-held DISPATCHING block abandonment without mutation; no cancellation |
+| F | PASS: one callback in VALIDATING and two in PUBLISHED consult executor truth and preserve terminal history/timestamps; no redispatch |
+
+PREPARED is not left publicly observable by the Run API. Its abandonment guard is verified by the unchanged Task 006 PostgreSQL suite (64 passing entries), not independently claimed by E2E Flow E.
+
+- CON-01: reconciliation-first and dispatch-first both returned A/B 200/200, ending SUCCEEDED with one external execution and unchanged history. All 32 focused B1 entries passed, including later lifecycle, retry ownership, identity, contradictions and lock boundaries.
+- CON-02: both legal rejection recording orders returned 502/502, EXECUTOR_DISPATCH_FAILED, one DISPATCH_FAILED attempt, PENDING job and zero external X. Subsequent independent retry created only fresh Y. Both acceptance-first orders returned 200/200 with one ACCEPTED attempt/external X. UNKNOWN, script/tombstone/full-key isolation and independent-job cases passed.
+- Invalid adapter: deliberately creating X but reporting REJECTED remains an ADR-0008 violation. Rejection-recorded-first intentionally observes 502/500 and verifies no history rewrite. This is a passing negative test, not an unexpected 500 under supported semantics.
+- Lock/transaction checks: dataset/job/attempt FOR UPDATE NOWAIT locks were available during external waits, other idle transactions=0. Held-attempt gates proved dispatch recording and reconciliation already held the job lock (55P03) before waiting for the attempt.
+- Task 007C: 11 passing API contract entries, including identifiers/NUL, request/body/media errors and fake-control exposure.
+- Migrations: 30 passing entries cover fresh up, legacy conversion, supported down/forward, unsafe rollback rejection, malformed/orphan/collision/dependency/status guards, atomicity, real constraint writes and indexes. Historical migrations are unchanged.
+- Raw ingestion: original 20-request test passed: one success, nineteen conflicts, one allocation/batch, isolated DB removed by its launcher.
+
+## Earlier failed attempts — not final PASS evidence
+
+| Attempt / command | Exit | Actual observations and disposition |
+|---|---:|---|
+| Initial development npm.cmd run test:milestone-runner | 1 | 19 pass / 1 fail / 0 skip / 0 cancelled / 0 TODO. Actual-TAP subprocess inherited internal Node test context. Test-only context isolation fixed it; independent rerun exited 0 with 20/0/0/0/0 |
+| npm.cmd run test:milestone at b0cc9dc514ed55ac8438d1b324b33929318bde47 | 1 | Build passed; runner-test child exited 0 and spec output showed 20 passing tests, but TAP was absent. Gate correctly preserved all counters as null and FAILED; subsequent eleven commands NOT RUN with null exit/counters. Fixed explicit child TAP selection |
+| npm.cmd run test:milestone at 73f30e367459a9ecf81eb43253bbb2c29dea6e2c | 1 | Build passed; runner tests 19/1/0/0/0 because the fixture selected TAP twice via CLI and NODE_OPTIONS. Subsequent eleven commands NOT RUN. Isolated that fixture's reporter environment |
+| npm.cmd run test:milestone at 3f1f95550d04e08e4e03ef98fc150b5f64690a9e | 1 | All commands through raw ingestion passed with the same counts as the final table. E2E 5/2/0/0/0 (Flow D plus parent); totals 243 pass / 2 fail. Raw/E2E databases were dropped |
+| Independent npm.cmd run test:task-007d-end-to-end after fixture correction | 0 | 7/0/0/0/0; A–F and teardown passed before final complete rerun |
+
+Flow D was a **test harness assertion defect**, not a production defect: its historical version state object included the shared mutable series counter after deliberately creating v3. It expected 2; PostgreSQL correctly stored 3. The correction retains the full deep comparison of historical fields and explicitly expects counter 3. No lifecycle assertion was skipped or removed. Two existing test-only SHOW server_version field-name mistakes were corrected so raw/E2E logs print the actual version.
+
+An intermediate optional type-check/diff shell invocation emitted TS2339 for the runner environment's inferred type, but the shell's final diff command returned 0. That combined exit was **not** accepted as successful type-check evidence. An explicit NodeJS.ProcessEnv annotation fixed the type and the standalone check below exited 0 without diagnostics.
+
+## Additional verification and warnings
+
+| Exact command/check | Exit | Result |
+|---|---:|---|
+| docker compose up -d | 0 | PostgreSQL container running |
+| node --version | 0 | v24.18.0 |
+| npm.cmd --version | 0 | 11.16.0 |
+| npm.cmd ls --depth=0 | 0 | Dependencies present |
+| git diff --check | 0 | No whitespace errors |
+| Git diff against reviewed HEAD for src, migrations, lockfile, original raw test and Task 007B regression suites | 0 | Empty; no changes to these paths |
+| PostgreSQL preflight via node --input-type=module -e | 0 | Local endpoint, privileges, six migration files and owned create/ownership/drop verified; no credentials printed |
+| PostgreSQL postflight via node --input-type=module -e | 0 | Inventory unchanged; no temporary DB remained |
+
+Standalone script type-check, exact command (exit **0**, test counters not applicable):
+
+    npm.cmd exec -- tsc --ignoreConfig --noEmit --strict --skipLibCheck --esModuleInterop --module NodeNext --target ES2022 scripts/task-007d-milestone-runner.ts scripts/task-007d-milestone-runner.test.ts scripts/support/task-007d-isolated-raw-ingestion.ts scripts/task-007d-end-to-end.pg.test.ts
+
+Warnings and limitations:
+
+- Final full-gate run: no unexpected test/compiler warnings, spawn/signal errors, skipped/TODO/cancelled tests or teardown failures. Earlier failed attempts are recorded separately above.
+- Git emitted informational LF-to-CRLF conversion warnings when staging new test files; whitespace checks passed.
+- An initial Windows wildcard search was retried using rg -g; an optional Windows CIM process-list diagnostic was denied. Neither blocked required verification.
+- Compose uses a privileged local test role. Ownership/name guards are essential; no role-hardening infrastructure was added.
+- FakeExecutor tombstones are instance-local, not distributed/restart durability. Real Airflow/cancellation/distributed adapter guarantees were not tested or implemented.
+- Runtime matrix: Windows, Node 24, PostgreSQL 18.6 only. No new production dependencies.
+- No unresolved production correctness defect or architecture conflict found. Owner approval remains pending.
+
+## Reproduce and review boundary
+
+With Node.js 24+, installed project dependencies and a suitable local test PostgreSQL service, configure TEST_DATABASE_URL or DATABASE_URL privately. The role needs CREATE DATABASE and ownership/DDL/drop privileges for temporary databases. Do not log credentials.
+
+    docker compose up -d
+    npm.cmd run test:milestone
+    git diff --check
+
+Use npm run test:milestone on non-Windows systems. Do not bypass raw-ingestion isolation against a persistent database.
+
+Correction files: package.json; scripts/task-007d-milestone-runner.ts; scripts/support/task-007d-milestone-results.ts; scripts/task-007d-milestone-runner.test.ts; scripts/support/task-007d-isolated-raw-ingestion.ts; bounded Flow D/runtime-log corrections in scripts/task-007d-end-to-end.pg.test.ts; this report.
+
+No production code, state machines, transaction/locking protocols, historical migrations/data, raw business behavior or Task 007B assertions changed. No skipped tests, new production dependencies, Task 007E cleanup or automatic merge. Stop here for System Owner review.
