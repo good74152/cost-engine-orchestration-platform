@@ -32,6 +32,9 @@ function executionKey(identity: ExecutionIdentity): string {
 
 export class FakeExecutor implements CalculationExecutor {
   private readonly externalExecutions = new Map<string, FakeExternalExecution>();
+  // ADR-0008: instance-lifetime test/demo state only, not persisted or shared
+  // across processes/instances. A real adapter must independently prove no-run.
+  private readonly rejectedIdentities = new Set<string>();
   private readonly dispatchHistory: DispatchCalculationCommand[] = [];
   private readonly statusLookupHistory: ExecutionIdentity[] = [];
   private readonly scriptedBehaviors: FakeDispatchBehavior[];
@@ -100,12 +103,21 @@ export class FakeExecutor implements CalculationExecutor {
   async dispatch(command: DispatchCalculationCommand): Promise<DispatchResult> {
     this.dispatchHistory.push(command);
     const key = executionKey(command);
+    // Keep checks and identity decision synchronous (no await): concurrent
+    // dispatches on this instance cannot both decide an unseen identity.
     if (this.externalExecutions.has(key)) {
       return { kind: 'ALREADY_EXISTS' };
+    }
+    if (this.rejectedIdentities.has(key)) {
+      return {
+        kind: 'REJECTED',
+        message: 'Fake executor rejected dispatch',
+      };
     }
 
     const behavior = this.scriptedBehaviors.shift() ?? this.defaultBehavior;
     if (behavior === 'REJECT') {
+      this.rejectedIdentities.add(key);
       return {
         kind: 'REJECTED',
         message: 'Fake executor rejected dispatch',

@@ -23,9 +23,16 @@ export interface DispatchCalculationCommand {
 }
 
 export type DispatchResult =
+  // The exact DAG/run identity was created or confirmed.
   | { kind: 'ACCEPTED' }
+  // That exact identity already exists: successful idempotent recovery.
   | { kind: 'ALREADY_EXISTS' }
+  // ADR-0008: this exact identity never existed and can never be created,
+  // including by overlapping/future dispatches. Irrevocable and identity-wide;
+  // an adapter unable to enforce this guarantee must return UNKNOWN.
   | { kind: 'REJECTED'; message: string }
+  // No irrevocable identity decision can be established. Recover with the same
+  // identity; the run may already exist or may still be created later.
   | { kind: 'UNKNOWN'; message: string };
 
 export interface ExecutionIdentity {
