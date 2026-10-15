@@ -29,7 +29,9 @@ Task 007A's historical red evidence is retained as investigation history. It doe
 
 ## Current milestone: Task 007 — End-to-End Hardening and Legacy Cleanup
 
-**Status: Task 007E awaiting review; overall milestone NOT COMPLETE.**
+**Status: Task 007E awaiting review; verification blocked; overall milestone NOT COMPLETE.**
+
+The new E gate attempt failed at Task 007C with asynchronous activity after its raw-ingestion contention test: PostgreSQL reported terminating connection due to administrator command. The runner correctly stopped; original isolated raw regression and E2E Flow A–F were NOT RUN. No tests/production code were changed or rerun to hide this failure. The E verification note records all observed counters and the unresolved teardown investigation for owner direction.
 
 - [Master scope/acceptance gates](tasks/007-end-to-end-hardening-and-legacy-cleanup.md)
 - [Current Task 007E specification](tasks/007e-legacy-and-documentation-cleanup.md)
