@@ -127,17 +127,18 @@ Do not put employer-specific Airflow DAG code, SQL, proprietary schemas, or conf
 
 ## Current Implementation Task
 
-Tasks 002–006 are merged into main. The active milestone is Task 007 — End-to-End Hardening and Legacy Cleanup.
+Tasks 002–006 and Task 007A/B-1/B-2/C/D are merged into main. The active bounded slice is Task 007E — Safe Legacy Cleanup and Documentation Synchronization.
 
 Master scope and acceptance gates:
 
 docs/tasks/007-end-to-end-hardening-and-legacy-cleanup.md
 
-Task 007A investigation evidence (including intentionally red tests) is available on the unmerged branch feature/task-007a-concurrency-investigation. The system owner has accepted the Task 007B architecture response to its findings.
+Current task and verification navigation:
 
-Active bounded implementation specs:
+- docs/tasks/007e-legacy-and-documentation-cleanup.md
+- docs/verification/task-007d-milestone.md (historical executed Task 007D evidence)
+- docs/verification/task-007e-cleanup.md (cleanup audit and PostgreSQL rerun)
 
-- docs/tasks/007b1-late-dispatch-terminal-reconciliation.md
-- docs/tasks/007b2-definite-rejection-semantics-review.md
+Executor REJECTED remains an irrevocable identity-wide no-run guarantee (ADR-0008), not a per-call observation. Retain the supported raw-ingestion API, historical migrations/data and any application artifact with supported callers. Do not redesign accepted lifecycle/locking protocols. FakeExecutor is development/test only; no real Airflow adapter is implemented.
 
-Executor REJECTED is an irrevocable identity-wide no-run guarantee (ADR-0008), not a per-call observation. Implement 007B-1 and 007B-2 as independently reviewable PRs. Do not merge the intentionally red investigation branch without replacing failing regressions with verified green tests. Do not delegate speculative fixes outside these specs. Retain raw-ingestion API and historical migrations. Do not redesign accepted lifecycle/locking protocols.
+Run npm run build and the unchanged npm run test:milestone against owned disposable PostgreSQL databases; use its isolated raw-ingestion launcher rather than testing against a persistent developer database. Task 007E is awaiting review, not merged. Do not mark Task 007 COMPLETE without cleanup verification, the real PostgreSQL rerun, System Owner final acceptance and Task 007E merge.

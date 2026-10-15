@@ -1,357 +1,174 @@
 # Cost Engine Orchestration Platform
 
-A production-style backend project for orchestrating long-running, versioned cost and financial data calculations across Airflow/ETL workflows.
+A portfolio backend for coordinating versioned cost/financial datasets and external calculation executions. The backend owns orchestration, reproducibility, concurrency and publication state; it does not execute financial calculation logic or contain a previous employer's proprietary Airflow/ETL implementation.
 
-The platform focuses on backend orchestration concerns around cost-engine data processing: reproducibility, concurrency correctness, versioned datasets, dependency management, asynchronous execution, failure recovery, auditability, and PostgreSQL reliability.
+## Current milestone
 
-> Status: In Progress
+Tasks 002–006 and Task 007A/B-1/B-2/C/D are merged into main. Task 007D's milestone gate is implemented and has recorded real PostgreSQL results. Task 007E is the current cleanup/documentation review slice; **Task 007 is not COMPLETE**. System Owner acceptance and Task 007E review/merge remain required.
 
-> Portfolio truth boundary: this is a new implementation inspired by prior enterprise cost-calculation orchestration experience. It does not reproduce proprietary employer code, schemas, Airflow DAGs, SQL, data, or internal system details.
+The authorized Task 007E teardown investigation and corrections are verified: three independent Task 007C runs and a new full PostgreSQL milestone gate passed. Earlier failures and the exact tested source revisions remain in the E verification note below. Task 007E still awaits System Owner review/merge; the overall milestone remains open.
 
-## Problem
+See [Roadmap](docs/ROADMAP.md), [Task 007 master scope](docs/tasks/007-end-to-end-hardening-and-legacy-cleanup.md), [Task 007E](docs/tasks/007e-legacy-and-documentation-cleanup.md), [historical Task 007D verification](docs/verification/task-007d-milestone.md) and [Task 007E audit/verification](docs/verification/task-007e-cleanup.md).
 
-Enterprise cost workflows are rarely one synchronous request. A quarterly dataset may require multiple calculation tasks, each task may depend on published upstream datasets, external Airflow/ETL execution can fail or time out, and the final dataset may still require manual validation before downstream consumers are allowed to use it.
-
-This project models those concerns explicitly instead of treating a calculation as a single API call or implementing the financial calculation engine inside the Node.js backend.
-
-## Tech Stack
-
-- TypeScript
-- Node.js / Fastify
-- PostgreSQL
-- Docker / Docker Compose
-- Airflow-compatible executor boundary (implementation in progress)
-
-## Representative Cost Domains
-
-The orchestration model is designed around multiple quarterly cost/financial domains rather than a hard-coded three-step pipeline.
-
-Canonical machine identifiers currently used by the portfolio are:
+## Implemented model
 
 ```text
-FAB_COST
-CAPEX
-DPR
-INSURANCE
-ONE_STD_COST
-COWOS_S
+Dataset Series (domain, company_code, fiscal_year, period)
+└── Dataset Versions
+    ├── Immutable Dataset Build Snapshot (after first Run)
+    │   └── Frozen upstream published dataset versions
+    └── Calculation Jobs (one per snapshotted active calculation type)
+        ├── Frozen dependency-definition version (after first Run)
+        └── Execution Attempts
+            └── FakeExecutor external execution identity
 ```
 
-Human-facing labels may be rendered as `FAB COST`, `ONE STD COST`, or `COWOS-S`, while APIs and database records use the normalized identifiers above.
-
-These domains share the same orchestration identity and lifecycle model. Their calculation types, dependency definitions, and Airflow DAG mappings are configuration owned by the platform and may differ by domain.
-
-## Architecture Baseline
-
-The accepted orchestration model is:
+Canonical domains are exactly:
 
 ```text
-Dataset Series
-(domain, company_code, fiscal_year, period)
-        │
-        ▼
-Dataset Version
-        │
-        ├── Immutable Dataset Build Snapshot
-        │       └── Frozen upstream Dataset Versions
-        │
-        └── Calculation Jobs
-                └── Execution Attempts
-                        └── External executor / Airflow DAG Run
+FAB_COST  CAPEX  DPR  INSURANCE  ONE_STD_COST  COWOS_S
 ```
 
-The backend owns orchestration. It does not own the financial calculation implementation itself. Airflow may execute Python, SQL, or other data-processing tasks; this service coordinates inputs, lifecycle, identity, retries, reconciliation, and publication state.
+Aliases such as `FAB COST` or `COWOS-S` are not normalized. Period is Q1–Q4; fiscal year is a positive integer.
 
-## Canonical Dataset Identity
+### Creation and frozen inputs
 
-All calculation domains use the same quarterly reporting coordinates:
+`POST /dataset-versions` accepts only this identity:
+
+```json
+{
+  "domain": "DPR",
+  "companyCode": "TW01",
+  "fiscalYear": 2026,
+  "period": "Q3"
+}
+```
+
+One transaction safely finds/creates and locks the canonical series, checks for an active version, increments `last_allocated_version`, inserts a DRAFT version, and creates a PENDING job for every active calculation type in the domain. The 201 response contains `datasetSeriesId`, `datasetVersionId`, `version`, `datasetStatus` and `calculationJobs` (job/type identities and job status).
+
+A series can have only one DRAFT/BUILDING/VALIDATING version. Version numbers are monotonic and never reused after rejection or abandonment. The counter is not a latest-published or active-version pointer. No active calculation types means 409 CALCULATION_TYPE_NOT_CONFIGURED and complete rollback, including a newly created series.
+
+Creation does not resolve dependencies. First Run freezes the latest PUBLISHED dependency-definition version for every job, derives required direct upstream domains using the same company/year/period, and selects their latest PUBLISHED dataset versions under the accepted locks. It atomically creates one dataset-wide snapshot, pins all job definitions, moves DRAFT to BUILDING and prepares the selected attempt. A published zero-dependency definition is valid; missing configuration is not.
+
+All jobs and retries reuse this frozen build contract. Later publications or configuration changes do not refresh it. Each dispatched job receives only its required dependency subset, not the union for every job.
+
+### Run, retry and reconciliation
+
+`POST /calculation-jobs/:jobId/run` routes from durable job/attempt state. The platform generates each attempt's stable `(airflow_dag_id, airflow_dag_run_id)`; HTTP callers do not choose execution or data identity.
+
+Durability boundaries are separate:
 
 ```text
-(domain, company_code, fiscal_year, period)
+A: prepare/reuse PREPARED attempt; commit
+B: mark/reuse DISPATCHING and read frozen command; commit
+   executor.dispatch — no open orchestration transaction/locks
+C: record outcome atomically; commit
 ```
 
-Examples:
+- ACCEPTED or ALREADY_EXISTS confirms the same external identity: attempt ACCEPTED and job RUNNING.
+- REJECTED is an irrevocable, identity-wide guarantee that this execution never existed and cannot later be created (ADR-0008). Record DISPATCH_FAILED, leave job PENDING/FAILED, return 502 EXECUTOR_DISPATCH_FAILED.
+- UNKNOWN remains DISPATCHING and normally returns 202 with the same attempt/run identity. Recovery redispatches that identity or reconciles it, rather than allocating a new attempt. Already-confirmed/terminal durable state is not regressed by late responses.
+- An already ACCEPTED/RUNNING job returns durable state without redispatch. A definite dispatch failure or reconciled calculation failure can be retried with a new attempt number and identity, against the same snapshot.
 
-```text
-(FAB_COST,     TW01, 2026, Q3)
-(CAPEX,        TW01, 2026, Q3)
-(DPR,          TW01, 2026, Q3)
-(INSURANCE,    TW01, 2026, Q3)
-(ONE_STD_COST, TW01, 2026, Q3)
-(COWOS_S,      TW01, 2026, Q3)
+`POST /calculation-jobs/:jobId/reconcile` queries executor truth outside DB transactions, then locks/revalidates job and attempt in canonical order before applying atomic updates. Confirmed terminal executor results produce SUCCEEDED/FAILED job and attempt states. NOT_FOUND/unavailability does not infer failure. Stale terminal observations cannot overwrite a newer retry.
+
+`POST /executor-callbacks/airflow` accepts only `airflowDagId` and `airflowDagRunId`. It triggers the same reconciliation path; callback-reported terminal state is not authoritative. Periodic/background reconciliation is not implemented.
+
+### Validation and terminal decisions
+
+Dataset states are DRAFT → BUILDING → VALIDATING → PUBLISHED or REJECTED; DRAFT/BUILDING may instead become ABANDONED. There is no dataset-level FAILED.
+
+All required jobs must succeed before explicit Submit Validation. Job completion does not automatically validate or publish. Publish/Reject require VALIDATING. Abandon rejects any PREPARED/DISPATCHING/ACCEPTED attempt and does not cancel external executions. Same-target lifecycle commands are idempotent; conflicting terminal decisions return STATE_CONFLICT and never rewrite history.
+
+### Supported raw ingestion
+
+Raw ingestion is a separate supported bounded feature, not obsolete calculation-job creation. `POST /raw-ingestion-batches` accepts exactly `domain` and `businessKey`, for FAB_COST_RAW, CAPEX_RAW or DPR_RAW. It atomically allocates a LOADING batch and returns 201 with `batchId`, `ingestionSeriesId`, `batchSequence` and `status`. An active batch returns 409 ACTIVE_RAW_INGESTION_BATCH_EXISTS. Its identity/model and historical data are retained; this businessKey is not canonical orchestration dataset identity.
+
+## Registered API surface
+
+| Method | Route | Purpose |
+|---|---|---|
+| GET | /health | Database connectivity/time (Fastify also generates HEAD) |
+| POST | /dataset-versions | Atomic dataset/job creation (201) |
+| POST | /dataset-versions/:datasetVersionId/submit-validation | Explicit readiness transition |
+| POST | /dataset-versions/:datasetVersionId/publish | Publish validated dataset |
+| POST | /dataset-versions/:datasetVersionId/reject | Reject validated dataset |
+| POST | /dataset-versions/:datasetVersionId/abandon | Safely abandon DRAFT/BUILDING |
+| POST | /calculation-jobs/:jobId/run | Dispatch or retry (200; unresolved DISPATCHING is 202) |
+| POST | /calculation-jobs/:jobId/reconcile | Reconcile selected durable attempt |
+| POST | /executor-callbacks/airflow | Reconciliation trigger by stored external identity |
+| POST | /raw-ingestion-batches | Raw batch allocation (201) |
+
+Executor-backed routes require executor injection into `buildApp`; `src/server.ts` supplies the explicitly configured executor.
+
+Only with an injected FakeExecutor and an explicitly approved development/test environment:
+
+| Method | Internal route | Purpose |
+|---|---|---|
+| POST | /internal/fake-executor/executions/:dagRunId/succeed | Set in-memory fake execution to SUCCEEDED |
+| POST | /internal/fake-executor/executions/:dagRunId/fail | Set in-memory fake execution to FAILED |
+
+These controls do not reconcile DB state automatically and are not production APIs. No read/list API is implemented. Legacy POST /calculation-jobs and job-level start/submit-validation/publish/reject/fail routes are not registered.
+
+Handled API errors use the flat envelope:
+
+```json
+{ "message": "...", "code": "..." }
 ```
 
-`company_code`, `fiscal_year`, and `period` are immutable business identity dimensions. `business_key` is being retired from the orchestration model.
+Representative contracts: 400 INVALID_REQUEST/INVALID_DOMAIN/INVALID_PERIOD; 404 CALCULATION_JOB_NOT_FOUND/DATASET_VERSION_NOT_FOUND/EXECUTION_ATTEMPT_NOT_FOUND; 409 lifecycle/readiness/active-version conflicts; 502 EXECUTOR_DISPATCH_FAILED; 503 EXECUTOR_STATUS_UNAVAILABLE. Parser body-size/media errors use 413/415 with INVALID_REQUEST. Unexpected failures are logged and return 500 INTERNAL_SERVER_ERROR without PostgreSQL details. Unregistered routes retain Fastify's normal 404 response. See [API coverage inventory](docs/tasks/007c-api-error-contract-coverage.md) and the executed verification reports for the full contracts.
 
-A `dataset_series` stores the logical identity and a monotonic `last_allocated_version`. Dataset version numbers are never reused, including after rejection or abandonment.
+## Local development
 
-## Dataset Build Flow
+Requirements: Node.js 24+, npm, Docker/Compose and PostgreSQL (repository Compose uses PostgreSQL 18).
 
-### 1. Create Dataset Version
+1. Install dependencies with `npm ci`.
+2. Create a private `.env` from `.env.example` only if one does not already exist. Configure a local DATABASE_URL and the matching Compose POSTGRES_USER/POSTGRES_PASSWORD/POSTGRES_DB. Replace example credentials; never commit secrets.
+3. Explicitly select dev-only execution:
 
-Creating a new dataset version is one database transaction:
+   ```dotenv
+   NODE_ENV=development
+   EXECUTOR_TYPE=fake
+   PORT=3000
+   ```
 
-```text
-lock dataset_series
-→ allocate next version
-→ create dataset_version = DRAFT
-→ snapshot all active calculation_types into calculation_jobs = PENDING
-→ commit
-```
+4. Start PostgreSQL and apply the existing migrations:
 
-A domain can have multiple calculation types. One dataset version therefore owns one or more calculation jobs.
+   ```bash
+   docker compose up -d postgres_db
+   npm run migrate -- up
+   npm run dev
+   ```
 
-### 2. First Run Freezes the Dataset Build Snapshot
+The server binds port 3000 by default on 0.0.0.0; use it only in a trusted local development environment. Fake controls are not authenticated production controls. The factory rejects fake in production and fails closed without an explicit development/test environment or executor selection. There is no implemented real Airflow adapter to select.
 
-Creating a dataset version does **not** resolve upstream data immediately.
+Calculation types and published dependency definitions must be configured in PostgreSQL before their corresponding workflows can succeed. There is no management API or general seed command for that configuration; the integration suites install their own fixtures. A fresh migrated database alone is not a preconfigured financial pipeline.
 
-When the first calculation job is run:
+All six historical migrations are retained. The v2 migration deliberately rejects unsafe/ambiguous legacy data and unsupported down conversions instead of discarding history. Do not edit applied migrations or delete/truncate a persistent developer database to bypass a migration guard.
 
-```text
-resolve latest published dependency-definition versions
-→ union required upstream domains
-→ deterministically lock upstream dataset_series rows
-→ resolve latest PUBLISHED upstream dataset versions
-→ persist one immutable dataset_build_snapshot
-→ dataset DRAFT → BUILDING
-→ create the selected job execution_attempt
-```
+## Verification
 
-The transaction commit is the dataset version's build-consistency boundary.
-
-After the snapshot is frozen, every calculation job in that dataset version must use the same concrete upstream version for the same upstream series. A retry creates a new execution attempt but does not change the dataset build snapshot.
-
-If newer upstream data must be used, the existing dataset version is abandoned and a new version is created.
-
-### 3. Dispatch Calculation Jobs
-
-A `calculation_job` represents one logical calculation task inside a dataset version.
-
-An `execution_attempt` represents one concrete external execution / Airflow DAG run.
-
-```text
-calculation_job
-PENDING → RUNNING → SUCCEEDED
-                  └→ FAILED → retry with a new execution_attempt
-```
-
-Execution attempts preserve immutable execution history:
-
-```text
-PREPARED
-  → DISPATCHING
-      → ACCEPTED
-          → SUCCEEDED
-          └→ FAILED
-      └→ DISPATCH_FAILED
-```
-
-Airflow calls are never performed while holding a long PostgreSQL transaction.
-
-A stable caller-supplied DAG run identity is used for idempotent dispatch and response-loss recovery. Duplicate DAG run identity is treated as a reconciliation signal, not automatically as a failed dispatch.
-
-### 4. Reconcile Executor Status
-
-Airflow execution state is reconciled through one service path. Reconciliation may be triggered by:
-
-- an Airflow callback signal,
-- a user-triggered "Check Status" action,
-- a future periodic reconciliation worker.
-
-The callback is a signal; the executor status API is the execution-state source of truth.
-
-Executor/API availability failures do not change a financial calculation to `FAILED`. A job becomes `FAILED` only when the executor explicitly reports execution failure.
-
-### 5. Validate and Publish the Dataset
-
-A dataset remains `BUILDING` while any required calculation job is not successful.
-
-For the current portfolio scope, validation submission is manual:
-
-```text
-all calculation_jobs = SUCCEEDED
-→ Submit Validation
-→ dataset BUILDING → VALIDATING
-```
-
-Dataset lifecycle:
-
-```text
-DRAFT ─────────────────────→ ABANDONED
-  │
-  ▼
-BUILDING ──────────────────→ ABANDONED
-  │
-  ▼
-VALIDATING
-  ├────────────────────────→ PUBLISHED
-  └────────────────────────→ REJECTED
-```
-
-`PUBLISHED`, `REJECTED`, and `ABANDONED` are immutable terminal dataset states.
-
-`REJECTED` means the full build completed but validation/publication was rejected. `ABANDONED` means the build was intentionally stopped before publication readiness.
-
-## Dependency Definitions
-
-Each calculation type has versioned execution dependency definitions.
-
-Example:
-
-```text
-DPR / TABLE_X
-
-Definition v1:
-- CAPEX
-
-Definition v2:
-- CAPEX
-- INSURANCE
-```
-
-Definitions answer **what upstream domains are required**.
-
-The dataset build snapshot answers **which concrete upstream dataset versions this dataset build uses**.
-
-Historical jobs pin the dependency-definition version used by that dataset build, so dependency configuration changes are auditable instead of overwriting history.
-
-## Airflow / ETL Boundary
-
-The Cost Engine Orchestration Platform treats Airflow as an external execution engine.
-
-A `calculation_type` maps to an `airflow_dag_id`. One logical calculation job may have multiple immutable execution attempts when a failed execution is retried, and each accepted attempt corresponds to one Airflow DAG run.
-
-The platform does not require calculation logic to be Python. Airflow DAGs may execute Python code, large SQL transformations, or other ETL mechanisms. The orchestration backend tracks identity, configuration, inputs, execution state, retries, and publication; implementation details of the data-processing DAG remain outside this service.
-
-## Concurrency Invariants
-
-Critical invariants are enforced by PostgreSQL constraints in addition to service-level locking:
-
-- One dataset series per `(domain, company_code, fiscal_year, period)`.
-- Dataset version numbers are monotonic and never reused.
-- A dataset series has at most one active `DRAFT`, `BUILDING`, or `VALIDATING` version.
-- A dataset version has at most one build snapshot.
-- A dataset version has at most one job for each calculation type.
-- A calculation job has at most one non-terminal execution attempt.
-- A build snapshot pins at most one version of each upstream dataset series.
-- Publish/reject transitions use compare-and-set semantics.
-
-`dataset_series` is the coordination row for version allocation, publication visibility, abandonment/rejection ordering, and downstream dependency resolution.
-
-When multiple series rows must be locked, they are acquired in deterministic order:
-
-```text
-(domain, company_code, fiscal_year, period)
-```
-
-Calculation type rows used during first-run definition resolution are likewise locked deterministically by `(domain, code)`.
-
-## Error and Failure Model
-
-The API distinguishes business, concurrency, and executor failures. Expected lifecycle failures are not generic `500` errors.
-
-Examples include:
-
-- `ACTIVE_DATASET_VERSION_EXISTS`
-- `CALCULATION_TYPE_NOT_CONFIGURED`
-- `DEPENDENCY_DEFINITION_NOT_READY`
-- `DEPENDENCY_NOT_READY`
-- `JOB_NOT_RUNNABLE`
-- `DATASET_NOT_READY_FOR_VALIDATION`
-- `DATASET_HAS_ACTIVE_EXECUTION`
-- `STATE_CONFLICT`
-- `EXECUTOR_DISPATCH_FAILED`
-- `EXECUTOR_STATUS_UNAVAILABLE`
-
-Every public error code in the orchestration API is expected to have a route-level contract test.
-
-## Testing Strategy
-
-Critical transaction and concurrency behavior must be tested against real PostgreSQL, not a mocked database.
-
-The orchestration implementation will use an executor abstraction:
-
-```text
-CalculationExecutor
-├── AirflowExecutor
-└── FakeExecutor
-```
-
-`FakeExecutor` allows deterministic portfolio/demo tests for:
-
-- dispatch accepted/rejected,
-- response loss / unknown dispatch outcome,
-- duplicate stable DAG run identity,
-- execution success/failure,
-- job retry,
-- status reconciliation,
-- publish/reject/abandon flows.
-
-Fake executor control endpoints must only be registered in development/test environments.
-
-## Current Implementation
-
-The repository currently contains the earlier orchestration implementation, including:
-
-- Dataset Series and Dataset Versions
-- one calculation job per output dataset version
-- application-level calculation dependencies
-- transactional job/dataset state transitions
-- concurrency experiments and partial unique indexes
-- versioned raw-ingestion allocation work
-
-The accepted orchestration architecture above intentionally changes several of those assumptions. In particular:
-
-- `business_key` is replaced by structured reporting identity columns,
-- one dataset version owns multiple calculation jobs,
-- dependency configuration becomes versioned,
-- upstream inputs are frozen once per dataset version,
-- Airflow executions are modeled as immutable execution attempts,
-- dataset execution failure is no longer a dataset-level `FAILED` state.
-
-## Current Milestone
-
-The current milestone is **Orchestration Schema v2 and execution lifecycle migration**.
-
-Implementation sequence:
-
-1. Schema/migration and database constraints.
-2. Dataset creation and calculation-type snapshotting.
-3. First-run immutable build snapshot.
-4. Execution-attempt lifecycle and FakeExecutor.
-5. Executor reconciliation.
-6. Validation / publish / reject / abandon APIs.
-7. Required failure-path and concurrency integration tests.
-
-The migration is implemented as a forward migration rather than editing previously applied migration history. `legacy_business_key` is retained temporarily as a rollback bridge; new orchestration code must not use it.
-
-## Non-Goals for This Milestone
-
-The current milestone does not implement:
-
-- Airflow itself or financial calculation code,
-- Python/SQL calculation internals,
-- job-to-job dependency DAGs inside one dataset version,
-- automatic dependency-ready scheduling,
-- Airflow cancellation,
-- RabbitMQ, Kafka, Redis, or Kubernetes solely for architecture complexity.
-
-## Local Development
-
-### Requirements
-
-- Node.js 24+
-- Docker
-- Docker Compose
-
-### Setup
+Against a dedicated local PostgreSQL test service:
 
 ```bash
-cp .env.example .env
-npm install
-docker compose up -d
-npm run migrate up
-npm run dev
+npm run build
+npm run test:milestone
 ```
 
-The orchestration v2 migration changes the schema ahead of the existing v1 service implementation. Apply it only together with the corresponding application migration work, or use a disposable development database while this milestone is in progress.
+On Windows the equivalent commands are `npm.cmd run build` and `npm.cmd run test:milestone`.
+
+Configure TEST_DATABASE_URL, falling back to DATABASE_URL, privately. This is a connection source for the test service, not permission to destroy a persistent application database. The role needs CREATE DATABASE and ownership/DDL/drop privileges for independently owned disposable databases, plus access to the maintenance database `postgres`. Do not use production.
+
+The unchanged milestone runner executes sequentially: build; runner regression tests; schema/migrations; dataset creation; first-run snapshot; dispatch; reconciliation; dataset terminal lifecycle; CON-01/CON-02; focused Task 007B-1; Task 007C contracts; isolated raw ingestion; Task 007D integrated E2E Flow A–F.
+
+Every PostgreSQL suite migrates its own disposable database. The raw-ingestion test is launched through the milestone's isolated wrapper with child-scoped DB URLs and owned teardown. **Do not run the standalone raw-ingestion command against a persistent developer database.**
+
+The gate stops after the first failure, reports remaining commands NOT RUN, and rejects missing/invalid TAP evidence, failures, skips, cancellations or TODOs. A successful exit alone is insufficient for a test suite without valid nonzero passing counters. See the [historical Task 007D report](docs/verification/task-007d-milestone.md) and [Task 007E rerun](docs/verification/task-007e-cleanup.md) for exact revisions, counts and teardown evidence.
+
+## Scope and future work
+
+FakeExecutor is the only implemented adapter: deterministic, in-process, development/test only. External fake runs and identity-rejection tombstones last only for that instance; they are not durable or shared across processes/restarts. It models dispatch acceptance/rejection/response loss and executor status for tests, not real financial computation.
+
+Real Airflow HTTP integration, cancellation, queues, background workers, periodic reconciliation, dependency-management APIs and automatic publication are not implemented. Historical DPR/raw-ingestion schema and the legacy_business_key rollback bridge remain intact.
+
+Accepted decisions: [Architecture](docs/ARCHITECTURE.md), [ADRs](docs/adr/README.md). Engineering/change policy: [AGENTS.md](AGENTS.md).

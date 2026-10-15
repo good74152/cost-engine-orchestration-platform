@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import { runner } from 'node-pg-migrate';
-import { Client, type Pool } from 'pg';
+import { Client, Pool, type PoolClient } from 'pg';
 import type { FastifyInstance } from 'fastify';
 import type { CalculationExecutor } from '../src/executors/calculation-executor.js';
 import { FakeExecutor } from '../src/executors/fake-executor.js';
@@ -29,6 +29,21 @@ function expectError(response: Response, status: number, code: string): void {
   assert.doesNotMatch(body.message as string, /SQLSTATE|constraint|uq_|ck_|postgresql:\/\/|SELECT |INSERT /i);
 }
 
+// pg-pool removes idle clients from its accounting before their socket close
+// callbacks run. Its end() promise alone is not a barrier for dropping a DB.
+// Register before the first acquisition, including clients later retired idle.
+function trackPoolShutdown(pool: Pool): () => Promise<number> {
+  const clientEnds: Promise<void>[] = [];
+  pool.on('connect', (client) => {
+    clientEnds.push(new Promise<void>((resolve) => client.once('end', () => resolve())));
+  });
+  return async () => {
+    await pool.end();
+    await Promise.all(clientEnds);
+    return clientEnds.length;
+  };
+}
+
 test('Task 007C API contract: real migrated PostgreSQL', { concurrency: false }, async (t) => {
   const dbName = `task_007c_test_${process.pid}_${randomUUID().replaceAll('-', '').slice(0, 12)}`;
   assert.match(dbName, /^task_007c_test_[a-z0-9_]+$/);
@@ -39,6 +54,7 @@ test('Task 007C API contract: real migrated PostgreSQL', { concurrency: false },
   let databaseCreated = false;
   let app: FastifyInstance | undefined;
   let pool: Pool | undefined;
+  let closeApplicationPool: (() => Promise<number>) | undefined;
   await admin.connect();
   try {
     await admin.query(`CREATE DATABASE "${dbName}" TEMPLATE template0`);
@@ -56,6 +72,7 @@ test('Task 007C API contract: real migrated PostgreSQL', { concurrency: false },
       import('../src/db/pool.js'), import('../src/app.js'),
     ]);
     pool = applicationPool;
+    closeApplicationPool = trackPoolShutdown(pool);
     const fake = new FakeExecutor();
     app = await buildApp({ logger: false, calculationExecutor: fake, nodeEnvironment: 'test' });
     const version = await pool.query<{ version: string }>('SELECT version() AS version');
@@ -305,16 +322,84 @@ test('Task 007C API contract: real migrated PostgreSQL', { concurrency: false },
         else process.env.NODE_ENV = prior;
       }
     });
+
+    await t.test('pool teardown waits for real client shutdown, not just pool accounting', async () => {
+      const regressionPool = new Pool({ connectionString: connection(dbName), max: 1,
+        application_name: 'task007e-shutdown-regression' });
+      const closeRegressionPool = trackPoolShutdown(regressionPool);
+      let client: PoolClient | undefined;
+      let released = false;
+      let releaseClose = () => {};
+      let closing: Promise<void> | undefined;
+      try {
+        client = await regressionPool.connect();
+        const pid = (await client.query<{ pid: number }>('SELECT pg_backend_pid() AS pid')).rows[0]!.pid;
+        const realEnd = client.end.bind(client);
+        let closeRequested!: () => void;
+        const requested = new Promise<void>((resolve) => { closeRequested = resolve; });
+        const allowClose = new Promise<void>((resolve) => { releaseClose = resolve; });
+        // Hold one actual driver's graceful close, not any HTTP/SQL operation.
+        // This deterministically exposes the same pool.end()/client.end gap.
+        client.end = ((callback?: () => void) => {
+          closeRequested();
+          return allowClose.then(() => callback ? realEnd(callback) : realEnd());
+        }) as typeof client.end;
+        client.release();
+        released = true;
+        let shutdownCompleted = false;
+        closing = closeRegressionPool().then(() => { shutdownCompleted = true; });
+        await requested;
+        // Real DB I/O also lets already-resolved shutdown promises settle; no
+        // sleep/polling, exception suppression or retry-until-green mechanism.
+        const held = await admin.query<{ pid: number; state: string; xact_start: Date | null }>(
+          'SELECT pid, state, xact_start FROM pg_stat_activity WHERE datname = $1 AND pid = $2', [dbName, pid]);
+        assert.equal(held.rows.length, 1, 'Real backend must remain connected at the barrier');
+        assert.equal(held.rows[0]!.state, 'idle');
+        assert.equal(held.rows[0]!.xact_start, null);
+        assert.equal(shutdownCompleted, false, 'Cleanup must await client end, not only pool.end()');
+        releaseClose();
+        await closing;
+        const remaining = await admin.query(
+          'SELECT pid FROM pg_stat_activity WHERE datname = $1 AND pid = $2', [dbName, pid]);
+        assert.equal(remaining.rows.length, 0, 'Backend must exit before cleanup can complete');
+        console.log('TASK007E_SHUTDOWN_REGRESSION', JSON.stringify({ database: dbName, pid,
+          heldState: held.rows[0]!.state, heldTransaction: null, waitedForClientEnd: true,
+          remainingSessions: remaining.rows.length }));
+      } finally {
+        if (client && !released) client.release();
+        releaseClose();
+        if (closing) await closing;
+        else await closeRegressionPool();
+      }
+    });
   } finally {
     try { if (app) await app.close(); }
     finally {
-      try { if (pool) await pool.end(); }
+      try {
+        if (closeApplicationPool) {
+          const closedClients = await closeApplicationPool();
+          console.log('TASK007C_POOL_CLOSED', JSON.stringify({ database: dbName, closedClients }));
+        }
+      }
       finally {
         if (previousDatabaseUrl === undefined) delete process.env.DATABASE_URL;
         else process.env.DATABASE_URL = previousDatabaseUrl;
         if (previousNodeEnv === undefined) delete process.env.NODE_ENV;
         else process.env.NODE_ENV = previousNodeEnv;
-        try { if (databaseCreated) await admin.query(`DROP DATABASE IF EXISTS "${dbName}" WITH (FORCE)`); }
+        try {
+          if (databaseCreated) {
+            assert.match(dbName, /^task_007c_test_[a-z0-9_]+$/);
+            assert.ok(dbName.length <= 63);
+            const sessions = await admin.query(
+              'SELECT pid, application_name, state, xact_start, backend_start, wait_event_type, wait_event FROM pg_stat_activity WHERE datname = $1 ORDER BY pid',
+              [dbName]);
+            console.log('TASK007C_TEARDOWN_DRAINED', JSON.stringify({ database: dbName, sessions: sessions.rows }));
+            assert.equal(sessions.rows.length, 0, 'All owned connections must close before DROP');
+            // Do not kill leftover sessions: a resource leak must fail visibly.
+            await admin.query(`DROP DATABASE "${dbName}"`);
+            console.log('TASK007C_DB_TEARDOWN', JSON.stringify({ database: dbName, result: 'dropped', forced: false }));
+          }
+        }
         finally { await admin.end(); }
       }
     }

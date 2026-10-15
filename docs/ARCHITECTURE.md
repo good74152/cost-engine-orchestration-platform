@@ -351,10 +351,13 @@ Do not call Airflow while holding a PostgreSQL transaction that owns orchestrati
 Dispatch flow:
 
 ```text
-DB transaction: prepare/fetch durable attempt and mark DISPATCHING
+DB transaction A: prepare/fetch durable PREPARED attempt
 → commit
-→ external Airflow HTTP call
-→ DB transaction: record accepted/rejected result
+→ DB transaction B: mark/reuse DISPATCHING and read frozen dispatch command
+→ commit
+→ executor.dispatch (currently FakeExecutor, not a real Airflow HTTP adapter)
+→ DB transaction C: record accepted/rejected/unknown result
+→ commit
 ```
 
 ### Dispatch Outcomes
@@ -378,6 +381,8 @@ reconcile; do not create a fresh attempt
 ```
 
 Duplicate `dag_run_id` is an idempotency/recovery signal, not automatically a dispatch failure.
+
+Confirmed ACCEPTED or ALREADY_EXISTS atomically records ACCEPTED + RUNNING. PREPARED/DISPATCHING alone does not make a PENDING or FAILED job RUNNING. UNKNOWN normally returns 202 with the same DISPATCHING identity; a concurrent confirmation or terminal reconciliation is never regressed. Task 007B-1 preserves an already reconciled terminal attempt when a late non-rejection dispatch response arrives, including after dataset lifecycle advancement or a newer retry. Contradictory state remains an internal invariant failure, not a history rewrite.
 
 ### Reconciliation
 
@@ -500,7 +505,9 @@ EXECUTION_NOT_RECONCILABLE
 EXECUTOR_STATUS_UNAVAILABLE
 ```
 
-Every documented public error code should eventually have a route-level contract test when its public route exists.
+Handled API errors use the flat response `{ "message": "...", "code": "..." }`. Expected codes have route-level coverage across the PostgreSQL suites; the Task 007C coverage inventory is in `docs/tasks/007c-api-error-contract-coverage.md`. Executed suite evidence, rather than that inventory alone, is recorded in the Task 007D/007E verification reports.
+
+Request errors use 400 (INVALID_REQUEST/INVALID_DOMAIN/INVALID_PERIOD); framework body-size/media errors use 413/415 with INVALID_REQUEST. Missing resources use 404, readiness/state conflicts use 409, definite dispatch rejection uses 502, and unavailable executor truth uses 503. Unexpected/invariant failures are logged and return 500 INTERNAL_SERVER_ERROR without exposing PostgreSQL details. Supported raw ingestion additionally returns 409 ACTIVE_RAW_INGESTION_BATCH_EXISTS; dev/test fake controls return 404 FAKE_EXECUTION_NOT_FOUND when no unique fake run is found. Unregistered routes retain Fastify's normal 404 envelope.
 
 ## 15. Testing Strategy
 
@@ -512,11 +519,15 @@ Executor-facing tasks use an abstraction:
 
 ```text
 CalculationExecutor
-├── AirflowExecutor
-└── FakeExecutor
+├── FakeExecutor    implemented (development/test only)
+└── Airflow adapter future work, not implemented
 ```
 
 `FakeExecutor` enables deterministic coverage for accepted/rejected dispatch, unknown dispatch outcome, duplicate run identity, execution success/failure, retry, reconciliation, and terminal dataset flows. Fake control routes must never be enabled in production.
+
+The factory requires explicit EXECUTOR_TYPE=fake and an approved development/test environment; production configuration fails fast. Fake executions and identity-rejection tombstones are in-process, instance-lifetime state, not cross-process/restart durability or proof of real Airflow behavior. Callback/manual reconciliation is implemented; a periodic worker is not.
+
+`npm run test:milestone` runs build and twelve test suites sequentially, including runner-policy regressions, all PostgreSQL lifecycle/constraint/concurrency suites, API contracts, isolated raw ingestion and Task 007D E2E Flow A–F. It stops on the first failure and rejects invalid/missing TAP evidence, skips, cancellations or TODOs. Tests create/migrate/drop independently owned disposable databases; the source TEST_DATABASE_URL/DATABASE_URL must point at a safe test service with CREATE DATABASE and owned DDL/drop privileges. Raw ingestion must use the milestone's isolated launcher, not a persistent developer database. See README for setup and the verification reports for actual results.
 
 ## 16. Current Implementation Sequence
 
@@ -527,7 +538,7 @@ CalculationExecutor
 4. Execution attempts + FakeExecutor                                  MERGED
 5. Reconciliation                                                     MERGED
 6. Validation / Publish / Reject / Abandon                            MERGED
-7. End-to-End Hardening and Legacy Cleanup                            DESIGN ACCEPTED / NOT IMPLEMENTED
+7. End-to-End Hardening and Legacy Cleanup                            IN REVIEW; NOT COMPLETE
 ```
 
 The active milestone specification is:
@@ -536,8 +547,18 @@ The active milestone specification is:
 docs/tasks/007-end-to-end-hardening-and-legacy-cleanup.md
 ```
 
-Task 007A has recorded real PostgreSQL evidence for CON-01 and CON-02 on an unmerged investigation branch. Task 007B-1 is the bounded late-response correction; ADR-0008 accepts the identity-wide rejection contract and Task 007B-2 specifies FakeExecutor compliance. Both need implementation, system-owner review and green PostgreSQL regressions. Tasks 002–006 state machines and locking protocols remain unchanged.
+Verified main baseline for Task 007E: `74f08823e8be099ef4eef5b6fa8d3c43cf019b09` (Task 007D merge, PR #11). Task 007A investigation, B-1 late-response remediation, B-2 identity-wide rejection compliance, C API hardening and D integrated verification gate are merged. Historical red investigation results describe the before-fix system, not the current regression expectation.
+
+Task 007E audits supported callers and synchronizes developer documentation without changing accepted state machines, transaction/lock protocols or historical migrations. It is awaiting review, not merged. The overall milestone still requires Task 007E review/cleanup verification, real PostgreSQL milestone rerun, System Owner final acceptance and Task 007E merge. See `docs/ROADMAP.md`, `docs/tasks/007e-legacy-and-documentation-cleanup.md`, and the separate historical D/current E verification notes in `docs/verification/`.
 
 ## 17. Decision Records
 
 The rationale and alternatives behind the major decisions above are recorded in `docs/adr/`.
+
+## 18. Current Runtime/API Surface
+
+The server explicitly configures its executor before building the app. Registered supported routes are GET /health; POST /dataset-versions; POST /dataset-versions/:datasetVersionId/submit-validation, /publish, /reject and /abandon; POST /calculation-jobs/:jobId/run and /reconcile; POST /executor-callbacks/airflow; and POST /raw-ingestion-batches. Run/reconcile/callback registration requires an injected executor. The full route table is in README; no read/list APIs are implemented.
+
+With an injected FakeExecutor and explicitly approved development/test environment only, POST /internal/fake-executor/executions/:dagRunId/succeed and /fail set in-memory fake state. These controls neither reconcile local state automatically nor provide a production execution adapter. Legacy calculation-job creation/start/validation/publication/rejection/failure mutation routes are not registered.
+
+Raw ingestion remains a separate supported transactional allocation workflow for FAB_COST_RAW, CAPEX_RAW and DPR_RAW. Its domain/businessKey request, 201 LOADING-batch response and 409 active-batch conflict are retained; its business key is not canonical dataset-series identity. No raw-ingestion architecture or historical data retirement is part of the orchestration cleanup.
