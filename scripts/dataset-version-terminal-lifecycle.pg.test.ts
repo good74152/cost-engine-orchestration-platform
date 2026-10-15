@@ -64,6 +64,7 @@ test('dataset validation and terminal lifecycle PostgreSQL integration and concu
   const admin = new Client({ connectionString: databaseUrl('postgres') });
   const previousDatabaseUrl = process.env.DATABASE_URL;
   let applicationPool: Pool | undefined;
+  const applicationClientEnds: Promise<void>[] = [];
   let app: FastifyInstance | undefined;
   let fake: FakeExecutor = new FakeExecutor();
   await admin.connect();
@@ -82,6 +83,10 @@ test('dataset validation and terminal lifecycle PostgreSQL integration and concu
       import('../src/modules/calculation-job-preparation.service.js'),
     ]);
     applicationPool = pool;
+    // Pool accounting can reach zero before these actual client closes finish.
+    pool.on('connect', (client) => {
+      applicationClientEnds.push(new Promise<void>((resolve) => client.once('end', () => resolve())));
+    });
 
     async function reset(executor: FakeExecutor = new FakeExecutor()): Promise<void> {
       if (app) await app.close();
@@ -803,11 +808,29 @@ test('dataset validation and terminal lifecycle PostgreSQL integration and concu
       });
     }
   } finally {
-    if (app) await app.close();
-    if (applicationPool) await applicationPool.end();
-    if (previousDatabaseUrl === undefined) delete process.env.DATABASE_URL;
-    else process.env.DATABASE_URL = previousDatabaseUrl;
-    await admin.query(`DROP DATABASE IF EXISTS "${name}" WITH (FORCE)`);
-    await admin.end();
+    try { if (app) await app.close(); }
+    finally {
+      try {
+        if (applicationPool) {
+          await applicationPool.end();
+          await Promise.all(applicationClientEnds);
+        }
+      } finally {
+        if (previousDatabaseUrl === undefined) delete process.env.DATABASE_URL;
+        else process.env.DATABASE_URL = previousDatabaseUrl;
+        try {
+          assert.match(name, /^dataset_lifecycle_test_[a-z0-9_]+$/);
+          assert.ok(name.length <= 63);
+          const sessions = await admin.query(
+            'SELECT pid, application_name, state, xact_start, backend_start, wait_event_type, wait_event FROM pg_stat_activity WHERE datname = $1 ORDER BY pid',
+            [name]);
+          console.log('DATASET_LIFECYCLE_TEARDOWN_DRAINED', JSON.stringify({ database: name,
+            closedClients: applicationClientEnds.length, sessions: sessions.rows }));
+          assert.equal(sessions.rows.length, 0, 'All owned connections must close before DROP');
+          await admin.query(`DROP DATABASE "${name}"`);
+          console.log('DATASET_LIFECYCLE_DB_TEARDOWN', JSON.stringify({ database: name, result: 'dropped', forced: false }));
+        } finally { await admin.end(); }
+      }
+    }
   }
 });
