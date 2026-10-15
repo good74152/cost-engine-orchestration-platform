@@ -1,6 +1,6 @@
 # Task 007E — Cleanup Audit and PostgreSQL Verification
 
-Status: audit/documentation implemented; PostgreSQL milestone rerun FAILED at Task 007C asynchronous teardown. Verification is blocked pending System Owner direction. Task 007E is not merged and Task 007 is not COMPLETE.
+Status: VERIFICATION PASSED — AWAITING SYSTEM OWNER REVIEW. Authorized teardown corrections and the new complete PostgreSQL PASS are recorded below. Earlier failures remain preserved as historical evidence. Task 007E is not merged and Task 007 is not COMPLETE.
 
 ## Branch and predecessor
 
@@ -102,7 +102,7 @@ No historical DPR/raw table/index/compatibility column or data is removed. No DB
 
 Static pre-test findings: git diff --check exits 0; full diff contains only these five Markdown files. git diff against baseline for src, scripts, migrations, package.json and package-lock.json is empty. No removed symbols/files need a dangling-reference sweep, because none are removed. Existing caller references were positively rechecked instead. No new skipped/TODO tests, route/DTO/error/state-machine/lock/transaction changes, dependencies or infrastructure.
 
-## New runtime verification
+## Original runtime verification — failed (preserved)
 
 Executed on 2026-10-15 (Asia/Taipei). **Overall FAIL / verification blocked**, not a milestone PASS. No rerun was used to hide the observed failure.
 
@@ -217,6 +217,200 @@ No additional compiler, spawn or signal warning was observed in the gate. Runtim
 
 The existing origin still uses the former financial-calculation-platform repository slug. Read-only git ls-remote origin refs/heads/main exited 0 and returned the same 74f0882 baseline. The remote configuration was not changed as part of this bounded task; GitHub may print repository-relocation guidance on push.
 
-## Remaining limits / review gate
+## Original review gate — before authorized correction (preserved)
 
 FakeExecutor is instance-local dev/test state, not a production Airflow implementation or durable distributed rejection store. Real Airflow, cancellation, queues, periodic workers, automatic publication and schema/data retirement remain deferred. No production architecture conflict found in the audit. The observed Task 007C teardown failure is unresolved; further scoped investigation/repair needs owner direction. Task 007E review/merge and System Owner final milestone acceptance remain pending.
+
+## Authorized teardown investigation and corrected verification — 2026-10-15
+
+**Current result: VERIFICATION PASSED — AWAITING SYSTEM OWNER REVIEW.** Task 007E remains unmerged; Task 007 is not COMPLETE. The original failed-run evidence above is preserved, not retroactively changed to PASS.
+
+### Starting point, ownership and confirmed cause
+
+The existing branch and clean reviewed HEAD matched 4ad8c822732b789ed46d6a0e1ddbb29ad1bfc633. No new branch or cleanup audit was created. The accepted barrel-retention decision, application architecture and cleanup documentation were preserved.
+
+Connection ownership established from source and temporary lifecycle tracing:
+
+| Resource | Owner / lifetime |
+|---|---|
+| Maintenance pg.Client | Fixture; connects to postgres, creates/drops only its generated database; ends after cleanup |
+| Migration pg.Client | node-pg-migrate runner; separate from the application pool; its end event was observed before application work |
+| Application pg.Pool | Fixture imports the singleton pool and owns its test-process shutdown; Fastify instances share this pool |
+| Raw transactions | Borrow/release clients from that application pool; COMMIT/ROLLBACK and release complete before service/HTTP promises resolve |
+| Other Fastify test instances | Closed by their existing finally blocks; do not create independent pools |
+| New shutdown-regression pg.Pool | One explicit additional fixture-owned pool; real connection, deterministic close barrier, closed in finally before main teardown |
+
+The initial unmodified focused reproduction passed once, so the original uncontrolled timing-sensitive failure was **not** reproduced in that run. Passive instrumentation nevertheless showed pool.end() resolving while ten application client end events were still pending. The migration client had already ended.
+
+The installed pg 8.23.0 / pg-pool 3.14.0 implementation explains this precisely: pg-pool's _remove removes a client from _clients before its asynchronous client.end callback finishes; _pulseQueue can observe empty accounting and resolve pool.end immediately. Individual Client end events occur later. An empty pool count/end promise therefore was not a sufficient fixture barrier for forced database removal.
+
+A deterministic diagnostic held one application's graceful protocol close (no sleep), leaving the unchanged original forced DROP in place. Immediately before DROP, a strictly database-name-filtered pg_stat_activity query returned:
+
+| Field | Observed value |
+|---|---|
+| Database | task_007c_test_22620_921784deb410 |
+| Backend PID | 957 |
+| Owner | application-pool |
+| application_name | empty |
+| state / transaction | idle / xact_start=null |
+| backend_start | 2026-10-15T05:51:39.390Z |
+| Wait | Client / ClientRead |
+
+The maintenance client was PID 955 in postgres; migration client PID 956 was already closed. The forced DROP terminated application PID 957 and its errorMonitor observation reported code 57P01, message terminating connection due to administrator command. errorMonitor only observed the error; no error/exception/rejection handler suppressed it. The diagnostic exited 1.
+
+This identifies the faulty ordering rather than merely inferring a cause from FORCE's name. The original uninstrumented failure's exact client was not captured; the controlled replay isolates and confirms the same causal mechanism. Clients created during a subtest retain its asynchronous context, so a later forced termination can be attributed to that already-passed subtest and fail the Node process after HTTP assertions have completed.
+
+No application transaction/client-release defect was found. This is a fixture resource-lifetime bug: administrative deletion raced still-closing connections, not failed raw ingestion or an accepted production lifecycle transition.
+
+### Every diagnostic attempt, including failures
+
+Commands below used real PostgreSQL and fresh owned disposable databases. Temporary preloads were diagnostic-only, never committed, and removed before corrected source commits.
+
+| Attempt / exact npm command | Revision / diagnostic setting | Exit | Pass | Fail | Skip | Cancelled | TODO |
+|---|---|---:|---:|---:|---:|---:|---:|
+| npm.cmd run test:task-007c-api-contract | Clean reviewed 4ad8c82; unmodified reproduction | 0 | 11 | 0 | 0 | 0 | 0 |
+| npm.cmd run test:task-007c-api-contract | 4ad8c82 + temporary task-007e-pg-diagnostic.mjs; passive tracing | 0 | 11 | 0 | 0 | 0 | 0 |
+| npm.cmd run test:task-007c-api-contract | Same temporary tracing + TASK007E_HOLD_CLIENT_CLOSE=1; controlled forced-DROP replay | 1 | 10 | 1 | 0 | 0 | 0 |
+| npm.cmd run test:dataset-version-terminal-lifecycle | 56ee543 + temporary task-007e-terminal-diagnostic.mjs; passive tracing after first corrected gate failed there | 0 | 64 | 0 | 0 | 0 | 0 |
+
+The preload executions selected NODE_OPTIONS --import=./scripts/support/<diagnostic-file> --test-reporter=tap. Shell variables were saved/restored; the hold flag was removed afterwards. They are not claimed as clean-commit production runs. There was no retry-until-green loop.
+
+### Bounded correction and regression coverage
+
+Commit 56ee54315efc8600e54471970a3bbed7eb332c8f changed only scripts/task-007c-api-contract.pg.test.ts:
+
+- Register client end-event promises through the pool's public connect event before its first acquisition, including any clients retired before pool shutdown.
+- Close Fastify, await pool.end(), then await every tracked client end event.
+- Query pg_stat_activity strictly for the generated test database, require zero sessions, revalidate its name, and issue normal DROP DATABASE without FORCE. Unexpected remaining sessions, end failures or DROP failures still fail visibly.
+- Add one real-PG regression: hold one actual driver's graceful close, verify its backend is idle with no transaction and cleanup remains pending, release the barrier, then verify the backend has disappeared. This checks resource lifetime, not merely that a cleanup function was called.
+- Preserve all ten original subtests and the twenty concurrent requests with exactly one 201, nineteen 409s and one persisted batch. No assertions or public contracts were removed.
+
+No arbitrary sleeps, retry loops, global exception handlers, swallowed errors, mocked PostgreSQL or new framework/dependency were introduced. The helper observes public client end events; it does not patch production pg internals. Only the regression's own client close is gated, and always released in finally.
+
+The first complete gate on that correction exposed the **same fixture-only bug** in the existing dataset terminal-lifecycle suite: all 64 entries passed, then forced DROP caused asynchronous administrator-termination errors. Passive tracing there again found its migration connection closed and all ten application client end events pending after pool.end (PIDs 1215–1224; owned dataset_lifecycle_test_30600_2883bbf89e0f).
+
+A separate bounded commit, c0f09b290d1c729760637837410951d33a680333, applies the same end-event barrier, zero-session check and normal owned DROP to that fixture only. It also keeps maintenance connection cleanup in finally. All 64 original lifecycle assertions are untouched. This is an evidence-driven second fixture correction required by the gate, not a production lifecycle change or speculative repository-wide cleanup. Task 007C's file is byte-identical to its three focused successful runs.
+
+### Three independent Task 007C executions
+
+Exact command each time: npm.cmd run test:task-007c-api-contract, selecting TAP with child-scoped NODE_OPTIONS --test-reporter=tap and restoring the previous setting. All three ran sequentially at clean commit 56ee54315efc8600e54471970a3bbed7eb332c8f, tree 47389fe51cd88b531a5277e946e9733ebaf897b1.
+
+| Run | Owned database | Exit | Pass | Fail | Skip | Cancelled | TODO | Teardown |
+|---|---|---:|---:|---:|---:|---:|---:|---|
+| 1 | task_007c_test_34628_10c1d903f544 | 0 | 12 | 0 | 0 | 0 | 0 | 10 application clients ended; zero sessions; non-forced DROP |
+| 2 | task_007c_test_19784_392dca75ad90 | 0 | 12 | 0 | 0 | 0 | 0 | Same; new independent database |
+| 3 | task_007c_test_12952_5c6fce0c6f4e | 0 | 12 | 0 | 0 | 0 | 0 | Same; new independent database |
+
+Barrier backend PIDs were 987, 1001 and 1015 respectively; every regression logged waitedForClientEnd=true and remainingSessions=0. The twelve entries are the ten original subtests, one new shutdown regression, and the parent. No asynchronous activity, uncaught connection error or cleanup failure occurred in any repetition.
+
+Additional focused verification after the second fixture fix: npm.cmd run test:dataset-version-terminal-lifecycle at c0f09b2 exited 0 with **64 pass / 0 fail / 0 skip / 0 cancelled / 0 TODO**. Its owned dataset_lifecycle_test_25328_13d0f6e5eb6e reported ten clients closed, zero sessions and a successful non-forced DROP.
+
+### Failed intermediate complete gate — preserved separately
+
+Exact command: npm.cmd run test:milestone at clean 56ee54315efc8600e54471970a3bbed7eb332c8f — exit **1**. This was before the second fixture correction, not the final result.
+
+| Command | Exit | Pass | Fail | Skip | Cancelled | TODO | Status |
+|---|---:|---:|---:|---:|---:|---:|---|
+| npm run build | 0 | null | null | null | null | null | PASS |
+| npm run test:milestone-runner | 0 | 20 | 0 | 0 | 0 | 0 | PASS |
+| npm run test:orchestration-schema-v2 | 0 | 30 | 0 | 0 | 0 | 0 | PASS |
+| npm run test:dataset-version-creation-v2 | 0 | 14 | 0 | 0 | 0 | 0 | PASS |
+| npm run test:first-run-immutable-build-snapshot | 0 | 19 | 0 | 0 | 0 | 0 | PASS |
+| npm run test:execution-attempt-dispatch-fake-executor | 0 | 11 | 0 | 0 | 0 | 0 | PASS |
+| npm run test:executor-reconciliation | 0 | 22 | 0 | 0 | 0 | 0 | PASS |
+| npm run test:dataset-version-terminal-lifecycle | 1 | 64 | 1 | 0 | 0 | 0 | FAIL |
+| npm run test:cross-workflow-concurrency-investigation | null | null | null | null | null | null | NOT RUN |
+| npm run test:task-007b1-late-dispatch-reconciliation | null | null | null | null | null | null | NOT RUN |
+| npm run test:task-007c-api-contract | null | null | null | null | null | null | NOT RUN |
+| npm run test:raw-ingestion (owned disposable PostgreSQL database) | null | null | null | null | null | null | NOT RUN |
+| npm run test:task-007d-end-to-end | null | null | null | null | null | null | NOT RUN |
+
+Observed aggregate: **180 pass / 1 fail / 0 skip / 0 cancelled / 0 TODO**; later five commands NOT RUN with null counters. Terminal-lifecycle assertions all passed, but the file-level asynchronous error added a failing entry (# tests 65, # pass 64, # fail 1). Node attributed two errors to its subtest at baseline line 225. PostgreSQL logged administrator termination for PIDs 1197, 1198 and 1200 at 05:57:14 UTC. This failure was investigated and corrected, not ignored or relabelled as a warning.
+
+### Final complete milestone — actual executed PASS
+
+| Revision/environment | Value |
+|---|---|
+| Exact final runtime-tested source | c0f09b290d1c729760637837410951d33a680333 |
+| Exact final runtime-tested tree | 095375e8f1a02db44f68e846c0dabec59a954b06 |
+| Working tree during gate | Clean |
+| Node.js / npm | v24.18.0 / 11.16.0 |
+| PostgreSQL | PostgreSQL 18.6 (Debian 18.6-1.pgdg13+2), x86_64, 64-bit |
+| Topology | Windows Node → localhost:5432 → repository Compose postgres_db / test_postgres |
+| Database source | Private TEST_DATABASE_URL, falling back to DATABASE_URL; no credential output |
+| Role preflight | CREATEDB=true, SUPERUSER=true; local test service only |
+| Isolation | Independently owned disposable databases, checked-in migrations, maintenance DB postgres |
+| Report/delivery commit | Later documentation-only descendant; not claimed as separately runtime-tested |
+
+npm.cmd run build exited **0** at both 56ee543 and c0f09b2. Final exact full-gate command: **npm.cmd run test:milestone — process exit 0** at c0f09b2. These are this continuation's executions, not substituted historical Task 007D results.
+
+| Command | Exit | Pass | Fail | Skip | Cancelled | TODO | Status |
+|---|---:|---:|---:|---:|---:|---:|---|
+| npm run build | 0 | null | null | null | null | null | PASS |
+| npm run test:milestone-runner | 0 | 20 | 0 | 0 | 0 | 0 | PASS |
+| npm run test:orchestration-schema-v2 | 0 | 30 | 0 | 0 | 0 | 0 | PASS |
+| npm run test:dataset-version-creation-v2 | 0 | 14 | 0 | 0 | 0 | 0 | PASS |
+| npm run test:first-run-immutable-build-snapshot | 0 | 19 | 0 | 0 | 0 | 0 | PASS |
+| npm run test:execution-attempt-dispatch-fake-executor | 0 | 11 | 0 | 0 | 0 | 0 | PASS |
+| npm run test:executor-reconciliation | 0 | 22 | 0 | 0 | 0 | 0 | PASS |
+| npm run test:dataset-version-terminal-lifecycle | 0 | 64 | 0 | 0 | 0 | 0 | PASS |
+| npm run test:cross-workflow-concurrency-investigation | 0 | 14 | 0 | 0 | 0 | 0 | PASS |
+| npm run test:task-007b1-late-dispatch-reconciliation | 0 | 32 | 0 | 0 | 0 | 0 | PASS |
+| npm run test:task-007c-api-contract | 0 | 12 | 0 | 0 | 0 | 0 | PASS |
+| npm run test:raw-ingestion (owned disposable PostgreSQL database) | 0 | 1 | 0 | 0 | 0 | 0 | PASS |
+| npm run test:task-007d-end-to-end | 0 | 7 | 0 | 0 | 0 | 0 | PASS |
+
+MILESTONE_SUMMARY: overall PASS, exitCode=0; all thirteen command records PASS; signal/spawnError null, issues arrays empty. Aggregate **246 pass / 0 fail / 0 skip / 0 cancelled / 0 TODO**. No missing/invalid TAP summaries. The extra entry versus historical D's 245 is the new shutdown regression, not a changed lifecycle expectation.
+
+Confirmed end-to-end/regression results:
+
+| Area | Actual final result |
+|---|---|
+| CON-01 / CON-02 combined | 14 pass, exit 0; accepted ordering/recovery/rejection regressions green; invalid-adapter negative tests remain negative contract tests |
+| Focused Task 007B-1 | 32 pass, exit 0; accepted assertions/production fixes unchanged |
+| Task 007C | 12 pass; original request/error/environment/raw contention contracts preserved plus close-barrier regression |
+| Original raw ingestion | 1 pass, exit 0 via unchanged isolated launcher; 20 requests, one 201/nineteen 409s; successful owned teardown |
+| E2E A | Published CAPEX v1; two DPR jobs share one snapshot and upstream pin; explicit publication succeeds |
+| E2E B | Original attempt FAILED, retry SUCCEEDED, three attempts total; frozen snapshot reused |
+| E2E C | 202 response-loss path recovered same attempt; no duplicate external execution |
+| E2E D | Versions 1/2/3; v2 rejected; v1 stays latest published |
+| E2E E | Safe DRAFT/BUILDING abandonment; DISPATCHING/ACCEPTED guarded; PREPARED covered by unchanged existing Task 006 assertions |
+| E2E F | Callback in VALIDATING and two in PUBLISHED preserve immutable terminal history |
+| E2E total | Six flows plus parent = 7 pass, exit 0 |
+
+### Teardown and quality evidence
+
+Final explicit events:
+
+- DATASET_LIFECYCLE_TEARDOWN_DRAINED: dataset_lifecycle_test_2644_6559a425f35e, ten closed clients, sessions=[]; normal DROP succeeded.
+- TASK007C_POOL_CLOSED / TEARDOWN_DRAINED: task_007c_test_9420_decb5d9817ae, ten closed clients, sessions=[]; normal DROP succeeded. Regression backend PID 1462 ended before cleanup completed.
+- RAW_ISOLATED_TEARDOWN: raw_milestone_test_28144_dec89435d54e dropped by the unchanged isolated launcher.
+- E2E_DB_TEARDOWN: task_007d_e2e_25660_0893c643b20e dropped after its suite completed.
+- Read-only postflight inventory matched preflight exactly: postgres, template0, template1, testdb. No suite databases remained and no C/terminal/raw/E2E sessions remained.
+- Container-log check since final source commit time 2026-10-15T05:59:56Z found **zero** FATAL/administrator-termination entries. Earlier deliberate diagnostic and failed-gate termination logs are not represented as final-run warnings.
+
+Additional exact checks:
+
+| Check | Exit/result |
+|---|---|
+| npm.cmd exec -- tsc --ignoreConfig --noEmit --strict --skipLibCheck --esModuleInterop --module NodeNext --target ES2022 scripts/task-007c-api-contract.pg.test.ts | 0 after explicit PoolClient typing correction |
+| npm.cmd exec -- tsc --ignoreConfig --noEmit --strict --skipLibCheck --esModuleInterop --module NodeNext --target ES2022 scripts/task-007c-api-contract.pg.test.ts scripts/dataset-version-terminal-lifecycle.pg.test.ts | 0 before committing the unchanged corrected source |
+| git diff --check | 0; final branch comparison checked against 74f08823e8be099ef4eef5b6fa8d3c43cf019b09 |
+| Protected-path diff against reviewed 4ad8c82 | Empty for src, migrations, package/lockfile, ADRs, milestone runner/support, original raw test and Task 007B regression files |
+| Temporary diagnostic files | Removed before source commits; no preload/hold flags in final test commands |
+| Historical migration inventory | Same six blobs recorded above; no new/edited/renamed migrations |
+| Current continuation diff | Two bounded test-fixture changes plus verification/status documentation only |
+
+During test authoring, an initial supplemental type-check exited 1 because ReturnType of overloaded pool.connect selected its callback/void signature. Explicit PoolClient typing corrected that test-only declaration; both final checks above exited 0. It was not a PostgreSQL/business assertion failure. All diagnostic/gate failures are recorded above.
+
+Final-gate warnings: no unexpected compiler/runtime warning, asynchronous activity, spawn/signal error or teardown error. Git emitted informational LF-to-CRLF guidance for this Markdown report. The unchanged origin uses the old repository slug and GitHub redirects pushes to cost-engine-orchestration-platform; no remote/dependency configuration was changed.
+
+### Current limitations and owner gate
+
+No unresolved failure was observed in the final required gate or three focused C repetitions. This is Windows/Node 24/PostgreSQL 18.6 coverage, not a multi-platform guarantee. The local role remains privileged; safety depends on owned test targets. No unrelated historical fixture/launcher rewrite was performed; the two demonstrated races were corrected and the unchanged remaining suites passed the complete gate.
+
+FakeExecutor remains in-process development/test only; production adapters/distributed durability are not added. No production code, architecture/state machine, transaction/lock protocol, public DTO/error, raw business behavior, accepted ADR, Task 007B assertion/fix, migration, dependency or infrastructure was changed.
+
+This continuation changes scripts/task-007c-api-contract.pg.test.ts, scripts/dataset-version-terminal-lifecycle.pg.test.ts, this verification report, and status-only references in README.md/docs/ROADMAP.md. Previously approved AGENTS/ARCHITECTURE/cleanup decisions are not reopened. Documentation-only status changes after execution do not change the identity of the tested source.
+
+System Owner review/acceptance and Task 007E merge are still pending. No automatic merge, milestone COMPLETE declaration, or next milestone was started.

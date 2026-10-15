@@ -29,9 +29,9 @@ Task 007A's historical red evidence is retained as investigation history. It doe
 
 ## Current milestone: Task 007 — End-to-End Hardening and Legacy Cleanup
 
-**Status: Task 007E awaiting review; verification blocked; overall milestone NOT COMPLETE.**
+**Status: Task 007E VERIFICATION PASSED — AWAITING SYSTEM OWNER REVIEW; overall milestone NOT COMPLETE.**
 
-The new E gate attempt failed at Task 007C with asynchronous activity after its raw-ingestion contention test: PostgreSQL reported terminating connection due to administrator command. The runner correctly stopped; original isolated raw regression and E2E Flow A–F were NOT RUN. No tests/production code were changed or rerun to hide this failure. The E verification note records all observed counters and the unresolved teardown investigation for owner direction.
+The authorized teardown investigation confirmed a pool-accounting/client-close race before forced database removal. Bounded test-fixture corrections cover Task 007C and the same defect subsequently observed in terminal-lifecycle verification. Three independent C runs and the complete gate now pass, including isolated raw ingestion and E2E Flow A–F. The E note preserves both earlier failed gates and all diagnostic attempts; no failure was hidden and no production behavior was changed.
 
 - [Master scope/acceptance gates](tasks/007-end-to-end-hardening-and-legacy-cleanup.md)
 - [Current Task 007E specification](tasks/007e-legacy-and-documentation-cleanup.md)
@@ -53,7 +53,7 @@ All six applied migrations, historical DPR performance/input snapshots, raw tabl
 
 Reproducible command: npm run test:milestone (also runs the build); separately run npm run build. Node.js 24+ and a real PostgreSQL test service are required. See README for configuration, owned disposable database permissions and raw-ingestion isolation. Do not run the standalone raw test against a persistent developer database.
 
-Task 007D has recorded a full real PostgreSQL PASS; Task 007E must also rerun the unchanged complete gate after its own changes. A static test inventory is not execution evidence.
+Task 007D has recorded its historical real PostgreSQL PASS. Task 007E now separately records a new complete PASS at c0f09b290d1c729760637837410951d33a680333 (246 passing entries), after its own fixture corrections. A static inventory or historical D result is not substituted for this execution evidence.
 
 Do not mark Task 007 or Orchestration Core v2 COMPLETE until:
 

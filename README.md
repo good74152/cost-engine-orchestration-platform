@@ -6,7 +6,7 @@ A portfolio backend for coordinating versioned cost/financial datasets and exter
 
 Tasks 002–006 and Task 007A/B-1/B-2/C/D are merged into main. Task 007D's milestone gate is implemented and has recorded real PostgreSQL results. Task 007E is the current cleanup/documentation review slice; **Task 007 is not COMPLETE**. System Owner acceptance and Task 007E review/merge remain required.
 
-The Task 007E rerun stopped on a Task 007C asynchronous PostgreSQL teardown error; its required original raw-ingestion and E2E suites were NOT RUN. See the E verification note below. The historical D PASS is not a PASS for this rerun; owner direction is needed before further repair.
+The authorized Task 007E teardown investigation and corrections are verified: three independent Task 007C runs and a new full PostgreSQL milestone gate passed. Earlier failures and the exact tested source revisions remain in the E verification note below. Task 007E still awaits System Owner review/merge; the overall milestone remains open.
 
 See [Roadmap](docs/ROADMAP.md), [Task 007 master scope](docs/tasks/007-end-to-end-hardening-and-legacy-cleanup.md), [Task 007E](docs/tasks/007e-legacy-and-documentation-cleanup.md), [historical Task 007D verification](docs/verification/task-007d-milestone.md) and [Task 007E audit/verification](docs/verification/task-007e-cleanup.md).
 
