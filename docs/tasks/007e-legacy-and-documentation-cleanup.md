@@ -1,7 +1,9 @@
 # Task 007E — Safe Legacy Cleanup and Documentation Synchronization
 
-- Status: Last bounded Task 007 slice, after behavior and E2E verification are protected by tests.
+- Status: MERGED via PR #12 at 1f441eb6e430ba2acd0078cf9ce48045cfeb6e67; Task 007 COMPLETE and Orchestration Core v2 ACCEPTED by the System Owner.
 - No migration/data deletion; no unrelated architecture refactor.
+
+Closure status and recorded verification: [Task 007 final acceptance](../verification/task-007-final-acceptance.md), recorded 2026-10-16. The original cleanup requirements and acceptance criteria below are preserved; historical D/E verification reports remain unchanged.
 
 ## Goal
 

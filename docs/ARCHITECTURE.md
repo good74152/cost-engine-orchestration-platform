@@ -538,18 +538,18 @@ The factory requires explicit EXECUTOR_TYPE=fake and an approved development/tes
 4. Execution attempts + FakeExecutor                                  MERGED
 5. Reconciliation                                                     MERGED
 6. Validation / Publish / Reject / Abandon                            MERGED
-7. End-to-End Hardening and Legacy Cleanup                            IN REVIEW; NOT COMPLETE
+7. End-to-End Hardening and Legacy Cleanup                            COMPLETE; ACCEPTED; MERGED
 ```
 
-The active milestone specification is:
+The completed milestone specification is:
 
 ```text
 docs/tasks/007-end-to-end-hardening-and-legacy-cleanup.md
 ```
 
-Verified main baseline for Task 007E: `74f08823e8be099ef4eef5b6fa8d3c43cf019b09` (Task 007D merge, PR #11). Task 007A investigation, B-1 late-response remediation, B-2 identity-wide rejection compliance, C API hardening and D integrated verification gate are merged. Historical red investigation results describe the before-fix system, not the current regression expectation.
+Accepted main baseline: `1f441eb6e430ba2acd0078cf9ce48045cfeb6e67` (Task 007E merge, PR #12). Tasks 007A–007E, including B-1/B-2 remediation, API hardening, integrated verification and safe cleanup/documentation, are merged. Historical red investigation results describe the before-fix system, not the current regression expectation.
 
-Task 007E audits supported callers and synchronizes developer documentation without changing accepted state machines, transaction/lock protocols or historical migrations. It is awaiting review, not merged. The overall milestone still requires Task 007E review/cleanup verification, real PostgreSQL milestone rerun, System Owner final acceptance and Task 007E merge. See `docs/ROADMAP.md`, `docs/tasks/007e-legacy-and-documentation-cleanup.md`, and the separate historical D/current E verification notes in `docs/verification/`.
+Task 007 is COMPLETE and Orchestration Core v2 is ACCEPTED by the System Owner; architecture defense PASSED. The [final acceptance record](verification/task-007-final-acceptance.md) records the 2026-10-16 approval, accepted limitations and precise verification boundary. The original D/E reports remain unchanged. This is implementation-status synchronization only: accepted state machines, transaction/lock protocols, identities and historical migrations are unchanged, and this documentation-only closure awaits its own review/merge.
 
 ## 17. Decision Records
 

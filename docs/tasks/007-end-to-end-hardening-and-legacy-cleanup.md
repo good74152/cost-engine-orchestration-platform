@@ -1,9 +1,11 @@
 # Task 007 — End-to-End Hardening and Legacy Cleanup
 
-- Status: Design priorities accepted; implementation not started.
-- Baseline: main commit 85479c723090de8dc96cdb0a13472f3156b5e8f9.
+- Status: COMPLETE; Orchestration Core v2 ACCEPTED by the System Owner. Tasks 007A–007E MERGED; final implementation merge PR #12 at 1f441eb6e430ba2acd0078cf9ce48045cfeb6e67.
+- Original design baseline: main commit 85479c723090de8dc96cdb0a13472f3156b5e8f9.
 - Workflow: system owner reviews each bounded PR first; Codex implements only delegated packages.
 - Goal: finish the Orchestration Core v2 milestone without redesigning Tasks 002–006.
+
+Current closure authority: [Task 007 final acceptance](../verification/task-007-final-acceptance.md), recorded 2026-10-16. Original baseline findings, investigation questions, sequencing rationale and acceptance checklist below are preserved as the original specification, not current implementation status. Detailed execution evidence remains in the unchanged D/E reports linked by that record.
 
 ## Accepted decisions
 
@@ -15,7 +17,7 @@
 
 ## Source of truth and evidence boundary
 
-Read AGENTS.md, README.md, docs/ARCHITECTURE.md, docs/ROADMAP.md and ADRs 0001–0007.
+Read AGENTS.md, README.md, docs/ARCHITECTURE.md, docs/ROADMAP.md and accepted ADRs 0001–0008. Use the final acceptance record above for current closure status.
 
 The static inspection at main 85479c72 found these test suites:
 ~~~text
@@ -50,11 +52,11 @@ job/attempt:     calculation_job → execution_attempt
 
 | Package | Bounded purpose | Status |
 |---|---|---|
-| 007A | Deterministic proof/classification of cross-workflow dispatch races | Evidence complete on unmerged 007A branch |
-| 007B | CON-01 bounded late-response correction; CON-02 identity-scoped rejection contract | ADR-0008 accepted; 007B-1/007B-2 bounded specs ready, implementation pending |
-| 007C | HTTP validation and public error contract hardening | Ready after concurrency gate |
-| 007D | Complete E2E acceptance + reproducible PostgreSQL milestone test command | After concurrency and API stabilise |
-| 007E | Safe legacy application cleanup and truthful documentation | Last, after replacement paths protected by tests |
+| 007A | Deterministic proof/classification of cross-workflow dispatch races | MERGED — PR #7 |
+| 007B | CON-01 bounded late-response correction; CON-02 identity-scoped rejection contract | 007B-1 / 007B-2 MERGED — PRs #8 / #9; ADR-0008 accepted |
+| 007C | HTTP validation and public error contract hardening | MERGED — PR #10 |
+| 007D | Complete E2E acceptance + reproducible PostgreSQL milestone test command | MERGED — PR #11 |
+| 007E | Safe legacy application cleanup and truthful documentation | MERGED — PR #12 |
 
 Subtask specifications:
 - docs/tasks/007a-cross-workflow-concurrency-investigation.md
@@ -66,7 +68,7 @@ Subtask specifications:
 - docs/tasks/007d-end-to-end-verification-gate.md
 - docs/tasks/007e-legacy-and-documentation-cleanup.md
 
-Task 007A investigation evidence is available on feature/task-007a-concurrency-investigation (currently unmerged and containing intentionally red regression tests). CON-01 and CON-02 were reproduced on real PostgreSQL. 007B-1 has a bounded spec for the valid late-acceptance case; 007B-2 remains blocked pending the system owner's decision on the permanent identity scope of definite rejection. Do not merge a red suite or treat CON-01 resolution as complete Task 007B.
+Task 007A's original red PostgreSQL evidence is retained as investigation history. The accepted 007B-1/007B-2 remediations and verified green regressions are merged under ADR-0008; the former investigation-branch and architecture-decision blockers no longer describe current status. The original technical questions below remain historical context, not instructions to merge a red suite.
 
 ## 1. API contract gap inventory
 
