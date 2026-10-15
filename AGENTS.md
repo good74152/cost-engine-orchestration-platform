@@ -125,20 +125,18 @@ Airflow/ETL owns calculation execution. The backend owns:
 
 Do not put employer-specific Airflow DAG code, SQL, proprietary schemas, or confidential configuration in this repository.
 
-## Current Implementation Task
+## Accepted Baseline and Future Work
 
-Tasks 002–006 and Task 007A/B-1/B-2/C/D are merged into main. The active bounded slice is Task 007E — Safe Legacy Cleanup and Documentation Synchronization.
+Task 007 is COMPLETE, accepted by the System Owner, and its implementation slices 007A–007E are merged. The current repository baseline is the accepted Orchestration Core v2 milestone at main commit 1f441eb6e430ba2acd0078cf9ce48045cfeb6e67.
 
-Master scope and acceptance gates:
+Milestone and evidence navigation:
 
-docs/tasks/007-end-to-end-hardening-and-legacy-cleanup.md
-
-Current task and verification navigation:
-
+- docs/verification/task-007-final-acceptance.md (authoritative closure record)
+- docs/tasks/007-end-to-end-hardening-and-legacy-cleanup.md (original specification)
 - docs/tasks/007e-legacy-and-documentation-cleanup.md
 - docs/verification/task-007d-milestone.md (historical executed Task 007D evidence)
 - docs/verification/task-007e-cleanup.md (cleanup audit and PostgreSQL rerun)
 
 Executor REJECTED remains an irrevocable identity-wide no-run guarantee (ADR-0008), not a per-call observation. Retain the supported raw-ingestion API, historical migrations/data and any application artifact with supported callers. Do not redesign accepted lifecycle/locking protocols. FakeExecutor is development/test only; no real Airflow adapter is implemented.
 
-Run npm run build and the unchanged npm run test:milestone against owned disposable PostgreSQL databases; use its isolated raw-ingestion launcher rather than testing against a persistent developer database. Task 007E is awaiting review, not merged. Do not mark Task 007 COMPLETE without cleanup verification, the real PostgreSQL rerun, System Owner final acceptance and Task 007E merge.
+Run npm run build and npm run test:milestone for future implementation verification against owned disposable PostgreSQL databases; use its isolated raw-ingestion launcher rather than a persistent developer database. Future substantial features require architecture review and a new bounded task; do not infer Task 008 or another milestone from this closure. Documentation-closure review/merge is separate from the approved implementation milestone.

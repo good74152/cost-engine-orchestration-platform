@@ -4,7 +4,7 @@ The Cost Engine Orchestration Platform is a portfolio backend. Accepted decision
 
 ## Verified main baseline
 
-Task 007E starts from **74f08823e8be099ef4eef5b6fa8d3c43cf019b09**, fetched origin/main on 2026-10-15. Task 007D reviewed commit 54dac9e3fa0c3dfcb5d1f151dfcddd6205f8c5de is an ancestor of this baseline; its runner, E2E tests and historical verification report are on main. This is a verified merge prerequisite, not an assumption based on code review.
+Accepted main baseline: **1f441eb6e430ba2acd0078cf9ce48045cfeb6e67**, fetched and verified on 2026-10-16. Task 007E PR #12 is merged, with all Task 007A–007E implementation and recorded acceptance evidence on main. The [final acceptance record](verification/task-007-final-acceptance.md) distinguishes the tested source, implementation merge, System Owner approval and pending documentation-closure merge.
 
 ## Completed implementation slices on main
 
@@ -21,25 +21,26 @@ Task 007E starts from **74f08823e8be099ef4eef5b6fa8d3c43cf019b09**, fetched orig
 | 007B-2 | ADR-0008 irrevocable identity-wide rejection; FakeExecutor compliance | Merged — PR #9, 273eac6 |
 | 007C | Public error/input contracts, supported raw validation, dev/test fake-control gating | Merged — PR #10, 58dd1b7 |
 | 007D | Sequential fail-closed milestone runner, integrated Flow A–F and PostgreSQL evidence | Merged — PR #11, 74f0882 |
-| 007E | Supported-caller/dependency audit and developer documentation synchronization | Feature branch; awaiting review, **not merged** |
+| 007E | Supported-caller/dependency audit, documentation synchronization and verified teardown corrections | Merged — PR #12, 1f441eb |
 
-PR references: [#7](https://github.com/good74152/cost-engine-orchestration-platform/pull/7), [#8](https://github.com/good74152/cost-engine-orchestration-platform/pull/8), [#9](https://github.com/good74152/cost-engine-orchestration-platform/pull/9), [#10](https://github.com/good74152/cost-engine-orchestration-platform/pull/10), [#11](https://github.com/good74152/cost-engine-orchestration-platform/pull/11).
+PR references: [#7](https://github.com/good74152/cost-engine-orchestration-platform/pull/7), [#8](https://github.com/good74152/cost-engine-orchestration-platform/pull/8), [#9](https://github.com/good74152/cost-engine-orchestration-platform/pull/9), [#10](https://github.com/good74152/cost-engine-orchestration-platform/pull/10), [#11](https://github.com/good74152/cost-engine-orchestration-platform/pull/11), [#12](https://github.com/good74152/cost-engine-orchestration-platform/pull/12).
 
 Task 007A's historical red evidence is retained as investigation history. It does not mean current supported CON-01/CON-02 regressions should fail: accepted fixes and green regressions are merged.
 
-## Current milestone: Task 007 — End-to-End Hardening and Legacy Cleanup
+## Accepted milestone: Task 007 — End-to-End Hardening and Legacy Cleanup
 
-**Status: Task 007E VERIFICATION PASSED — AWAITING SYSTEM OWNER REVIEW; overall milestone NOT COMPLETE.**
+**Task 007 Milestone — COMPLETE. Orchestration Core v2 — ACCEPTED. System Owner — APPROVED.** Senior Architecture Review APPROVED; Architecture Defense PASSED. Approval is recorded on 2026-10-16 (Asia/Taipei); Tasks 007A–007E are MERGED. This does not claim production deployment readiness.
 
 The authorized teardown investigation confirmed a pool-accounting/client-close race before forced database removal. Bounded test-fixture corrections cover Task 007C and the same defect subsequently observed in terminal-lifecycle verification. Three independent C runs and the complete gate now pass, including isolated raw ingestion and E2E Flow A–F. The E note preserves both earlier failed gates and all diagnostic attempts; no failure was hidden and no production behavior was changed.
 
-- [Master scope/acceptance gates](tasks/007-end-to-end-hardening-and-legacy-cleanup.md)
-- [Current Task 007E specification](tasks/007e-legacy-and-documentation-cleanup.md)
+- [Final acceptance record](verification/task-007-final-acceptance.md)
+- [Original master scope/acceptance gates](tasks/007-end-to-end-hardening-and-legacy-cleanup.md)
+- [Task 007E specification](tasks/007e-legacy-and-documentation-cleanup.md)
 - [Historical Task 007D executed verification](verification/task-007d-milestone.md)
 - [Task 007E audit and new PostgreSQL rerun](verification/task-007e-cleanup.md)
 - [API error contract coverage inventory](tasks/007c-api-error-contract-coverage.md)
 
-The historical D report records its own tested revision and review-time status; its original evidence is not rewritten to claim the later merge or the E branch was tested. The E note records its own source revision and results separately.
+The historical D/E reports record their own tested revisions and review-time states. They are preserved unchanged; the final acceptance record supersedes their pending-review language for current closure status, without claiming new execution or GitHub CI results.
 
 Task 007E preserves accepted state machines, locking/transaction boundaries, public DTOs/errors and executor semantics. The service barrel still has a supported Task 003 test caller and is retained. No speculative deletion or test-import rewrite is required merely to increase cleanup volume.
 
@@ -49,23 +50,23 @@ Raw ingestion remains supported: src/modules/raw-ingestion/, POST /raw-ingestion
 
 All six applied migrations, historical DPR performance/input snapshots, raw tables and legacy_business_key compatibility bridge remain unchanged. Dependencies and package/milestone scripts are retained unless positive supported-workflow evidence proves removal safe. No upgrade sweep.
 
-## Verification and completion gate
+## Verification and satisfied acceptance gate
 
 Reproducible command: npm run test:milestone (also runs the build); separately run npm run build. Node.js 24+ and a real PostgreSQL test service are required. See README for configuration, owned disposable database permissions and raw-ingestion isolation. Do not run the standalone raw test against a persistent developer database.
 
 Task 007D has recorded its historical real PostgreSQL PASS. Task 007E now separately records a new complete PASS at c0f09b290d1c729760637837410951d33a680333 (246 passing entries), after its own fixture corrections. A static inventory or historical D result is not substituted for this execution evidence.
 
-Do not mark Task 007 or Orchestration Core v2 COMPLETE until:
+The final acceptance record confirms the milestone gates were satisfied:
 
 - CON-01/CON-02 and focused B-1 regressions pass with accepted executor behavior;
 - public error contracts, malformed inputs, immutable snapshot/attempt history and E2E flows pass;
 - the full sequential build/runner/schema/lifecycle/concurrency/API/raw/E2E gate passes on real PostgreSQL, without failures/skips/cancellations/TODOs, with successful owned teardown;
 - Task 007E cleanup and documentation are verified and reviewed;
 - historical migration/data and supported routes are preserved;
-- System Owner gives final acceptance;
-- Task 007E is merged.
+- System Owner explicitly approved final acceptance;
+- Task 007E is merged via PR #12.
 
-The E feature branch does not pre-approve those last acceptance/merge steps. Any later milestone-completion status update is a separate owner-authorized change.
+Implementation acceptance and merge are complete. This separately authorized documentation-only closure still awaits its own review/merge; it does not begin another task or define Task 008 requirements. The preserved execution evidence is not a new PostgreSQL run on the merge or closure commit.
 
 ## Deferred until a concrete requirement
 
