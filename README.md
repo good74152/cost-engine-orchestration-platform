@@ -99,6 +99,33 @@ Only manual and callback-triggered checks are implemented; there is no periodic 
 
 [View the complete static SVG](docs/diagrams/flows/task-005-executor-reconciliation.svg) · [Regenerate the animation](docs/diagrams/flows/README.md#task-005-executor-reconciliation) · [Task 005 specification](docs/tasks/005-executor-reconciliation.md)
 
+### Dataset Lifecycle & Concurrent Decisions
+
+![Dataset Lifecycle & Concurrent Decisions — six-step animation](docs/diagrams/flows/task-006-dataset-lifecycle.gif)
+
+**Problem:** Two requests may try to make different final decisions for the same dataset.
+
+**Solution:** PostgreSQL locks the dataset series so only one decision is applied at a time.
+
+**Guarantee:** A completed dataset cannot be changed by a conflicting request.
+
+#### Implementation Details
+
+| Concept | How It Works |
+|---|---|
+| State Machine | Defines which status changes are allowed. There is no dataset-level FAILED. |
+| Validation | Requires every job to succeed and an explicit Submit Validation. |
+| Transaction | Checks and saves a status change together. |
+| Row Lock | Publish/Reject lock the series, then the dataset version; other decisions wait. |
+| Conflict | An opposing final decision returns `409 STATE_CONFLICT` without changing history. |
+| Terminal State | PUBLISHED, REJECTED and ABANDONED cannot change. The same completed decision returns saved state. |
+
+Jobs can all succeed while the dataset stays BUILDING. Validation and publication are separate commands. Either Publish or Reject may win; the animation shows Publish committing first. Reject then gets the lock, rechecks state and returns a conflict.
+
+**Safe Abandon:** Only DRAFT or BUILDING can become ABANDONED. Any PREPARED, DISPATCHING or ACCEPTED attempt blocks it with `409 DATASET_HAS_ACTIVE_EXECUTION`. Abandon keeps job/attempt history and the frozen snapshot. It does not cancel executions and is separate from Demo Session Reset.
+
+[Complete state machine SVG](docs/diagrams/flows/task-006-dataset-lifecycle.svg) · [Regenerate the animation](docs/diagrams/flows/README.md#task-006-dataset-lifecycle) · [Task 006 specification](docs/tasks/006-validation-and-dataset-terminal-decisions.md) · [ADR-0007](docs/adr/0007-dataset-terminal-decisions-and-publication-serialization.md)
+
 ## Accepted milestone baseline
 
 The Orchestration Core v2 milestone is **completed and accepted**: Task 007 COMPLETE; Orchestration Core v2 ACCEPTED. The implemented orchestration scope for Tasks 002–007 is complete, and Tasks 007A–007E are merged. System Owner final acceptance is recorded on 2026-10-16 (Asia/Taipei) in the [final acceptance record](docs/verification/task-007-final-acceptance.md).

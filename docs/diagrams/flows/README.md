@@ -1,6 +1,6 @@
 # Core engineering flow assets
 
-The Task 002–005 flows use the same SVG scene and Sharp GIF rendering approach. Each generator is an independent, editable source for its two final assets; generating one task does not modify the other tasks' outputs.
+The Task 002–006 flows use the same SVG scene and Sharp GIF rendering approach. Each generator is an independent, editable source for its two final assets; generating one task does not modify the other tasks' outputs.
 
 ## Task 003 — Immutable snapshot
 
@@ -166,3 +166,60 @@ The existing PostgreSQL tests cover the fake/DB state gap, direct DISPATCHING re
 - [Callback route](../../../src/modules/executor-callback.route.ts)
 - [FakeExecutor](../../../src/executors/fake-executor.ts)
 - [PostgreSQL reconciliation tests](../../../scripts/executor-reconciliation.pg.test.ts)
+
+## Task 006 Dataset Lifecycle
+
+`generate-task-006.cjs` creates `task-006-dataset-lifecycle.svg` and `task-006-dataset-lifecycle.gif`. The static SVG includes all six states and all six allowed paths. The GIF highlights the six-step example and shows Publish/Reject waiting on the same series. Edit the shared scene, state definitions or `STEPS` timing, then regenerate both files.
+
+The loop takes 27.2 seconds. Use the existing Node.js 24+ and isolated Sharp 0.35.5 setup above. No production dependency changes are needed.
+
+```powershell
+node docs/diagrams/flows/generate-task-006.cjs --sharp-module (Join-Path $flowTools 'node_modules/sharp')
+```
+
+```bash
+node docs/diagrams/flows/generate-task-006.cjs --sharp-module "$flow_tools/node_modules/sharp"
+```
+
+Append `--frames-dir <directory-outside-the-repository>` to inspect step SVGs and PNGs. The generator checks dimensions, six frames, exact timing, infinite looping and size below 1 MiB. Inspect the complete state machine, every GIF frame and README playback. Check both Abandon paths, explicit validation and the blocked Reject request. Then run `git diff --check`.
+
+### Explicit state changes
+
+Creation starts DRAFT (Task 002). First Run freezes a snapshot and moves to BUILDING (Task 003). BUILDING can include jobs that are preparing, running, failed or complete. All jobs succeeding does not validate or publish the dataset. Submit Validation checks readiness and moves to VALIDATING only on an explicit command. Publish or Reject then makes the final decision.
+
+PUBLISHED means released; REJECTED means rejected during validation; ABANDONED means safely stopped before validation. These are final, or terminal, states. No dataset-level FAILED exists. Repeating a command whose target is already reached returns 200 with saved state and timestamps. An opposing or invalid target returns STATE_CONFLICT; it never replaces the old final state.
+
+### PostgreSQL lock order
+
+| Command | Lock Order |
+|---|---|
+| Submit Validation | dataset_version → calculation_jobs → execution_attempts |
+| Publish / Reject | dataset_series → dataset_version |
+| Abandon | dataset_series → dataset_version → calculation_jobs → execution_attempts |
+
+Jobs are locked in ID order. Attempts are locked in `(calculation_job_id, attempt_number)` order. State is checked after the required locks are held. All state changes commit inside PostgreSQL transactions.
+
+For a normal incomplete job, Submit Validation returns `409 DATASET_NOT_READY_FOR_VALIDATION` with no change. The code also checks invalid stored combinations, such as a SUCCEEDED job with an active attempt, as internal invariant errors. Publish/Reject require VALIDATING; they do not rerun the full job-readiness check.
+
+### Two final requests
+
+Either Publish or Reject can win. The GIF shows Publish holding the series lock while Reject waits. Publish then locks the version, confirms VALIDATING, saves PUBLISHED and commits. Reject acquires the series and version locks, sees PUBLISHED and returns `409 STATE_CONFLICT`. If Reject commits first, Publish conflicts instead. No global/distributed lock or new backend technology is involved.
+
+This is the existing Task 006 Publish-vs-Reject regression. It is separate from Task 007 CON-01 late-dispatch recording and CON-02 identity-scoped rejection races. The diagram does not rename those executor races as publication races.
+
+### Safe Abandon
+
+Only DRAFT or BUILDING may become ABANDONED. Any PREPARED, DISPATCHING or ACCEPTED attempt blocks Abandon with `409 DATASET_HAS_ACTIVE_EXECUTION`. A PREPARED attempt can still be dispatched, so it is included. The guard checks all attempts after taking the ordered job/attempt locks. Terminal attempts do not block it.
+
+Abandon does not cancel external work. It does not delete attempts or change job/attempt state, frozen snapshots or definition pins. An invalid RUNNING job without an ACCEPTED attempt is an internal error. Dataset Abandon and Demo Session Reset are separate operations; this task changes no Demo code.
+
+### Source checks
+
+The lifecycle PostgreSQL tests cover readiness, same-target repeats, both Publish/Reject winners, ordered waiting, active-attempt Abandon guards, atomic rollback and unchanged build history. These tests were read to check the animation. This documentation change does not claim a fresh PostgreSQL run.
+
+- [Task 006 specification](../../tasks/006-validation-and-dataset-terminal-decisions.md)
+- [Task 007 specification](../../tasks/007-end-to-end-hardening-and-legacy-cleanup.md)
+- [ADR-0007](../../adr/0007-dataset-terminal-decisions-and-publication-serialization.md)
+- [Lifecycle service](../../../src/modules/dataset-version/dataset-version-lifecycle.service.ts)
+- [Lifecycle repository](../../../src/modules/dataset-version/dataset-version-lifecycle.repository.ts)
+- [PostgreSQL lifecycle tests](../../../scripts/dataset-version-terminal-lifecycle.pg.test.ts)
