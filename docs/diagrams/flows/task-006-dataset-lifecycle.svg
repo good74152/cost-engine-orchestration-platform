@@ -1,0 +1,107 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 1080" width="1280" height="1080" role="img" aria-labelledby="flow-title flow-desc">
+<title id="flow-title">Task 006 — Dataset Lifecycle and Concurrent Decisions — Complete State Machine</title>
+<desc id="flow-desc">Complete dataset state machine: DRAFT to BUILDING at First Run, BUILDING to VALIDATING only after all required jobs succeed and validation is explicitly submitted, VALIDATING to PUBLISHED or REJECTED, and DRAFT or BUILDING to ABANDONED when no active attempt exists. PUBLISHED, REJECTED and ABANDONED are terminal. No dataset-level FAILED exists. The six-step example shows creation, snapshot freeze, jobs completed while dataset remains BUILDING, explicit validation, concurrent Publish and Reject, and protected PUBLISHED state. Publish wins only in this illustration; either request may win. Each decision transaction locks dataset_series then dataset_version. Publish commits and releases its lock; Reject then acquires the locks, sees PUBLISHED and returns 409 STATE_CONFLICT without rewriting history. Same-target repeats keep saved state. Submit Validation locks dataset_version, ordered calculation_jobs, then ordered execution_attempts; any normal incomplete job returns 409 DATASET_NOT_READY_FOR_VALIDATION. Abandon locks series, version, jobs and attempts, in that order. PREPARED, DISPATCHING or ACCEPTED attempts block it with 409 DATASET_HAS_ACTIVE_EXECUTION. Abandon preserves jobs, attempt history and the frozen snapshot and does not cancel execution. It is not Demo Session Reset. This diagram documents existing PostgreSQL lifecycle tests; it does not claim a fresh database test run.</desc>
+<defs>
+<marker id="teal-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M 0 0 L 10 5 L 0 10 Z" fill="#176270"/></marker>
+<marker id="amber-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M 0 0 L 10 5 L 0 10 Z" fill="#87500f"/></marker>
+<marker id="gray-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M 0 0 L 10 5 L 0 10 Z" fill="#64748b"/></marker>
+</defs><style>text { font-family: Arial, Helvetica, sans-serif; }</style>
+<rect x="0" y="0" width="1280" height="1080" rx="12" fill="#fff" stroke="none" />
+<text x="32" y="49" font-size="32" font-weight="700" fill="#172b4d">Dataset Lifecycle &amp; Concurrent Decisions</text>
+<text x="32" y="84" font-size="22" font-weight="400" fill="#42526b">Task 006 · Explicit validation. One final decision. Protected history.</text>
+<text x="32" y="139" font-size="17" font-weight="700" fill="#176270">COMPLETE LIFECYCLE</text>
+<path d="M 58 191 V 681" stroke="#bacbe0" stroke-width="2"/>
+<rect x="32" y="164" width="360" height="92" rx="12" fill="#f0f5fc" stroke="#bacbe0" />
+<circle cx="58" cy="191" r="15" fill="#176270" stroke="#176270"/>
+<text x="53" y="197" font-size="17" font-weight="700" fill="#fff">1</text>
+<text x="84" y="195" font-size="21" font-weight="700" fill="#172b4d">Dataset Created</text>
+<text x="84" y="221" font-size="17" font-weight="400" fill="#42526b">Dataset: DRAFT</text>
+<text x="84" y="243" font-size="17" font-weight="400" fill="#42526b">The dataset and its jobs exist.</text>
+<rect x="32" y="262" width="360" height="92" rx="12" fill="#f0f5fc" stroke="#bacbe0" />
+<circle cx="58" cy="289" r="15" fill="#176270" stroke="#176270"/>
+<text x="53" y="295" font-size="17" font-weight="700" fill="#fff">2</text>
+<text x="84" y="293" font-size="21" font-weight="700" fill="#172b4d">First Run</text>
+<text x="84" y="319" font-size="17" font-weight="400" fill="#42526b">Freeze the build snapshot.</text>
+<text x="84" y="341" font-size="17" font-weight="400" fill="#42526b">DRAFT → BUILDING</text>
+<rect x="32" y="360" width="360" height="92" rx="12" fill="#f0f5fc" stroke="#bacbe0" />
+<circle cx="58" cy="387" r="15" fill="#176270" stroke="#176270"/>
+<text x="53" y="393" font-size="17" font-weight="700" fill="#fff">3</text>
+<text x="84" y="391" font-size="21" font-weight="700" fill="#172b4d">Jobs Completed</text>
+<text x="84" y="417" font-size="17" font-weight="400" fill="#42526b">All required jobs: SUCCEEDED</text>
+<text x="84" y="439" font-size="17" font-weight="400" fill="#42526b">Dataset stays BUILDING.</text>
+<rect x="32" y="458" width="360" height="92" rx="12" fill="#f0f5fc" stroke="#bacbe0" />
+<circle cx="58" cy="485" r="15" fill="#176270" stroke="#176270"/>
+<text x="53" y="491" font-size="17" font-weight="700" fill="#fff">4</text>
+<text x="84" y="489" font-size="21" font-weight="700" fill="#172b4d">Submit Validation</text>
+<text x="84" y="515" font-size="17" font-weight="400" fill="#42526b">Check all required jobs.</text>
+<text x="84" y="537" font-size="17" font-weight="400" fill="#42526b">Explicit submit → VALIDATING</text>
+<rect x="32" y="556" width="360" height="92" rx="12" fill="#f0f5fc" stroke="#bacbe0" />
+<circle cx="58" cy="583" r="15" fill="#176270" stroke="#176270"/>
+<text x="53" y="589" font-size="17" font-weight="700" fill="#fff">5</text>
+<text x="84" y="587" font-size="21" font-weight="700" fill="#172b4d">Concurrent Decisions</text>
+<text x="84" y="613" font-size="17" font-weight="400" fill="#42526b">A: Publish · B: Reject</text>
+<text x="84" y="635" font-size="17" font-weight="400" fill="#42526b">One locks the series; one waits.</text>
+<rect x="32" y="654" width="360" height="92" rx="12" fill="#f0f5fc" stroke="#bacbe0" />
+<circle cx="58" cy="681" r="15" fill="#176270" stroke="#176270"/>
+<text x="53" y="687" font-size="17" font-weight="700" fill="#fff">6</text>
+<text x="84" y="685" font-size="21" font-weight="700" fill="#172b4d">Terminal State Protected</text>
+<text x="84" y="711" font-size="17" font-weight="400" fill="#42526b">Publish commits in this example.</text>
+<text x="84" y="733" font-size="17" font-weight="400" fill="#42526b">Reject rechecks → 409 conflict.</text>
+<text x="430" y="139" font-size="25" font-weight="700" fill="#172b4d">Dataset state machine</text>
+<text x="430" y="168" font-size="19" font-weight="400" fill="#42526b">Explicit validation. No automatic publication.</text>
+<path class="flow-arrow" d="M 562 287 V 355" fill="none" stroke="#176270" stroke-width="2.5" stroke-linejoin="round" marker-end="url(#teal-arrow)" data-from="DRAFT" data-to="BUILDING"/>
+<path class="flow-arrow" d="M 562 447 V 515" fill="none" stroke="#176270" stroke-width="2.5" stroke-linejoin="round" marker-end="url(#teal-arrow)" data-from="BUILDING" data-to="VALIDATING"/>
+<path class="flow-arrow" d="M 695 241 H 822 V 303 H 970" fill="none" stroke="#64748b" stroke-width="2.5" stroke-linejoin="round" marker-end="url(#gray-arrow)" data-from="DRAFT" data-to="ABANDONED"/>
+<path class="flow-arrow" d="M 695 401 H 862 V 339 H 970" fill="none" stroke="#64748b" stroke-width="2.5" stroke-linejoin="round" marker-end="url(#gray-arrow)" data-from="BUILDING" data-to="ABANDONED"/>
+<path class="flow-arrow" d="M 695 552 H 970" fill="none" stroke="#176270" stroke-width="2.5" stroke-linejoin="round" marker-end="url(#teal-arrow)" data-from="VALIDATING" data-to="PUBLISHED"/>
+<path class="flow-arrow" d="M 562 607 V 671 H 970" fill="none" stroke="#64748b" stroke-width="2.5" stroke-linejoin="round" marker-end="url(#gray-arrow)" data-from="VALIDATING" data-to="REJECTED"/>
+<text x="582" y="325" font-size="19" font-weight="700" fill="#176270">First Run</text>
+<text x="582" y="485" font-size="19" font-weight="700" fill="#176270">Submit validation</text>
+<text x="720" y="228" font-size="19" font-weight="700" fill="#64748b">Abandon</text>
+<text x="720" y="388" font-size="19" font-weight="700" fill="#64748b">Abandon</text>
+<text x="790" y="535" font-size="19" font-weight="700" fill="#176270">Publish</text>
+<text x="760" y="652" font-size="19" font-weight="700" fill="#64748b">Reject</text>
+<text x="970" y="254" font-size="18" font-weight="700" fill="#176270">Final (terminal) states</text>
+<rect x="430" y="195" width="265" height="92" rx="12" fill="#fff" stroke="#bacbe0" data-state="DRAFT"/>
+<text x="450" y="230" font-size="25" font-weight="700" fill="#172b4d">DRAFT</text>
+<text x="450" y="260" font-size="17" font-weight="400" fill="#42526b">Dataset created</text>
+<rect x="430" y="355" width="265" height="92" rx="12" fill="#fff" stroke="#bacbe0" data-state="BUILDING"/>
+<text x="450" y="390" font-size="25" font-weight="700" fill="#172b4d">BUILDING</text>
+<text x="450" y="420" font-size="17" font-weight="400" fill="#42526b">Snapshot frozen</text>
+<text x="450" y="440" font-size="17" font-weight="400" fill="#42526b">Jobs prepare / run / finish</text>
+<rect x="430" y="515" width="265" height="92" rx="12" fill="#fff" stroke="#bacbe0" data-state="VALIDATING"/>
+<text x="450" y="550" font-size="25" font-weight="700" fill="#172b4d">VALIDATING</text>
+<text x="450" y="580" font-size="17" font-weight="400" fill="#42526b">All jobs succeeded;</text>
+<text x="450" y="600" font-size="17" font-weight="400" fill="#42526b">validation submitted</text>
+<rect x="970" y="275" width="278" height="92" rx="12" fill="#f0f5fc" stroke="#bacbe0" data-state="ABANDONED"/>
+<text x="990" y="310" font-size="25" font-weight="700" fill="#172b4d">ABANDONED</text>
+<text x="990" y="340" font-size="17" font-weight="400" fill="#42526b">Safely stopped · Terminal</text>
+<rect x="970" y="485" width="278" height="92" rx="12" fill="#e2f2f3" stroke="#65a5af" data-state="PUBLISHED"/>
+<text x="990" y="520" font-size="25" font-weight="700" fill="#176270">PUBLISHED</text>
+<text x="990" y="550" font-size="17" font-weight="400" fill="#42526b">Dataset released · Terminal</text>
+<rect x="970" y="625" width="278" height="92" rx="12" fill="#f0f5fc" stroke="#bacbe0" data-state="REJECTED"/>
+<text x="990" y="660" font-size="25" font-weight="700" fill="#172b4d">REJECTED</text>
+<text x="990" y="690" font-size="17" font-weight="400" fill="#42526b">Validation rejected · Terminal</text>
+<text x="430" y="737" font-size="20" font-weight="400" fill="#42526b">Publish wins in this example; either request may win.</text>
+<rect x="430" y="752" width="818" height="175" rx="12" fill="#f0f5fc" stroke="#bacbe0" />
+<rect x="450" y="779" width="310" height="44" rx="12" fill="#e2f2f3" stroke="#65a5af" />
+<text x="470" y="808" font-size="22" font-weight="700" fill="#176270">A: Publish · 200</text>
+<rect x="918" y="779" width="310" height="44" rx="12" fill="#fff8ed" stroke="#dec39a" />
+<text x="938" y="808" font-size="22" font-weight="700" fill="#87500f">B: Reject · 409</text>
+<path class="flow-arrow" d="M 605 823 V 844 H 760 V 862" fill="none" stroke="#176270" stroke-width="2.5" stroke-linejoin="round" marker-end="url(#teal-arrow)" />
+<path class="flow-arrow" d="M 1073 823 V 862" fill="none" stroke="#87500f" stroke-width="2.5" stroke-linejoin="round" marker-end="url(#amber-arrow)" />
+<text x="450" y="874" font-size="18" font-weight="700" fill="#176270">Commit → release</text>
+<text x="450" y="905" font-size="18" font-weight="400" fill="#42526b">Reject rechecks</text>
+<rect x="690" y="862" width="538" height="46" rx="12" fill="#fff" stroke="#bacbe0" />
+<text x="710" y="891" font-size="21" font-weight="700" fill="#87500f">PUBLISHED · 409 STATE_CONFLICT</text>
+<rect x="32" y="780" width="360" height="147" rx="12" fill="#f0f5fc" stroke="#bacbe0" />
+<text x="52" y="812" font-size="22" font-weight="700" fill="#176270">Safe Abandon</text>
+<text x="52" y="838" font-size="18" font-weight="400" fill="#42526b">DRAFT / BUILDING only.</text>
+<text x="52" y="863" font-size="17" font-weight="700" fill="#172b4d">Active attempts block it:</text>
+<text x="52" y="886" font-size="16" font-weight="400" fill="#42526b">PREPARED / DISPATCHING / ACCEPTED</text>
+<text x="52" y="914" font-size="16" font-weight="700" fill="#87500f">409 DATASET_HAS_ACTIVE_EXECUTION</text>
+<rect x="32" y="948" width="1216" height="96" rx="12" fill="#e2f2f3" stroke="#65a5af" />
+<text x="56" y="986" font-size="27" font-weight="700" fill="#176270">Only one final decision can succeed.</text>
+<text x="56" y="1023" font-size="22" font-weight="400" fill="#172b4d">Publish commits. Reject rechecks and returns 409 STATE_CONFLICT.</text>
+<text x="32" y="1070" font-size="18" font-weight="400" fill="#42526b">Terminal states never change. No dataset-level FAILED. Abandon keeps history; it is not Demo Session Reset.</text>
+</svg>
