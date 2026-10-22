@@ -1,0 +1,94 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 920" width="1280" height="920" role="img" aria-labelledby="flow-title flow-desc">
+<title id="flow-title">Task 003 — Immutable Dataset Build Snapshot — Complete Flow</title>
+<desc id="flow-desc">Six-step example: CAPEX v1 is published; DPR v1 is created DRAFT with PENDING jobs; First Run takes ordered PostgreSQL row locks, resolves published definitions for every job and selects CAPEX v1, freezes one dataset-wide snapshot and all job definition pins, then commits BUILDING with Job A still PENDING and its attempt PREPARED. CAPEX v2 publishes later. Preparing Job B reuses CAPEX v1 and pinned definitions, without refreshing inputs. DPR v1 always points through its frozen snapshot to CAPEX v1; retries retain that snapshot too. Preparation is Task 003; dispatch and executor acceptance belong to Task 004. This example assumes both jobs require CAPEX at the same company, year and period; it is not a hard-coded domain pipeline.</desc>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M 0 0 L 10 5 L 0 10 Z" fill="#176270"/></marker></defs>
+<style>text { font-family: Arial, Helvetica, sans-serif; }</style>
+<rect x="0" y="0" width="1280" height="920" rx="12" fill="#fff" stroke="none" />
+<text x="32" y="49" font-size="32" font-weight="700" fill="#172b4d">Immutable Dataset Build Snapshot</text>
+<text x="32" y="84" font-size="22" font-weight="400" fill="#42526b">Task 003 · One dataset version, one frozen input contract</text>
+<text x="32" y="139" font-size="17" font-weight="700" fill="#176270">COMPLETE BUILD SEQUENCE</text>
+<path d="M 58 191 V 681" stroke="#bacbe0" stroke-width="2"/>
+<rect x="32" y="164" width="360" height="92" rx="12" fill="#f0f5fc" stroke="#bacbe0" />
+<circle cx="58" cy="191" r="15" fill="#176270" stroke="#176270"/>
+<text x="53" y="197" font-size="17" font-weight="700" fill="#fff">1</text>
+<text x="84" y="195" font-size="21" font-weight="700" fill="#172b4d">Upstream Ready</text>
+<text x="84" y="221" font-size="17" font-weight="400" fill="#42526b">CAPEX v1 is PUBLISHED.</text>
+<text x="84" y="243" font-size="17" font-weight="400" fill="#42526b">Inputs are ready for a new build.</text>
+<rect x="32" y="262" width="360" height="92" rx="12" fill="#f0f5fc" stroke="#bacbe0" />
+<circle cx="58" cy="289" r="15" fill="#176270" stroke="#176270"/>
+<text x="53" y="295" font-size="17" font-weight="700" fill="#fff">2</text>
+<text x="84" y="293" font-size="21" font-weight="700" fill="#172b4d">Create DPR v1</text>
+<text x="84" y="319" font-size="17" font-weight="400" fill="#42526b">DRAFT + two PENDING jobs.</text>
+<text x="84" y="341" font-size="17" font-weight="400" fill="#42526b">No snapshot or attempts yet.</text>
+<rect x="32" y="360" width="360" height="92" rx="12" fill="#f0f5fc" stroke="#bacbe0" />
+<circle cx="58" cy="387" r="15" fill="#176270" stroke="#176270"/>
+<text x="53" y="393" font-size="17" font-weight="700" fill="#fff">3</text>
+<text x="84" y="391" font-size="21" font-weight="700" fill="#172b4d">First Run</text>
+<text x="84" y="417" font-size="17" font-weight="400" fill="#42526b">Freeze inputs + all job definitions.</text>
+<text x="84" y="439" font-size="17" font-weight="400" fill="#42526b">DRAFT → BUILDING; prepare Job A.</text>
+<rect x="32" y="458" width="360" height="92" rx="12" fill="#f0f5fc" stroke="#bacbe0" />
+<circle cx="58" cy="485" r="15" fill="#176270" stroke="#176270"/>
+<text x="53" y="491" font-size="17" font-weight="700" fill="#fff">4</text>
+<text x="84" y="489" font-size="21" font-weight="700" fill="#172b4d">Upstream Changes</text>
+<text x="84" y="515" font-size="17" font-weight="400" fill="#42526b">CAPEX v2 becomes PUBLISHED.</text>
+<text x="84" y="537" font-size="17" font-weight="400" fill="#42526b">The frozen CAPEX v1 pin stays.</text>
+<rect x="32" y="556" width="360" height="92" rx="12" fill="#f0f5fc" stroke="#bacbe0" />
+<circle cx="58" cy="583" r="15" fill="#176270" stroke="#176270"/>
+<text x="53" y="589" font-size="17" font-weight="700" fill="#fff">5</text>
+<text x="84" y="587" font-size="21" font-weight="700" fill="#172b4d">Later Job</text>
+<text x="84" y="613" font-size="17" font-weight="400" fill="#42526b">Prepare Job B; reuse the snapshot.</text>
+<text x="84" y="635" font-size="17" font-weight="400" fill="#42526b">Keep the pinned job definitions.</text>
+<rect x="32" y="654" width="360" height="92" rx="12" fill="#f0f5fc" stroke="#bacbe0" />
+<circle cx="58" cy="681" r="15" fill="#176270" stroke="#176270"/>
+<text x="53" y="687" font-size="17" font-weight="700" fill="#fff">6</text>
+<text x="84" y="685" font-size="21" font-weight="700" fill="#172b4d">Invariant Verified</text>
+<text x="84" y="711" font-size="17" font-weight="400" fill="#42526b">Same dataset, same frozen inputs.</text>
+<text x="84" y="733" font-size="17" font-weight="400" fill="#42526b">Retries also preserve the snapshot.</text>
+<text x="450" y="139" font-size="17" font-weight="700" fill="#176270">EXAMPLE · TW01 / 2026 / Q3</text>
+<text x="450" y="168" font-size="19" font-weight="400" fill="#42526b">Both DPR jobs require CAPEX at the same reporting coordinates.</text>
+<path class="flow-arrow" d="M 670 270 H 760" fill="none" stroke="#176270" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path class="flow-arrow" d="M 1005 270 H 1080" fill="none" stroke="#176270" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<text x="686" y="253" font-size="17" font-weight="400" fill="#176270">owns</text>
+<text x="1021" y="253" font-size="17" font-weight="400" fill="#176270">pins</text>
+<path class="flow-arrow" d="M 700 405 V 370 H 820 V 350" fill="none" stroke="#176270" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path class="flow-arrow" d="M 900 405 V 350" fill="none" stroke="#176270" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<text x="922" y="389" font-size="17" font-weight="700" fill="#176270">reuse</text>
+<rect x="450" y="195" width="220" height="155" rx="12" fill="#f0f5fc" stroke="#bacbe0" />
+<text x="470" y="235" font-size="28" font-weight="700" fill="#172b4d">DPR v1</text>
+<text x="470" y="273" font-size="23" font-weight="700" fill="#176270">BUILDING</text>
+<text x="470" y="317" font-size="18" font-weight="400" fill="#42526b">Two calculation jobs</text>
+<rect x="760" y="195" width="245" height="155" rx="12" fill="#e2f2f3" stroke="#65a5af" stroke-width="2"/>
+<text x="780" y="232" font-size="24" font-weight="700" fill="#176270">Frozen Snapshot</text>
+<text x="780" y="269" font-size="24" font-weight="700" fill="#176270">CAPEX → v1</text>
+<text x="780" y="303" font-size="18" font-weight="400" fill="#42526b">All job definitions pinned</text>
+<text x="780" y="330" font-size="18" font-weight="400" fill="#42526b">One per Dataset Version</text>
+<rect x="1080" y="195" width="168" height="155" rx="12" fill="#e2f2f3" stroke="#65a5af" />
+<text x="1096" y="235" font-size="26" font-weight="700" fill="#172b4d">CAPEX v1</text>
+<text x="1096" y="273" font-size="19" font-weight="700" fill="#176270">PUBLISHED</text>
+<text x="1096" y="317" font-size="18" font-weight="400" fill="#42526b">Frozen input</text>
+<text x="450" y="389" font-size="17" font-weight="700" fill="#42526b">CALCULATION JOBS</text>
+<rect x="450" y="405" width="265" height="155" rx="12" fill="#f0f5fc" stroke="#bacbe0" />
+<text x="470" y="442" font-size="23" font-weight="700" fill="#172b4d">Job A</text>
+<text x="470" y="476" font-size="21" font-weight="400" fill="#42526b">Job: PENDING</text>
+<text x="470" y="512" font-size="20" font-weight="700" fill="#176270">Attempt: PREPARED</text>
+<text x="470" y="542" font-size="17" font-weight="400" fill="#42526b">Uses frozen definition</text>
+<rect x="740" y="405" width="265" height="155" rx="12" fill="#f0f5fc" stroke="#bacbe0" />
+<text x="760" y="442" font-size="23" font-weight="700" fill="#172b4d">Job B</text>
+<text x="760" y="476" font-size="21" font-weight="400" fill="#42526b">Job: PENDING</text>
+<text x="760" y="512" font-size="20" font-weight="700" fill="#176270">Attempt: PREPARED</text>
+<text x="760" y="542" font-size="17" font-weight="400" fill="#42526b">Uses frozen definition</text>
+<rect x="1080" y="405" width="168" height="155" rx="12" fill="#fff8ed" stroke="#dec39a" />
+<text x="1096" y="442" font-size="26" font-weight="700" fill="#172b4d">CAPEX v2</text>
+<text x="1096" y="476" font-size="19" font-weight="700" fill="#87500f">PUBLISHED</text>
+<text x="1096" y="512" font-size="18" font-weight="400" fill="#42526b">New latest</text>
+<text x="1096" y="542" font-size="18" font-weight="700" fill="#87500f">Not adopted</text>
+<rect x="450" y="592" width="798" height="164" rx="12" fill="#e2f2f3" stroke="#65a5af" />
+<text x="470" y="629" font-size="23" font-weight="700" fill="#176270">First Run · One PostgreSQL transaction</text>
+<text x="470" y="663" font-size="20" font-weight="400" fill="#42526b">Row locks: calculation types → upstream series → output version → selected job</text>
+<text x="470" y="696" font-size="20" font-weight="400" fill="#42526b">Resolve PUBLISHED definitions → select CAPEX v1 → freeze once</text>
+<text x="470" y="729" font-size="20" font-weight="700" fill="#176270">Commit: DPR BUILDING · Job A PENDING · Attempt PREPARED</text>
+<rect x="32" y="787" width="1216" height="98" rx="12" fill="#e2f2f3" stroke="#65a5af" />
+<text x="56" y="825" font-size="27" font-weight="700" fill="#176270">DPR v1 → Frozen Snapshot → CAPEX v1</text>
+<text x="56" y="863" font-size="23" font-weight="700" fill="#172b4d">Upstream changes do not modify an existing build snapshot.</text>
+<text x="32" y="910" font-size="18" font-weight="400" fill="#42526b">Preparation creates a PREPARED attempt; dispatch and executor acceptance belong to Task 004.</text>
+</svg>

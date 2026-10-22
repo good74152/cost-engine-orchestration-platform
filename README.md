@@ -8,6 +8,18 @@ A portfolio backend for coordinating versioned cost/financial datasets and exter
 
 The backend orchestrates dataset and execution lifecycles; it does not perform financial calculations. PostgreSQL persists orchestration state and enforces consistency through transactions, row locking and constraints. FakeExecutor is the development/test adapter that simulates external dispatch and execution outcomes; no real Airflow adapter is implemented.
 
+## Core Engineering Flows
+
+### 1. Immutable Dataset Build Snapshot
+
+![Immutable Dataset Build Snapshot — six-step animation](docs/diagrams/flows/task-003-immutable-snapshot.gif)
+
+**Problem:** Upstream data may change while a dataset is being built. **Solution:** First Run freezes published upstream versions and pins dependency definitions for every job. **Guarantee:** All jobs and retries within the same Dataset Version reuse consistent, immutable inputs.
+
+Task 003 prepares an attempt as `PREPARED` while its job remains `PENDING`; dispatch and executor acceptance belong to Task 004.
+
+[View the complete static SVG](docs/diagrams/flows/task-003-immutable-snapshot.svg) · [Regenerate the animation](docs/diagrams/flows/README.md)
+
 ## Accepted milestone baseline
 
 The Orchestration Core v2 milestone is **completed and accepted**: Task 007 COMPLETE; Orchestration Core v2 ACCEPTED. The implemented orchestration scope for Tasks 002–007 is complete, and Tasks 007A–007E are merged. System Owner final acceptance is recorded on 2026-10-16 (Asia/Taipei) in the [final acceptance record](docs/verification/task-007-final-acceptance.md).
