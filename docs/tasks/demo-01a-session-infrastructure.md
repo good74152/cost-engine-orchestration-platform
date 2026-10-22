@@ -124,6 +124,123 @@ Coordinator 不取代 PostgreSQL Transactions 或 Locks。
 
 ## Verification evidence
 
-Pending implementation and execution. Required: build, focused real PostgreSQL
-suite, unchanged milestone gate and diff check. Record exact source revision,
-commands, exit codes, counters, environment, warnings and owned DB teardown.
+Verified 2026-10-22 (Asia/Taipei); implementation submitted for System Owner
+review, not acceptance or merge. Exact final runtime-tested source commit:
+`e22e369d8c413983c3179beb055706b11af2f6bd`; tree:
+`503391ea0bf2e5ba9492b011194ef2b11ee944b9`. The working tree was clean throughout
+the final build/focused/milestone run. This later evidence-only documentation
+commit is not claimed as a separately runtime-tested source revision.
+
+Environment: Windows, Node.js v24.18.0, npm 11.16.0, PostgreSQL
+18.6 (Debian 18.6-1.pgdg13+2), existing Compose service postgres_db/test_postgres.
+Private TEST_DATABASE_URL (falling back to DATABASE_URL) is a connection source
+only; no credentials are printed. The role check observed CREATEDB=true and
+SUPERUSER=true on the local service; safety relies on owned disposable targets,
+not least-privilege sandboxing. Do not point these tests at production.
+
+### Final executed commands
+
+| Command | Exit | Pass | Fail | Skip | Cancelled | TODO |
+|---|---:|---:|---:|---:|---:|---:|
+| npm.cmd run build | 0 | n/a | n/a | n/a | n/a | n/a |
+| npm.cmd run test:demo-session-infrastructure | 0 | 18 | 0 | 0 | 0 | 0 |
+| npm.cmd run test:milestone | 0 | 246 | 0 | 0 | 0 | 0 |
+| git diff --check | 0 | n/a | n/a | n/a | n/a | n/a |
+| git diff --check origin/main | 0 | n/a | n/a | n/a | n/a | n/a |
+
+Supplemental script type-check (exit 0, no diagnostics; counters n/a):
+
+```powershell
+npm.cmd exec -- tsc --ignoreConfig --noEmit --strict --skipLibCheck --esModuleInterop --module NodeNext --target ES2022 scripts/demo-session-infrastructure.pg.test.ts
+```
+
+The unchanged milestone runner executed all thirteen child commands in order.
+Every child exit was 0, signal/spawnError null, status PASS, issues empty; all
+test fail/skip/cancelled/TODO counters were zero:
+
+| Child npm run command | Pass |
+|---|---:|
+| build | n/a (build policy) |
+| test:milestone-runner | 20 |
+| test:orchestration-schema-v2 | 30 |
+| test:dataset-version-creation-v2 | 14 |
+| test:first-run-immutable-build-snapshot | 19 |
+| test:execution-attempt-dispatch-fake-executor | 11 |
+| test:executor-reconciliation | 22 |
+| test:dataset-version-terminal-lifecycle | 64 |
+| test:cross-workflow-concurrency-investigation | 14 |
+| test:task-007b1-late-dispatch-reconciliation | 32 |
+| test:task-007c-api-contract | 12 |
+| test:raw-ingestion (owned isolated launcher) | 1 |
+| test:task-007d-end-to-end | 7 |
+
+Counts include Node parent/nested entries: the focused suite is 17 subtests
+plus parent; E2E is six flows plus parent. Existing CON-01/CON-02 are green.
+An earlier complete gate on the pre-commit tree also passed 246/0/0/0/0;
+the table above is the final clean-source rerun, not substituted old evidence.
+
+### Focused acceptance and teardown
+
+The focused suite verifies exact safe DTOs, hash-only persistence, all cookie
+attributes, POST reuse/GET recovery/fresh-app recovery, invalid credential and
+CSRF contracts, no allocation on rejection, secure configuration, twenty
+concurrent new sessions, real ID/token/company uniqueness collisions and bounded
+exhaustion, rejected PostgreSQL writes, all four ownership joins and forged
+context rejection, deterministic expiry before/at/after the boundary, durable
+revocation, serialized/failing/different-session operations, both queue limits,
+queued expiry/revocation, admitted-work completion, safe persistence failures,
+and empty-down/up versus non-empty-down refusal. No existing Domain route is
+protected; the fixture intentionally uses unchanged creation/First Run services.
+
+The final focused database was `demo_01a_test_24600_0f66a2451eef`, created from
+template0 and migrated through all seven checked-in migrations. Teardown awaited
+actual client end events, found zero connections and performed normal DROP
+(forced=false). Final milestone teardown also reported:
+
+- Terminal lifecycle: dataset_lifecycle_test_29356_9826619816e1, ten clients
+  closed, sessions=[], normal DROP.
+- API contracts: task_007c_test_30124_ec83590a8320, sessions=[], normal DROP.
+- Isolated raw: raw_milestone_test_22232_d7b8db84efc0 dropped by its launcher.
+- E2E: task_007d_e2e_10668_38e0ddc1fafd dropped.
+
+Read-only pre/post inventory matched exactly: postgres, template0, template1,
+testdb. No disposable database or matching fixture session remained. No persistent
+developer schema/data was migrated, truncated or dropped.
+
+Protected-path comparison exited 0 with an empty diff:
+
+```powershell
+git diff --exit-code origin/main -- migrations ':!migrations/1792600000000_demo-sessions.ts' docs/adr src/db src/executors src/modules ':!src/modules/demo-session' scripts ':!scripts/demo-session-infrastructure.pg.test.ts' package-lock.json
+```
+
+This confirms historical migrations, accepted ADRs, orchestration services/routes,
+transactions, executors, original tests/runner and lockfile are unchanged. App
+changes only register the two session routes, expose cookie configuration and
+redact credential headers. No dependency was added or upgraded.
+
+### Earlier failures and warnings, distinct from final PASS
+
+- First focused execution exited 1: 15 pass, 3 fail, 0 skip/cancel/TODO. Two
+  subtests failed (plus their parent) because PostgreSQL's microsecond timestamp
+  was later than its public millisecond ISO representation. Creation now uses
+  database time truncated to milliseconds; the same boundary assertions pass.
+  No assertions were weakened. Initial teardown still succeeded.
+- Initial supplemental type-check exited 1 (TS2322): randomUUID's inferred
+  template-literal type was too narrow for a test-controlled string candidate.
+  Explicit test candidate typing fixed it; final strict check exited 0.
+- Before verification Docker Desktop was stopped. It was started; subsequent
+  `docker compose up -d postgres_db` exited 0. gh CLI was unavailable; GitHub
+  connector delivery is used rather than installing tooling.
+- Git emitted informational LF-to-CRLF conversion guidance when staging new
+  files. Diff checks passed. Final executed test/build commands emitted no
+  unexpected compiler/runtime warning, skip, cancellation or teardown failure.
+
+Known limitations: Windows/Node 24/PostgreSQL 18.6 only; cookie/CSRF checks use
+Fastify.inject, not a deployed TLS/browser environment. Queue state is single
+instance and lost on restart; persisted session validity survives a fresh app.
+In-flight operations are not canceled by expiry/revocation. Sessions/ownership
+allocations are retained; a populated session migration cannot be rolled back.
+Raw credentials and hashes are excluded from application logs; database/operator
+diagnostic logging must likewise not expose bind parameters. Existing anonymous
+Domain APIs remain a deliberate boundary of this task, not an isolation claim.
+No architecture conflict with the approved bounded specification was found.
