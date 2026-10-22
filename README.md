@@ -20,6 +20,16 @@ Task 003 prepares an attempt as `PREPARED` while its job remains `PENDING`; disp
 
 [View the complete static SVG](docs/diagrams/flows/task-003-immutable-snapshot.svg) · [Regenerate the animation](docs/diagrams/flows/README.md)
 
+### 2. Dataset Creation & PostgreSQL Concurrency
+
+![Concurrent Dataset Creation — six-step animation](docs/diagrams/flows/task-002-dataset-creation.gif)
+
+**Problem:** Concurrent requests may create the same dataset. **Solution:** Per-series row locking, one atomic transaction and database constraints coordinate creation. **Guarantee:** One active Dataset Version and a complete job set; conflicting requests return `409 ACTIVE_DATASET_VERSION_EXISTS` without allocating another version. Different series can proceed without a shared global lock.
+
+The PostgreSQL regression with three active calculation types asserts that 20 same-series requests produce **1 × HTTP 201, 19 × HTTP 409, 1 Dataset Series, 1 DRAFT Dataset Version, 3 PENDING Jobs, and Version Counter = 1**.
+
+[View the complete static SVG](docs/diagrams/flows/task-002-dataset-creation.svg) · [Regenerate the animation](docs/diagrams/flows/README.md#task-002-dataset-creation)
+
 ## Accepted milestone baseline
 
 The Orchestration Core v2 milestone is **completed and accepted**: Task 007 COMPLETE; Orchestration Core v2 ACCEPTED. The implemented orchestration scope for Tasks 002–007 is complete, and Tasks 007A–007E are merged. System Owner final acceptance is recorded on 2026-10-16 (Asia/Taipei) in the [final acceptance record](docs/verification/task-007-final-acceptance.md).
