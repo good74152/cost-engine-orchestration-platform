@@ -58,6 +58,47 @@ Task 005 checks the executor's final success or failure. Task 004 confirms dispa
 
 [View the complete static SVG](docs/diagrams/flows/task-004-execution-dispatch.svg) · [Regenerate the animation](docs/diagrams/flows/README.md#task-004-execution-dispatch)
 
+### Executor Reconciliation & Recovery
+
+![Executor Reconciliation & Recovery — six-step animation](docs/diagrams/flows/task-005-executor-reconciliation.gif)
+
+**Problem:** A job may finish while the backend still shows it as running.
+
+**Solution:** The backend checks the executor and updates the stored state.
+
+**Guarantee:** Only confirmed executor results can complete a job.
+
+#### Implementation Details
+
+| Concept | How It Works |
+|---|---|
+| Reconciliation | Checks the executor's result against stored state. |
+| Executor Lookup | Uses saved `airflowDagId` + `airflowDagRunId`, outside database transactions. |
+| Transaction | Rechecks state and updates job and attempt together. |
+| Row Lock | Locks the job first, then the attempt, to prevent conflicting updates. |
+| Callback | Triggers the same check as manual `/reconcile`; it cannot set a result. |
+| Idempotency | Repeated checks of the same confirmed result keep completed state unchanged. |
+
+#### Other Results and Recovery
+
+Open attempts (`DISPATCHING` or `ACCEPTED`) follow the lookup results below. Once complete, a matching duplicate keeps the saved result.
+
+| Executor Result | Backend Behavior |
+|---|---|
+| RUNNING | Confirm attempt `ACCEPTED` and job `RUNNING`. |
+| SUCCEEDED | Mark job and attempt `SUCCEEDED` together. |
+| FAILED | Mark job and attempt `FAILED` together. |
+| NOT_FOUND / UNAVAILABLE | Keep local state unchanged; return `503 EXECUTOR_STATUS_UNAVAILABLE`. |
+| Duplicate callback with the same final result | Keep the confirmed result; no new attempt or execution. |
+
+**UNKNOWN dispatch recovery:** A `DISPATCHING` attempt can become `ACCEPTED` when the executor reports RUNNING, or go directly to a confirmed SUCCEEDED/FAILED result. It keeps the same attempt and execution ID.
+
+**Old callbacks:** A result for an older attempt cannot overwrite a newer retry. Completed attempts never move back to RUNNING. Conflicting final results raise an invariant error and keep stored history unchanged. Old callbacks are checked, not all silently ignored.
+
+Only manual and callback-triggered checks are implemented; there is no periodic worker. Job success does not publish the dataset. FakeExecutor is for development/test, and its in-memory state does not survive a restart.
+
+[View the complete static SVG](docs/diagrams/flows/task-005-executor-reconciliation.svg) · [Regenerate the animation](docs/diagrams/flows/README.md#task-005-executor-reconciliation) · [Task 005 specification](docs/tasks/005-executor-reconciliation.md)
+
 ## Accepted milestone baseline
 
 The Orchestration Core v2 milestone is **completed and accepted**: Task 007 COMPLETE; Orchestration Core v2 ACCEPTED. The implemented orchestration scope for Tasks 002–007 is complete, and Tasks 007A–007E are merged. System Owner final acceptance is recorded on 2026-10-16 (Asia/Taipei) in the [final acceptance record](docs/verification/task-007-final-acceptance.md).

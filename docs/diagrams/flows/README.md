@@ -1,6 +1,6 @@
 # Core engineering flow assets
 
-The Task 002, Task 003 and Task 004 flows use the same SVG scene and Sharp GIF rendering approach. Each generator is an independent, editable source for its two final assets; generating one task does not modify the other tasks' outputs.
+The Task 002–005 flows use the same SVG scene and Sharp GIF rendering approach. Each generator is an independent, editable source for its two final assets; generating one task does not modify the other tasks' outputs.
 
 ## Task 003 — Immutable snapshot
 
@@ -117,3 +117,52 @@ Sources:
 - [Run service](../../../src/modules/calculation-job-run.service.ts)
 - [FakeExecutor](../../../src/executors/fake-executor.ts)
 - [PostgreSQL dispatch tests](../../../scripts/execution-attempt-dispatch-fake-executor.pg.test.ts)
+
+## Task 005 Executor Reconciliation
+
+`generate-task-005.cjs` creates `task-005-executor-reconciliation.svg` and `task-005-executor-reconciliation.gif`. Edit its shared scene, labels or `STEPS` timing, then regenerate both files. The six-step loop takes 27.8 seconds. Use the same Node.js 24+ and isolated Sharp 0.35.5 setup above. No production dependency changes are needed.
+
+```powershell
+node docs/diagrams/flows/generate-task-005.cjs --sharp-module (Join-Path $flowTools 'node_modules/sharp')
+```
+
+```bash
+node docs/diagrams/flows/generate-task-005.cjs --sharp-module "$flow_tools/node_modules/sharp"
+```
+
+Append `--frames-dir <directory-outside-the-repository>` for step SVGs and PNGs. Generation checks dimensions, six frames, exact timing, infinite looping and size below 1 MiB. Inspect every frame, the complete static SVG and README playback. Check the executor/DB gap, Job → Attempt lock order and matching duplicate result. Then run `git diff --check`.
+
+### Check first, then save
+
+The scene starts with Job RUNNING and Attempt ACCEPTED after dispatch. Changing the fake execution to SUCCEEDED changes no PostgreSQL rows. Manual `POST /calculation-jobs/:jobId/reconcile` and `POST /executor-callbacks/airflow` both reach `reconcileExecutionAttemptService`. A callback supplies only `airflowDagId` and `airflowDagRunId`; extra status fields are rejected. It asks for a check, not a direct state change.
+
+The service reads saved execution identity and asks `getExecutionStatus` without holding a database transaction or row locks. After the reply it starts a transaction, locks the Calculation Job, then Execution Attempt, and rechecks identity, dataset state, attempt state and any newer retry. It saves confirmed job/attempt changes together and commits. A failed write rolls back both changes. The example keeps the dataset BUILDING after job success.
+
+The last frame checks the same SUCCEEDED result again. It keeps the confirmed state, including completion timestamps. It creates no new attempt and makes no dispatch call. This is the matching duplicate case, not a claim that every old or conflicting observation is ignored.
+
+### Missing results and UNKNOWN recovery
+
+For a current ACCEPTED attempt, RUNNING keeps ACCEPTED/RUNNING; SUCCEEDED or FAILED updates both rows to the matching final state. NOT_FOUND and UNAVAILABLE leave local state unchanged and return `503 EXECUTOR_STATUS_UNAVAILABLE`. Neither proves execution failure or permits a new attempt. A thrown lookup error uses the same unavailable response.
+
+For a DISPATCHING attempt left by Task 004, a confirmed RUNNING result saves ACCEPTED/RUNNING. A confirmed SUCCEEDED/FAILED result can finish both rows directly, without first committing RUNNING. All these paths keep the same attempt and execution identity. UNKNOWN is a dispatch result, not an attempt state.
+
+### Older results and retries
+
+- An old terminal attempt with the same confirmed result is checked and returned. A newer attempt and its job state are preserved.
+- If a check starts from a non-terminal attempt, another check may finish it while the first waits for the executor. A late RUNNING observation then returns the saved final result without moving it back to RUNNING.
+- If the attempt was already terminal when the check started, a new RUNNING observation is an invariant error. Conflicting terminal results are also invariant errors. History stays unchanged; the public response is `500 INTERNAL_SERVER_ERROR`.
+- A non-terminal older attempt with a newer retry is an invariant error. It is not silently ignored.
+
+Only manual and callback-triggered checks exist. No background worker or periodic repair is implemented. FakeExecutor is development/test only, and its in-memory execution records do not survive restart or transfer between processes. No real Airflow adapter is shown. Job completion does not automatically validate or publish a dataset. This task changes no Demo implementation.
+
+### Source checks
+
+The existing PostgreSQL tests cover the fake/DB state gap, direct DISPATCHING recovery, missing/unavailable results, matching repeats, stale RUNNING observations, terminal errors, old callbacks after retry, callback input validation, lookup with no held job/attempt locks, concurrent duplicates and atomic rollback. These are sources for the diagram; this documentation change does not claim a new database test run.
+
+- [Task 005 specification](../../tasks/005-executor-reconciliation.md)
+- [ADR-0005](../../adr/0005-execution-attempts-and-airflow-reconciliation.md)
+- [Reconciliation service](../../../src/modules/calculation-job-reconciliation.service.ts)
+- [Reconciliation repository](../../../src/modules/calculation-job-reconciliation.repository.ts)
+- [Callback route](../../../src/modules/executor-callback.route.ts)
+- [FakeExecutor](../../../src/executors/fake-executor.ts)
+- [PostgreSQL reconciliation tests](../../../scripts/executor-reconciliation.pg.test.ts)
