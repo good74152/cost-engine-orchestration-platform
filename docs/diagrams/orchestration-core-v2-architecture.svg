@@ -1,0 +1,120 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1560 1180" width="1560" height="1180" role="img" aria-labelledby="architecture-title architecture-desc">
+  <title id="architecture-title">Cost Engine Orchestration Platform — System Architecture</title>
+  <desc id="architecture-desc">Implemented Orchestration Core v2. An HTTP client calls the Fastify REST API to create dataset versions, run or retry jobs, reconcile execution state, and explicitly submit validation or publish. First Run freezes one immutable dataset-wide snapshot of published upstream versions and dependency-definition versions. Durable execution attempts use stable execution identities for idempotent recovery. Dispatch and execution status lookup use the development/test-only, in-memory FakeExecutor outside PostgreSQL transactions. Reconciliation records confirmed executor truth atomically. PostgreSQL persists dataset series and versions, calculation jobs and execution attempts, and frozen snapshots and dependencies, using transactions, row locking and constraints. Publication requires explicit validation after every required job succeeds. This diagram focuses on core orchestration; supported raw ingestion is a separate workflow.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 Z" fill="#475569"/>
+    </marker>
+    <marker id="executor-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 Z" fill="#9a5b13"/>
+    </marker>
+    <style>
+      text { font-family: Arial, Helvetica, sans-serif; fill: #172b4d; }
+      .layer { font-size: 18px; font-weight: 700; letter-spacing: 2px; }
+      .heading { font-size: 24px; font-weight: 700; }
+      .body { font-size: 20px; fill: #42526b; }
+      .small { font-size: 18px; fill: #42526b; }
+      .flow-label { font-size: 20px; font-weight: 600; }
+      .line { fill: none; stroke: #475569; stroke-width: 2.5; stroke-linejoin: round; marker-end: url(#arrow); }
+      .executor-line { fill: none; stroke: #9a5b13; stroke-width: 2.5; stroke-linejoin: round; marker-end: url(#executor-arrow); }
+      .card { fill: #fff; stroke: #bacbe0; stroke-width: 1.5; }
+    </style>
+  </defs>
+
+  <rect width="1560" height="1180" rx="20" fill="#fff"/>
+  <text x="40" y="60" font-size="34" font-weight="700">Cost Engine Orchestration Platform</text>
+  <text x="40" y="98" font-size="22" fill="#42526b">Orchestration Core v2 · Implemented on main</text>
+  <rect x="40" y="350" width="900" height="486" rx="16" fill="#f0f7f8" stroke="#9fc7ce"/>
+  <rect x="1135" y="350" width="385" height="486" rx="16" fill="#fff8ed" stroke="#dec39a"/>
+  <rect x="40" y="930" width="1480" height="194" rx="16" fill="#f2f1fa" stroke="#bcb6d8"/>
+
+  <!-- API entry point -->
+  <rect x="40" y="130" width="1480" height="140" rx="16" fill="#f0f5fc" stroke="#bacbe0"/>
+  <text x="68" y="161" class="layer">API LAYER</text>
+  <rect x="68" y="180" width="250" height="66" rx="10" class="card"/>
+  <text x="193" y="221" text-anchor="middle" class="heading">HTTP Client</text>
+  <path d="M 318 213 H 430" class="line"/>
+  <text x="374" y="199" text-anchor="middle" class="small">HTTP</text>
+  <rect x="430" y="180" width="1062" height="66" rx="10" class="card"/>
+  <text x="454" y="221" class="heading">Fastify REST API</text>
+  <text x="722" y="220" class="body">Request validation · Lifecycle commands · Reconciliation triggers</text>
+
+  <!-- API commands: validation/publication remains an explicit client action. -->
+  <path d="M 460 246 V 282 H 400 V 414" class="line"/>
+  <text x="98" y="307" class="flow-label">1  Create Dataset Version</text>
+  <text x="98" y="335" class="flow-label">5  Validate / Publish Dataset</text>
+  <path d="M 710 246 V 414" class="line"/>
+  <text x="734" y="307" class="flow-label">Run / Retry</text>
+  <text x="734" y="335" class="small">Reconcile on request or callback</text>
+
+  <!-- Backend responsibilities -->
+  <text x="68" y="384" class="layer" style="fill:#176270">ORCHESTRATION LAYER</text>
+  <rect x="68" y="414" width="395" height="150" rx="12" class="card"/>
+  <text x="90" y="451" class="heading">Dataset Version Lifecycle</text>
+  <text x="90" y="487" class="body">Allocate DRAFT + required jobs</text>
+  <text x="90" y="517" class="body">Explicit validation / terminal decisions</text>
+  <text x="90" y="547" font-size="19" font-weight="700" fill="#176270">State Machine</text>
+  <path d="M 463 489 H 510" class="line"/>
+
+  <rect x="510" y="414" width="402" height="150" rx="12" class="card"/>
+  <text x="532" y="451" class="heading">Calculation Job Orchestration</text>
+  <text x="532" y="487" class="body">One job per active calculation type</text>
+  <text x="532" y="517" class="body">Run / Retry with durable attempts</text>
+  <text x="532" y="547" class="small">All required jobs must succeed to validate</text>
+
+  <path d="M 710 564 V 608 H 265 V 640" class="line"/>
+  <text x="280" y="596" class="flow-label">2  First Run / Freeze Snapshot</text>
+  <rect x="68" y="640" width="395" height="160" rx="12" fill="#e2f2f3" stroke="#65a5af" stroke-width="1.5"/>
+  <text x="90" y="678" class="heading">Immutable Snapshot</text>
+  <text x="90" y="714" class="body">Published upstream dataset versions</text>
+  <text x="90" y="744" class="body">+ dependency-definition version pins</text>
+  <text x="90" y="776" font-size="19" font-weight="700" fill="#176270">Reused across jobs and retries</text>
+  <path d="M 463 720 H 510" class="line"/>
+
+  <rect x="510" y="640" width="402" height="160" rx="12" class="card"/>
+  <text x="532" y="675" class="heading">Execution Attempt /</text>
+  <text x="532" y="703" class="heading">Reconciliation</text>
+  <text x="532" y="740" font-size="21" font-weight="700" fill="#176270">Stable Execution Identity</text>
+  <text x="532" y="774" font-size="21" font-weight="700" fill="#176270">Idempotent Recovery</text>
+
+  <!-- Adapter calls and returned executor truth. No database locks span these calls. -->
+  <path d="M 912 684 H 965 V 550 H 1163" class="executor-line"/>
+  <text x="948" y="520" class="flow-label" style="fill:#87500f">3  Dispatch Execution</text>
+  <path d="M 912 720 H 1163" class="executor-line"/>
+  <text x="981" y="675" class="flow-label" style="fill:#87500f">4  Reconcile</text>
+  <text x="981" y="701" class="flow-label" style="fill:#87500f">Executor State</text>
+  <path d="M 1163 756 H 912" class="executor-line" stroke-dasharray="7 6"/>
+  <text x="977" y="790" class="small">Executor truth</text>
+
+  <text x="1163" y="384" class="layer" style="fill:#87500f">EXECUTOR LAYER</text>
+  <rect x="1163" y="414" width="329" height="386" rx="12" fill="#fff" stroke="#dec39a" stroke-width="1.5"/>
+  <text x="1187" y="451" font-size="28" font-weight="700">FakeExecutor</text>
+  <text x="1187" y="480" font-size="20" font-weight="700" fill="#87500f">Development / test only</text>
+  <path d="M 1187 500 H 1468" stroke="#ead9bf"/>
+  <text x="1187" y="536" class="heading">Dispatch</text>
+  <text x="1187" y="568" class="small">Accept / Reject / Unknown / Exists</text>
+  <text x="1187" y="613" font-size="19" font-weight="700">Simulated Execution Outcomes</text>
+  <text x="1187" y="643" class="small">Running / Succeeded / Failed</text>
+  <path d="M 1187 666 H 1468" stroke="#ead9bf"/>
+  <text x="1187" y="717" font-size="22" font-weight="700">Execution Status Lookup</text>
+  <text x="1187" y="772" class="small">Instance-local, in-memory state</text>
+
+  <!-- All orchestration services share PostgreSQL persistence. -->
+  <path d="M 490 836 V 930" class="line" marker-start="url(#arrow)"/>
+  <text x="514" y="879" class="flow-label">Read / write durable state</text>
+  <text x="514" y="907" class="small">Atomic transitions · Frozen inputs · Attempt history</text>
+  <text x="68" y="969" class="layer" style="fill:#5c4b88">PERSISTENCE LAYER</text>
+  <text x="330" y="969" font-size="27" font-weight="700">PostgreSQL</text>
+  <text x="750" y="968" font-size="22" font-weight="700" fill="#5c4b88">PostgreSQL Transactions · Row Locking · Constraints</text>
+  <rect x="68" y="993" width="438" height="103" rx="10" class="card"/>
+  <text x="90" y="1031" font-size="22" font-weight="700">Dataset Series / Versions</text>
+  <text x="90" y="1069" class="small">Monotonic versions · Publication state</text>
+  <rect x="530" y="993" width="455" height="103" rx="10" class="card"/>
+  <text x="552" y="1031" font-size="21" font-weight="700">Calculation Jobs / Execution Attempts</text>
+  <text x="552" y="1069" class="small">Durable lifecycle · Stable run identities</text>
+  <rect x="1009" y="993" width="483" height="103" rx="10" class="card"/>
+  <text x="1031" y="1031" font-size="22" font-weight="700">Frozen Snapshot / Dependencies</text>
+  <text x="1031" y="1069" class="small">Pinned upstream versions + definition versions</text>
+
+  <text x="40" y="1157" class="small">Executor calls occur outside PostgreSQL transactions. Core orchestration shown; raw ingestion is a separate supported workflow.</text>
+</svg>

@@ -2,6 +2,12 @@
 
 A portfolio backend for coordinating versioned cost/financial datasets and external calculation executions. The backend owns orchestration, reproducibility, concurrency and publication state; it does not execute financial calculation logic or contain a previous employer's proprietary Airflow/ETL implementation.
 
+## System Architecture
+
+![System Architecture](docs/diagrams/orchestration-core-v2-architecture.svg)
+
+The backend orchestrates dataset and execution lifecycles; it does not perform financial calculations. PostgreSQL persists orchestration state and enforces consistency through transactions, row locking and constraints. FakeExecutor is the development/test adapter that simulates external dispatch and execution outcomes; no real Airflow adapter is implemented.
+
 ## Accepted milestone baseline
 
 The Orchestration Core v2 milestone is **completed and accepted**: Task 007 COMPLETE; Orchestration Core v2 ACCEPTED. The implemented orchestration scope for Tasks 002–007 is complete, and Tasks 007A–007E are merged. System Owner final acceptance is recorded on 2026-10-16 (Asia/Taipei) in the [final acceptance record](docs/verification/task-007-final-acceptance.md).
