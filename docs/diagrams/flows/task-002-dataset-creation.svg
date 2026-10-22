@@ -1,0 +1,93 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 1080" width="1280" height="1080" role="img" aria-labelledby="flow-title flow-desc">
+<title id="flow-title">Task 002 — Concurrent Dataset Creation — Complete Flow</title>
+<desc id="flow-desc">Two HTTP requests create DPR/TW01/2026/Q3 concurrently. Either may win; A wins only in this illustration. Each transaction inserts the canonical dataset series with ON CONFLICT DO NOTHING, then locks it with SELECT FOR UPDATE. A new series insert may wait on unique-identity conflict; an existing-row contender may wait on its row lock. The winner checks for active versions, increments dataset_series.last_allocated_version, creates a DRAFT version and one PENDING job per active calculation type, then commits and releases the lock. The second request acquires the row lock, sees an active version, rolls back before allocating, and returns 409 ACTIVE_DATASET_VERSION_EXISTS. The real PostgreSQL regression fixture with three active types asserts that 20 concurrent requests yield one HTTP 201, nineteen HTTP 409, one dataset series, one DRAFT version, three PENDING jobs and counter one. These are existing test assertions, not a newly executed database test report. Database constraints backstop per-series locking and atomic transactions. Different series can proceed without a shared global lock. Zero active types rolls back all creation writes. Creation makes no snapshot or execution attempt; committed historical version numbers are never reused.</desc>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M 0 0 L 10 5 L 0 10 Z" fill="#176270"/></marker><marker id="wait-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M 0 0 L 10 5 L 0 10 Z" fill="#87500f"/></marker></defs>
+<style>text { font-family: Arial, Helvetica, sans-serif; }</style>
+<rect x="0" y="0" width="1280" height="1080" rx="12" fill="#fff" stroke="none"/>
+<text x="32" y="49" font-size="32" font-weight="700" fill="#172b4d">Dataset Creation &amp; PostgreSQL Concurrency</text>
+<text x="32" y="84" font-size="22" font-weight="400" fill="#42526b">Task 002 · Per-Series Row Locking · Atomic Transaction · Database Constraints</text>
+<text x="32" y="139" font-size="17" font-weight="700" fill="#176270">COMPLETE CREATION SEQUENCE</text>
+<path d="M 58 191 V 681" stroke="#bacbe0" stroke-width="2"/>
+<rect x="32" y="164" width="360" height="92" rx="12" fill="#f0f5fc" stroke="#bacbe0"/>
+<circle cx="58" cy="191" r="15" fill="#176270" stroke="#176270"/>
+<text x="53" y="197" font-size="17" font-weight="700" fill="#fff">1</text>
+<text x="84" y="195" font-size="21" font-weight="700" fill="#172b4d">Concurrent Requests</text>
+<text x="84" y="221" font-size="17" font-weight="400" fill="#42526b">A and B request the same dataset.</text>
+<text x="84" y="243" font-size="17" font-weight="400" fill="#42526b">Either request may win.</text>
+<rect x="32" y="262" width="360" height="92" rx="12" fill="#f0f5fc" stroke="#bacbe0"/>
+<circle cx="58" cy="289" r="15" fill="#176270" stroke="#176270"/>
+<text x="53" y="295" font-size="17" font-weight="700" fill="#fff">2</text>
+<text x="84" y="293" font-size="21" font-weight="700" fill="#172b4d">Acquire Series Lock</text>
+<text x="84" y="319" font-size="17" font-weight="400" fill="#42526b">One transaction holds the row lock.</text>
+<text x="84" y="341" font-size="17" font-weight="400" fill="#42526b">The other waits for coordination.</text>
+<rect x="32" y="360" width="360" height="92" rx="12" fill="#f0f5fc" stroke="#bacbe0"/>
+<circle cx="58" cy="387" r="15" fill="#176270" stroke="#176270"/>
+<text x="53" y="393" font-size="17" font-weight="700" fill="#fff">3</text>
+<text x="84" y="391" font-size="21" font-weight="700" fill="#172b4d">Atomic Creation</text>
+<text x="84" y="417" font-size="17" font-weight="400" fill="#42526b">Check active → allocate → DRAFT.</text>
+<text x="84" y="439" font-size="17" font-weight="400" fill="#42526b">Create all required PENDING jobs.</text>
+<rect x="32" y="458" width="360" height="92" rx="12" fill="#f0f5fc" stroke="#bacbe0"/>
+<circle cx="58" cy="485" r="15" fill="#176270" stroke="#176270"/>
+<text x="53" y="491" font-size="17" font-weight="700" fill="#fff">4</text>
+<text x="84" y="489" font-size="21" font-weight="700" fill="#172b4d">Transaction Commit</text>
+<text x="84" y="515" font-size="17" font-weight="400" fill="#42526b">Commit the complete dataset build.</text>
+<text x="84" y="537" font-size="17" font-weight="400" fill="#42526b">Release the PostgreSQL row lock.</text>
+<rect x="32" y="556" width="360" height="92" rx="12" fill="#f0f5fc" stroke="#bacbe0"/>
+<circle cx="58" cy="583" r="15" fill="#176270" stroke="#176270"/>
+<text x="53" y="589" font-size="17" font-weight="700" fill="#fff">5</text>
+<text x="84" y="587" font-size="21" font-weight="700" fill="#172b4d">Second Request</text>
+<text x="84" y="613" font-size="17" font-weight="400" fill="#42526b">Lock, then recheck active versions.</text>
+<text x="84" y="635" font-size="17" font-weight="400" fill="#42526b">Conflict; no new version allocation.</text>
+<rect x="32" y="654" width="360" height="92" rx="12" fill="#f0f5fc" stroke="#bacbe0"/>
+<circle cx="58" cy="681" r="15" fill="#176270" stroke="#176270"/>
+<text x="53" y="687" font-size="17" font-weight="700" fill="#fff">6</text>
+<text x="84" y="685" font-size="21" font-weight="700" fill="#172b4d">Invariant Verified</text>
+<text x="84" y="711" font-size="17" font-weight="400" fill="#42526b">20 requests: one complete creation.</text>
+<text x="84" y="733" font-size="17" font-weight="400" fill="#42526b">No Duplicate Active Dataset.</text>
+<text x="430" y="139" font-size="25" font-weight="700" fill="#172b4d">DPR / TW01 / 2026 / Q3</text>
+<text x="430" y="168" font-size="19" font-weight="400" fill="#42526b">Identity: (domain, companyCode, fiscalYear, period) · Either request may win</text>
+<rect x="430" y="195" width="350" height="120" rx="12" fill="#e2f2f3" stroke="#65a5af"/>
+<text x="450" y="232" font-size="26" font-weight="700" fill="#172b4d">Request A</text>
+<text x="450" y="267" font-size="22" font-weight="700" fill="#176270">HTTP 201 · Created</text>
+<text x="450" y="296" font-size="18" font-weight="400" fill="#42526b">Complete dataset committed</text>
+<rect x="898" y="195" width="350" height="120" rx="12" fill="#fff8ed" stroke="#dec39a"/>
+<text x="918" y="232" font-size="26" font-weight="700" fill="#172b4d">Request B</text>
+<text x="918" y="267" font-size="22" font-weight="700" fill="#87500f">HTTP 409 · Conflict</text>
+<text x="918" y="296" font-size="18" font-weight="400" fill="#42526b">Rollback; allocation unchanged</text>
+<path class="flow-arrow" d="M 605 315 V 356 H 760 V 388" fill="none" stroke="#176270" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<text x="623" y="345" font-size="17" font-weight="700" fill="#176270">FOR UPDATE</text>
+<path class="flow-arrow" d="M 1074 315 V 388" fill="none" stroke="#87500f" stroke-width="3" stroke-linejoin="round" marker-end="url(#wait-arrow)"/>
+<text x="1092" y="355" font-size="18" font-weight="700" fill="#87500f">recheck</text>
+<text x="450" y="419" font-size="22" font-weight="700" fill="#87500f">First insert</text>
+<text x="450" y="451" font-size="18" font-weight="400" fill="#42526b">may wait on</text>
+<text x="450" y="483" font-size="18" font-weight="700" fill="#87500f">UNIQUE identity</text>
+<rect x="650" y="388" width="598" height="115" rx="12" fill="#f0f5fc" stroke="#bacbe0"/>
+<text x="670" y="419" font-size="23" font-weight="700" fill="#172b4d">dataset_series · Shared coordination row</text>
+<text x="670" y="451" font-size="19" font-weight="700" fill="#176270">B rechecks under lock → ROLLBACK releases lock</text>
+<text x="670" y="483" font-size="21" font-weight="400" fill="#42526b">last_allocated_version = 1 (committed)</text>
+<rect x="430" y="536" width="818" height="220" rx="12" fill="#e2f2f3" stroke="#65a5af"/>
+<text x="450" y="573" font-size="24" font-weight="700" fill="#176270">Atomic Transaction · Winning request</text>
+<text x="450" y="611" font-size="21" font-weight="400" fill="#42526b">1  Check: no active DRAFT / BUILDING / VALIDATING version</text>
+<text x="450" y="647" font-size="21" font-weight="400" fill="#42526b">2  Increment dataset_series.last_allocated_version → 1</text>
+<text x="450" y="683" font-size="21" font-weight="400" fill="#42526b">3  Insert Dataset Version v1 with status DRAFT</text>
+<text x="450" y="719" font-size="21" font-weight="400" fill="#42526b">4  Insert PENDING jobs for all active calculation types</text>
+<text x="450" y="745" font-size="18" font-weight="700" fill="#176270">COMMIT complete dataset + jobs → release lock → HTTP 201</text>
+<rect x="32" y="780" width="360" height="154" rx="12" fill="#f0f5fc" stroke="#bacbe0"/>
+<text x="52" y="812" font-size="23" font-weight="700" fill="#172b4d">Database Constraints</text>
+<text x="52" y="843" font-size="18" font-weight="400" fill="#42526b">Unique identity + series/version</text>
+<text x="52" y="869" font-size="18" font-weight="400" fill="#42526b">One active version per series</text>
+<text x="52" y="895" font-size="18" font-weight="700" fill="#176270">Different series run in parallel</text>
+<text x="52" y="921" font-size="18" font-weight="400" fill="#42526b">Per-series locks; no global lock</text>
+<rect x="430" y="780" width="818" height="154" rx="12" fill="#e2f2f3" stroke="#65a5af"/>
+<text x="450" y="812" font-size="23" font-weight="700" fill="#176270">PostgreSQL regression · 20 concurrent requests</text>
+<text x="450" y="850" font-size="23" font-weight="700" fill="#176270">1 × HTTP 201</text>
+<text x="832" y="850" font-size="23" font-weight="700" fill="#87500f">19 × HTTP 409</text>
+<text x="450" y="885" font-size="21" font-weight="700" fill="#172b4d">1 Dataset Series</text>
+<text x="832" y="885" font-size="21" font-weight="700" fill="#172b4d">1 DRAFT Dataset Version</text>
+<text x="450" y="920" font-size="21" font-weight="700" fill="#172b4d">3 PENDING Jobs</text>
+<text x="832" y="920" font-size="21" font-weight="700" fill="#172b4d">Version Counter = 1</text>
+<rect x="32" y="948" width="1216" height="96" rx="12" fill="#e2f2f3" stroke="#65a5af"/>
+<text x="56" y="986" font-size="27" font-weight="700" fill="#176270">One series → One active dataset → One complete job set</text>
+<text x="56" y="1023" font-size="22" font-weight="700" fill="#172b4d">No Duplicate Active Dataset · Row locking + atomic transactions + database constraints.</text>
+<text x="32" y="1070" font-size="18" font-weight="400" fill="#42526b">No active types → full rollback. Creation makes no snapshot or attempt. Committed version numbers are never reused.</text>
+</svg>
