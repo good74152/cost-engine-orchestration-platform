@@ -12,16 +12,21 @@ import { executorCallbackRoutes } from './modules/executor-callback.route.js';
 import { fakeExecutorControlRoutes } from './modules/fake-executor-control.route.js';
 import { ActiveRawIngestionBatchExistsError } from './modules/raw-ingestion/raw-ingestion.errors.js';
 import { rawIngestionRoutes } from './modules/raw-ingestion/raw-ingestion.route.js';
+import { DemoSessionService } from './modules/demo-session/demo-session.service.js';
+import { demoSessionRoutes, type DemoSessionRouteOptions } from './modules/demo-session/demo-session.route.js';
 
 export interface BuildAppOptions {
   logger?: boolean;
   calculationExecutor?: CalculationExecutor;
   nodeEnvironment?: string;
+  demoSession?: DemoSessionRouteOptions;
 }
 
 export async function buildApp(options: BuildAppOptions = {}) {
   const app = Fastify({
-    logger: options.logger ?? true,
+    logger: options.logger === false ? false : {
+      redact: ['req.headers.cookie', 'req.headers.authorization', 'res.headers["set-cookie"]'],
+    },
     // Fastify v5 passes param limits via routerOptions. Otherwise its default
     // 100-character cap returns 404 before UUID validation can reject the input.
     routerOptions: { maxParamLength: 1024 },
@@ -98,6 +103,9 @@ export async function buildApp(options: BuildAppOptions = {}) {
 
   await app.register(datasetVersionRoutes);
   await app.register(rawIngestionRoutes);
+  await app.register(demoSessionRoutes(new DemoSessionService(pool), {
+    nodeEnvironment: options.nodeEnvironment, ...options.demoSession,
+  }));
   if (options.calculationExecutor) {
     await app.register(calculationJobRoutes(options.calculationExecutor));
     await app.register(executorCallbackRoutes(options.calculationExecutor));
