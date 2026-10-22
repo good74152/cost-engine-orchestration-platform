@@ -68,6 +68,34 @@ The final acceptance record confirms the milestone gates were satisfied:
 
 Implementation acceptance and merge are complete. This separately authorized documentation-only closure still awaits its own review/merge; it does not begin another task or define Task 008 requirements. The preserved execution evidence is not a new PostgreSQL run on the merge or closure commit.
 
+## Backlog
+
+### Naming-01 — Rename COWOS_S to E2E_COST
+
+**Status: BACKLOG — Architecture Review Required**
+
+Goal: rename the canonical dataset domain identifier from `COWOS_S` to `E2E_COST`.
+
+Before implementation, investigate:
+
+1. TypeScript domain definitions and validation.
+2. REST API compatibility.
+3. PostgreSQL persisted domain values.
+4. Calculation types and dependency definitions.
+5. Existing migrations and historical data.
+6. Tests and documentation.
+7. Rollout and backward compatibility.
+
+Constraints:
+
+- Do not modify applied migrations.
+- Do not delete historical data.
+- Do not change dataset identity semantics beyond the approved rename.
+- Do not implement aliases without an approved decision.
+- Do not perform the rename in Docs-03B; `COWOS_S` remains the current canonical identifier.
+
+Naming-01 requires a separate architecture review and bounded implementation task.
+
 ## Deferred until a concrete requirement
 
 - Real Airflow HTTP adapter and external cancellation.

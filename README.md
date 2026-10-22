@@ -8,7 +8,7 @@ PostgreSQL keeps concurrent requests and recovery steps consistent.
 The backend owns orchestration; it does not perform financial calculations.
 This is a portfolio implementation, not a copy of a former employer's production system.
 
-**Start here:** read the architecture below, then watch the snapshot flow.
+**Start here:** read the architecture below, then watch concurrent dataset creation and dispatch recovery.
 For design decisions and test evidence, use [Explore the Engineering Design](#explore-the-engineering-design).
 
 ## Tech Stack
@@ -68,17 +68,31 @@ Job success does not publish a dataset. Checks run only when requested or trigge
 
 ## Animated Engineering Flows
 
-### Immutable Dataset Build Snapshot
+### Task 002 — Concurrent Dataset Creation
 
-![First Run freezes the inputs; later jobs keep the same snapshot](docs/diagrams/flows/task-003-immutable-snapshot.gif)
+![Concurrent requests create one active dataset through PostgreSQL coordination](docs/diagrams/flows/task-002-dataset-creation.gif)
 
-**Problem:** upstream data can change during a build.
-**Solution:** First Run freezes the upstream versions and each job's dependency definition.
-**Guarantee:** later jobs and retries keep the same inputs.
+**Problem:** concurrent requests may try to create the same dataset.
 
-[Static SVG](docs/diagrams/flows/task-003-immutable-snapshot.svg) · [Implementation details](docs/ENGINEERING_FLOWS.md#task-003--immutable-snapshot)
+**Solution:** a per-series row lock orders the requests. One transaction saves the dataset and its jobs; database constraints protect the invariants.
 
-Follow the full sequence in the [Engineering Flows gallery](docs/ENGINEERING_FLOWS.md):
+**Key Engineering Concepts:** per-series row locking, atomic transactions, database constraints and conflict handling.
+
+[Static SVG](docs/diagrams/flows/task-002-dataset-creation.svg) · [Implementation Details](docs/ENGINEERING_FLOWS.md#task-002--dataset-creation)
+
+### Task 004 — Execution Dispatch & Safe Retry
+
+![A lost executor response is recovered using the same attempt and execution identity](docs/diagrams/flows/task-004-execution-dispatch.gif)
+
+**Problem:** the executor may start a run but lose its response.
+
+**Solution:** commit the attempt before dispatch. Recover an UNKNOWN result using the same attempt and saved DAG/run identity. Avoiding duplicate runs also requires the executor to enforce that identity.
+
+**Key Engineering Concepts:** durable execution attempts, commit before external calls, stable execution identity and executor idempotency.
+
+[Static SVG](docs/diagrams/flows/task-004-execution-dispatch.svg) · [Implementation Details](docs/ENGINEERING_FLOWS.md#task-004--execution-dispatch)
+
+All five animations, including Snapshot, Reconciliation and Dataset Lifecycle, remain in the [Engineering Flows gallery](docs/ENGINEERING_FLOWS.md). Follow them in execution order:
 
 | Task | Engineering question |
 |---|---|
