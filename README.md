@@ -89,6 +89,8 @@ Raw ingestion is a separate supported bounded feature, not obsolete calculation-
 | Method | Route | Purpose |
 |---|---|---|
 | GET | /health | Database connectivity/time (Fastify also generates HEAD) |
+| POST | /demo/sessions | Create a four-hour session (201), or reuse a valid cookie (200) |
+| GET | /demo/sessions/current | Restore a valid session from its HttpOnly cookie (200) |
 | POST | /dataset-versions | Atomic dataset/job creation (201) |
 | POST | /dataset-versions/:datasetVersionId/submit-validation | Explicit readiness transition |
 | POST | /dataset-versions/:datasetVersionId/publish | Publish validated dataset |
@@ -100,6 +102,24 @@ Raw ingestion is a separate supported bounded feature, not obsolete calculation-
 | POST | /raw-ingestion-batches | Raw batch allocation (201) |
 
 Executor-backed routes require executor injection into `buildApp`; `src/server.ts` supplies the explicitly configured executor.
+
+### Demo Session foundation (Demo 01A)
+
+Session creation accepts an empty JSON object with `X-Demo-Session: 1`; browser
+Origin must match the configured/direct origin. Sessions have a fixed four-hour
+lifetime, no sliding extension, and hash-only credential persistence. Invalid,
+expired or revoked cookies return 401 DEMO_SESSION_UNAVAILABLE. Successful JSON
+contains only sessionId, companyCode, expiresAt and status. HTTPS cookies are
+Secure/HttpOnly/SameSite=Strict/Path=/; plain HTTP is development/test only.
+See [the bounded specification](docs/tasks/demo-01a-session-infrastructure.md)
+for cookie names, CSRF, internal revocation, ownership and queue policies.
+
+Ownership validators and the bounded per-session coordinator are foundations
+only: **existing Domain APIs remain unchanged and unauthenticated**. This slice
+does not provide end-to-end data isolation or make the application safe for an
+untrusted public deployment. No protected Domain API or scenario runner exists.
+Focused verification: `npm run test:demo-session-infrastructure`, against its
+own disposable migrated PostgreSQL database, alongside the unchanged milestone.
 
 Only with an injected FakeExecutor and an explicitly approved development/test environment:
 
