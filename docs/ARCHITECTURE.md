@@ -557,7 +557,7 @@ The rationale and alternatives behind the major decisions above are recorded in 
 
 ## 18. Current Runtime/API Surface
 
-The server explicitly configures its executor before building the app. Registered supported routes are GET /health; POST /dataset-versions; POST /dataset-versions/:datasetVersionId/submit-validation, /publish, /reject and /abandon; POST /calculation-jobs/:jobId/run and /reconcile; POST /executor-callbacks/airflow; and POST /raw-ingestion-batches. Run/reconcile/callback registration requires an injected executor. The full route table is in README; no read/list APIs are implemented.
+The server explicitly configures its executor before building the app. Registered supported routes are GET /health; POST /dataset-versions; POST /dataset-versions/:datasetVersionId/submit-validation, /publish, /reject and /abandon; POST /calculation-jobs/:jobId/run and /reconcile; POST /executor-callbacks/airflow; and POST /raw-ingestion-batches. Run/reconcile/callback registration requires an injected executor. The full route table is in [Backend Reference](REFERENCE.md#registered-api-surface); no read/list APIs are implemented.
 
 With an injected FakeExecutor and explicitly approved development/test environment only, POST /internal/fake-executor/executions/:dagRunId/succeed and /fail set in-memory fake state. These controls neither reconcile local state automatically nor provide a production execution adapter. Legacy calculation-job creation/start/validation/publication/rejection/failure mutation routes are not registered.
 

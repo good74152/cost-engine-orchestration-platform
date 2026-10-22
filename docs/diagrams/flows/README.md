@@ -1,5 +1,15 @@
 # Core engineering flow assets
 
+For the reader-friendly gallery and implementation tables, open [Engineering Flows](../../ENGINEERING_FLOWS.md). This page documents editable sources, regeneration and technical review notes.
+
+| Flow | Generator | Static SVG | Animation |
+|---|---|---|---|
+| Task 002 — Dataset Creation | [Source](generate-task-002.cjs) | [SVG](task-002-dataset-creation.svg) | [GIF](task-002-dataset-creation.gif) |
+| Task 003 — Immutable Snapshot | [Source](generate-task-003.cjs) | [SVG](task-003-immutable-snapshot.svg) | [GIF](task-003-immutable-snapshot.gif) |
+| Task 004 — Execution Dispatch | [Source](generate-task-004.cjs) | [SVG](task-004-execution-dispatch.svg) | [GIF](task-004-execution-dispatch.gif) |
+| Task 005 — Executor Reconciliation | [Source](generate-task-005.cjs) | [SVG](task-005-executor-reconciliation.svg) | [GIF](task-005-executor-reconciliation.gif) |
+| Task 006 — Dataset Lifecycle | [Source](generate-task-006.cjs) | [SVG](task-006-dataset-lifecycle.svg) | [GIF](task-006-dataset-lifecycle.gif) |
+
 The Task 002–006 flows use the same SVG scene and Sharp GIF rendering approach. Each generator is an independent, editable source for its two final assets; generating one task does not modify the other tasks' outputs.
 
 ## Task 003 — Immutable snapshot
@@ -93,7 +103,7 @@ node docs/diagrams/flows/generate-task-004.cjs --sharp-module (Join-Path $flowTo
 node docs/diagrams/flows/generate-task-004.cjs --sharp-module "$flow_tools/node_modules/sharp"
 ```
 
-Append `--frames-dir <directory-outside-the-repository>` to export step SVGs and PNGs. The generator checks dimensions, six frames, exact timing, infinite looping and a GIF size under 1 MiB. Inspect every frame, the complete static SVG and README playback, then run `git diff --check`. Public labels use short English; fuller details stay in the README tables and notes below.
+Append `--frames-dir <directory-outside-the-repository>` to export step SVGs and PNGs. The generator checks dimensions, six frames, exact timing, infinite looping and a GIF size under 1 MiB. Inspect every frame, the complete static SVG and gallery playback, then run `git diff --check`. Public labels use short English; fuller details stay in the Engineering Flows tables and notes below.
 
 ### Dispatch and recovery
 
