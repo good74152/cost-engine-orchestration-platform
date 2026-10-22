@@ -30,6 +30,34 @@ The PostgreSQL regression with three active calculation types asserts that 20 sa
 
 [View the complete static SVG](docs/diagrams/flows/task-002-dataset-creation.svg) · [Regenerate the animation](docs/diagrams/flows/README.md#task-002-dataset-creation)
 
+### Execution Dispatch & Safe Retry
+
+![Execution Dispatch & Safe Retry — six-step animation](docs/diagrams/flows/task-004-execution-dispatch.gif)
+
+**Problem:** The executor may start a job, but its response can be lost.
+
+**Solution:** The backend saves an execution ID before dispatching and reuses it when the result is unknown.
+
+**Guarantee:** The same attempt keeps the same execution identity. Avoiding duplicate runs also requires the executor to check that identity; retrying HTTP alone is not enough.
+
+The animation shows one FakeExecutor response-loss case: the run exists, so sending the same ID returns `ALREADY_EXISTS`. Other `UNKNOWN` results may stay unresolved. FakeExecutor is for development/test; its run records are in memory within one instance.
+
+#### Implementation Details
+
+| Concept | How It Works |
+|---|---|
+| PostgreSQL | Saves each execution attempt. |
+| Transaction | Commits before the executor call. A new transaction saves the result. |
+| Execution ID | The backend creates and stores `airflowDagId` + `airflowDagRunId` for each attempt. |
+| Idempotency | The executor checks the same ID and reuses an existing run. |
+| UNKNOWN | Keeps the attempt `DISPATCHING` and the job unchanged for recovery. |
+| REJECTED | Guarantees no run exists or can ever be created for that identity; records `DISPATCH_FAILED`. |
+| Retry | Creates a new attempt only when job/attempt state permits, using the same frozen snapshot. |
+
+Task 005 checks the executor's final success or failure. Task 004 confirms dispatch; it does not mark the job `SUCCEEDED` or `FAILED`.
+
+[View the complete static SVG](docs/diagrams/flows/task-004-execution-dispatch.svg) · [Regenerate the animation](docs/diagrams/flows/README.md#task-004-execution-dispatch)
+
 ## Accepted milestone baseline
 
 The Orchestration Core v2 milestone is **completed and accepted**: Task 007 COMPLETE; Orchestration Core v2 ACCEPTED. The implemented orchestration scope for Tasks 002–007 is complete, and Tasks 007A–007E are merged. System Owner final acceptance is recorded on 2026-10-16 (Asia/Taipei) in the [final acceptance record](docs/verification/task-007-final-acceptance.md).

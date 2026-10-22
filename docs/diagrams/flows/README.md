@@ -1,6 +1,6 @@
 # Core engineering flow assets
 
-The Task 002 and Task 003 flows use the same SVG scene and Sharp GIF rendering approach. Each generator is an independent, editable source for its two final assets; generating one task does not modify the other task's outputs.
+The Task 002, Task 003 and Task 004 flows use the same SVG scene and Sharp GIF rendering approach. Each generator is an independent, editable source for its two final assets; generating one task does not modify the other tasks' outputs.
 
 ## Task 003 — Immutable snapshot
 
@@ -80,3 +80,40 @@ Sources:
 - [Dataset creation service](../../../src/modules/dataset-version/dataset-version.service.ts)
 - [Dataset creation repository](../../../src/modules/dataset-version/dataset-version.repository.ts)
 - [PostgreSQL creation/concurrency tests](../../../scripts/dataset-version-creation-v2.pg.test.ts)
+
+## Task 004 Execution Dispatch
+
+`generate-task-004.cjs` creates `task-004-execution-dispatch.svg` and `task-004-execution-dispatch.gif`. Edit its shared scene or `STEPS` text/timing, then regenerate both files. The six-step loop takes 27 seconds. It uses the same Node.js 24+ and isolated Sharp 0.35.5 setup above, with no production dependency changes:
+
+```powershell
+node docs/diagrams/flows/generate-task-004.cjs --sharp-module (Join-Path $flowTools 'node_modules/sharp')
+```
+
+```bash
+node docs/diagrams/flows/generate-task-004.cjs --sharp-module "$flow_tools/node_modules/sharp"
+```
+
+Append `--frames-dir <directory-outside-the-repository>` to export step SVGs and PNGs. The generator checks dimensions, six frames, exact timing, infinite looping and a GIF size under 1 MiB. Inspect every frame, the complete static SVG and README playback, then run `git diff --check`. Public labels use short English; fuller details stay in the README tables and notes below.
+
+### Dispatch and recovery
+
+The animation starts after Task 003 has saved a `PREPARED` attempt, its backend-generated identity and a frozen snapshot. The initial job is `PENDING`. Task 004 locks job then attempt, saves `DISPATCHING`, reads the command from frozen data and commits. It then calls the executor outside database transactions and locks. A new transaction records the response. ACCEPTED or ALREADY_EXISTS saves attempt `ACCEPTED` and job `RUNNING` together. REJECTED records `DISPATCH_FAILED`; UNKNOWN keeps `DISPATCHING`. Both leave the job's prior state unchanged.
+
+The three outcomes in Step 4 are alternatives, not three events in one run. Steps 5–6 follow the existing `ACCEPT_THEN_UNKNOWN` test case: the fake has created a run, its response is lost, and the backend keeps the same attempt. Another `/run` reuses DISPATCHING in a short transaction, commits, then sends the same identity. The fake returns ALREADY_EXISTS; a new transaction saves ACCEPTED and RUNNING. The test asserts one stored attempt and one fake run. This documents existing tests; it does not report a new PostgreSQL run for this docs change.
+
+The full identity is `(airflowDagId, airflowDagRunId)`, not the run ID alone. The image uses the shortened template `cost-engine-<uuid>`; the same UUID and DAG ID are preserved on recovery. Duplicate prevention depends on that stable identity and the executor's ID checks. An HTTP retry by itself is not a general duplicate-prevention guarantee. UNKNOWN may also mean no run was created and can remain unresolved; it is a result, not an attempt status.
+
+ADR-0008 defines REJECTED as a permanent no-run guarantee for the whole identity: the run never existed and cannot be created later by a repeated or overlapping dispatch. An adapter that cannot enforce this must return UNKNOWN. FakeExecutor enforces this with instance-local, in-memory run records and rejection markers. It is development/test only, with no durability across restarts or processes and no real Airflow adapter.
+
+The displayed result mappings assume the selected attempt is still DISPATCHING. Current main also preserves already-confirmed or terminal state if late dispatch responses arrive; it does not rewrite history. Once ACCEPTED is stored, another `/run` returns that saved state without calling the executor again.
+
+A permitted retry after a definite dispatch failure or confirmed execution failure creates a new attempt and a new identity, while keeping the frozen snapshot and job definition pins. That is different from UNKNOWN recovery, which keeps the same attempt. Task 005 owns terminal success/failure reconciliation. This animation ends at dispatch confirmation; it adds no terminal transitions or new backend behavior.
+
+Sources:
+
+- [Task 004 specification](../../tasks/004-execution-attempt-dispatch-fake-executor.md)
+- [ADR-0005](../../adr/0005-execution-attempts-and-airflow-reconciliation.md)
+- [ADR-0008](../../adr/0008-identity-scoped-definite-dispatch-rejection.md)
+- [Run service](../../../src/modules/calculation-job-run.service.ts)
+- [FakeExecutor](../../../src/executors/fake-executor.ts)
+- [PostgreSQL dispatch tests](../../../scripts/execution-attempt-dispatch-fake-executor.pg.test.ts)
