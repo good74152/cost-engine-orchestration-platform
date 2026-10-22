@@ -140,7 +140,7 @@ All required jobs must succeed before explicit Submit Validation. Job completion
 
 Raw ingestion is a separate supported bounded feature, not obsolete calculation-job creation. `POST /raw-ingestion-batches` accepts exactly `domain` and `businessKey`, for FAB_COST_RAW, CAPEX_RAW or DPR_RAW. It atomically allocates a LOADING batch and returns 201 with `batchId`, `ingestionSeriesId`, `batchSequence` and `status`. An active batch returns 409 ACTIVE_RAW_INGESTION_BATCH_EXISTS. Its identity/model and historical data are retained; this businessKey is not canonical orchestration dataset identity.
 
-## Registered API surface
+## Core-mode registered API surface
 
 | Method | Route | Purpose |
 |---|---|---|
@@ -170,12 +170,40 @@ Secure/HttpOnly/SameSite=Strict/Path=/; plain HTTP is development/test only.
 See [the bounded specification](docs/tasks/demo-01a-session-infrastructure.md)
 for cookie names, CSRF, internal revocation, ownership and queue policies.
 
-Ownership validators and the bounded per-session coordinator are foundations
-only: **existing Domain APIs remain unchanged and unauthenticated**. This slice
-does not provide end-to-end data isolation or make the application safe for an
-untrusted public deployment. No protected Domain API or scenario runner exists.
+Demo-01A supplies the reusable ownership/coordinator foundations. Default core
+mode retains **unchanged, unauthenticated Domain APIs**; do not expose it to
+untrusted users or alongside demo data. Demo-01B-1's explicit mode below adds
+protected wrappers without changing those Domain services. No scenario runner
+or public-deployment readiness is implied.
 Focused verification: `npm run test:demo-session-infrastructure`, against its
 own disposable migrated PostgreSQL database, alongside the unchanged milestone.
+
+### Protected Demo runtime (Demo-01B-1)
+
+Explicitly select `APP_MODE=demo` with `NODE_ENV=development` or `test` and
+`EXECUTOR_TYPE=fake` for trusted local use. Unset APP_MODE defaults to core;
+unknown/empty/conflicting settings fail startup. Demo mode cannot enable fake
+execution in production, and cannot accept a global executor injection.
+
+Only health, session APIs and protected `/demo/*` mutation routes are registered
+in demo mode. Original anonymous Domain, callback, raw-ingestion and internal
+fake-control routes are absent. All Demo POST requests use the session cookie
+and the same CSRF protection (`X-Demo-Session: 1`, matching supplied Origin).
+Dataset creation accepts exactly domain/fiscalYear/period; the server supplies
+companyCode. Ownership checks and the unchanged Domain command share one
+per-session queue operation. Different sessions can proceed independently.
+
+Each session has its own FakeExecutor for Run/Retry/Reconcile and protected
+behavior/state controls. Controls never directly change persisted execution
+status: use Reconcile to record executor truth. See the complete
+[route inventory and bounded scope](docs/tasks/demo-01b1-session-ownership-executor-isolation.md)
+and [ADR-0009](docs/adr/0009-demo-session-api-and-executor-boundary.md).
+Verify with `npm run test:demo-session-ownership-executor-isolation`, the
+Demo-01A suite and the unchanged milestone gate. No Reset, cleanup, cookie
+clearing or backend restart recovery is implemented. The registry/queue are
+single-instance only. **Still not safe for direct public deployment.**
+The milestone and Demo-01A regression exercise core mode; select `APP_MODE=core`
+when running them if your private environment otherwise selects demo mode.
 
 Only with an injected FakeExecutor and an explicitly approved development/test environment:
 

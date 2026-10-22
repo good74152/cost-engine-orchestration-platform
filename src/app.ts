@@ -14,15 +14,26 @@ import { ActiveRawIngestionBatchExistsError } from './modules/raw-ingestion/raw-
 import { rawIngestionRoutes } from './modules/raw-ingestion/raw-ingestion.route.js';
 import { DemoSessionService } from './modules/demo-session/demo-session.service.js';
 import { demoSessionRoutes, type DemoSessionRouteOptions } from './modules/demo-session/demo-session.route.js';
+import { resolveAppMode } from './app-mode.js';
+import { DemoRuntime, assertDemoEnvironment } from './modules/demo-session/demo-runtime.js';
+import { demoDomainRoutes } from './modules/demo-session/demo-domain.route.js';
 
 export interface BuildAppOptions {
   logger?: boolean;
   calculationExecutor?: CalculationExecutor;
   nodeEnvironment?: string;
   demoSession?: DemoSessionRouteOptions;
+  appMode?: string;
+  demoRuntime?: DemoRuntime;
 }
 
 export async function buildApp(options: BuildAppOptions = {}) {
+  const mode = resolveAppMode(options.appMode);
+  if (mode === 'demo') {
+    assertDemoEnvironment(options.nodeEnvironment);
+    if (options.calculationExecutor) throw new Error('Demo mode cannot use a global calculation executor');
+  } else if (options.demoRuntime) throw new Error('Demo runtime requires APP_MODE=demo');
+  const runtime = mode === 'demo' ? options.demoRuntime ?? new DemoRuntime(pool, options.nodeEnvironment) : undefined;
   const app = Fastify({
     logger: options.logger === false ? false : {
       redact: ['req.headers.cookie', 'req.headers.authorization', 'res.headers["set-cookie"]'],
@@ -101,12 +112,17 @@ export async function buildApp(options: BuildAppOptions = {}) {
     };
   });
 
-  await app.register(datasetVersionRoutes);
-  await app.register(rawIngestionRoutes);
-  await app.register(demoSessionRoutes(new DemoSessionService(pool), {
+  const sessionOptions = {
     nodeEnvironment: options.nodeEnvironment, ...options.demoSession,
-  }));
-  if (options.calculationExecutor) {
+  };
+  await app.register(demoSessionRoutes(runtime?.sessions ?? new DemoSessionService(pool), sessionOptions));
+  if (runtime) {
+    await app.register(demoDomainRoutes(runtime, sessionOptions));
+  } else {
+    await app.register(datasetVersionRoutes);
+    await app.register(rawIngestionRoutes);
+  }
+  if (!runtime && options.calculationExecutor) {
     await app.register(calculationJobRoutes(options.calculationExecutor));
     await app.register(executorCallbackRoutes(options.calculationExecutor));
     if (

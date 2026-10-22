@@ -557,8 +557,50 @@ The rationale and alternatives behind the major decisions above are recorded in 
 
 ## 18. Current Runtime/API Surface
 
+The routes below describe the default `APP_MODE=core` surface. Explicit Demo
+runtime registration is described in section 19; it does not change these
+services or their accepted lifecycle/locking protocols.
+
 The server explicitly configures its executor before building the app. Registered supported routes are GET /health; POST /dataset-versions; POST /dataset-versions/:datasetVersionId/submit-validation, /publish, /reject and /abandon; POST /calculation-jobs/:jobId/run and /reconcile; POST /executor-callbacks/airflow; and POST /raw-ingestion-batches. Run/reconcile/callback registration requires an injected executor. The full route table is in README; no read/list APIs are implemented.
 
 With an injected FakeExecutor and explicitly approved development/test environment only, POST /internal/fake-executor/executions/:dagRunId/succeed and /fail set in-memory fake state. These controls neither reconcile local state automatically nor provide a production execution adapter. Legacy calculation-job creation/start/validation/publication/rejection/failure mutation routes are not registered.
 
 Raw ingestion remains a separate supported transactional allocation workflow for FAB_COST_RAW, CAPEX_RAW and DPR_RAW. Its domain/businessKey request, 201 LOADING-batch response and 409 active-batch conflict are retained; its business key is not canonical dataset-series identity. No raw-ingestion architecture or historical data retirement is part of the orchestration cleanup.
+
+## 19. Demo Session API and Executor Isolation
+
+Demo-01A supplies durable four-hour cookie sessions and ownership/coordinator
+foundations. Demo-01B-1 adds the explicit `APP_MODE=demo` boundary accepted in
+[ADR-0009](adr/0009-demo-session-api-and-executor-boundary.md). Unset mode is
+core; only exact core/demo values are accepted, and conflicting/unknown mode
+configuration fails startup. Demo FakeExecutor remains development/test only:
+production cannot be enabled through conflicting injected options.
+
+Demo mode registers health, session APIs and protected `/demo` dataset creation,
+dataset lifecycle, job Run/Reconcile and fake controls only. Original anonymous
+Domain writes, raw ingestion, executor callbacks and internal fake controls
+are not registered in that mode. Core registration remains supported unchanged.
+The complete route/body/response inventory lives in
+[Demo-01B-1](tasks/demo-01b1-session-ownership-executor-isolation.md).
+
+Every protected mutation authenticates a durable session and applies the shared
+CSRF policy used by session creation. In one session coordinator operation it
+revalidates eligibility, checks persisted resource ownership and calls the
+existing Domain service. Missing/foreign resources share a generic 404; no
+caller companyCode or execution identity grants ownership. Creation takes only
+domain/year/period and injects the authenticated session's companyCode.
+
+A runtime-owned registry gives each session a distinct FakeExecutor reused by
+Run/Retry/Reconcile/controls. Its execution state, scripts, history and permanent
+identity rejections are never shared across sessions. State controls accept an
+owned attempt UUID, resolve its full external identity from PostgreSQL, and
+mutate only the fake; reconciliation remains the DB execution-result authority.
+No accepted transaction/lock order changes and no SQL transaction spans an
+executor wait. Registry allocation is bounded, with no eviction that could lose
+execution/rejection history.
+
+Isolation applies to one correctly configured Demo runtime, not an anonymous
+core app sharing that data. No multi-instance/restart recovery, Reset, cleanup,
+scenario runner or real Airflow adapter is added. Expiry/revocation denies
+future/queued admissions without cancelling admitted executor work. Demo-01B-1
+still **must not be deployed directly to the public internet**.
