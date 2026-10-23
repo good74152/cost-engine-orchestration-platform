@@ -15,7 +15,7 @@ export function demoDomainRoutes(runtime: DemoRuntime, options: DemoSessionRoute
   const policy = new DemoHttpSecurity(options);
   return async (app: FastifyInstance) => {
     const authenticated = new WeakMap<FastifyRequest, AuthenticatedDemoSession>();
-    installDemoErrorBoundary(app, true);
+    installDemoErrorBoundary(app, true, policy);
     app.addHook('onRequest', async (request) => {
       authenticated.set(request, await runtime.sessions.authenticate(request.headers.cookie, policy.cookieName));
       policy.assertMutation(request);
@@ -46,7 +46,7 @@ export function demoDomainRoutes(runtime: DemoRuntime, options: DemoSessionRoute
         operate(request, async (session) => {
           await runtime.ownership.assertOwned(session, 'job', request.params.id);
           exactDemoBody(request.body, []);
-          const executor = runtime.executors.forSession(session);
+          const executor = await runtime.executors.forSession(session);
           const result = command === 'run'
             ? await runCalculationJobService(request.params.id, executor)
             : await reconcileCalculationJobService(request.params.id, executor);
@@ -59,7 +59,7 @@ export function demoDomainRoutes(runtime: DemoRuntime, options: DemoSessionRoute
       if (typeof behavior !== 'string' || !behaviors.includes(behavior)) {
         throw new DemoSessionError('INVALID_REQUEST', 400, 'Invalid request');
       }
-      runtime.executors.forSession(session).enqueueBehaviors(behavior as FakeDispatchBehavior);
+      (await runtime.executors.forSession(session)).enqueueBehaviors(behavior as FakeDispatchBehavior);
       return { behavior };
     }));
     app.post<{ Params: { id: string } }>('/demo/execution-attempts/:id/fake-state', async (request) =>
@@ -74,7 +74,7 @@ export function demoDomainRoutes(runtime: DemoRuntime, options: DemoSessionRoute
         const result = await runtime.db.query<{ airflow_dag_id: string; airflow_dag_run_id: string }>(
           'SELECT airflow_dag_id, airflow_dag_run_id FROM execution_attempts WHERE id=$1', [request.params.id]);
         const identity = result.rows[0];
-        if (!identity || !runtime.executors.forSession(session).setExecutionState({
+        if (!identity || !(await runtime.executors.forSession(session)).setExecutionState({
           airflowDagId: identity.airflow_dag_id, airflowDagRunId: identity.airflow_dag_run_id,
         }, state)) throw new DemoResourceUnavailableError();
         return { executionAttemptId: request.params.id, state };

@@ -81,6 +81,7 @@ test('Task 007B-1 late dispatch PostgreSQL regression and lock boundaries', { co
   const admin = new Client({ connectionString: url('postgres') });
   const previousUrl = process.env.DATABASE_URL;
   let applicationPool: Pool | undefined;
+  const applicationClientEnds: Promise<void>[] = [];
   let app: FastifyInstance | undefined;
   await admin.connect();
   await admin.query(`CREATE DATABASE "${name}" TEMPLATE template0`);
@@ -91,6 +92,11 @@ test('Task 007B-1 late dispatch PostgreSQL regression and lock boundaries', { co
     process.env.DATABASE_URL = url(name);
     const [{ pool }, { buildApp }] = await Promise.all([import('../src/db/pool.js'), import('../src/app.js')]);
     applicationPool = pool;
+    // Pool accounting can reach zero before idle client sockets close. Track
+    // real end events before the first acquisition, as in the C/lifecycle fixtures.
+    pool.on('connect', (client) => {
+      applicationClientEnds.push(new Promise<void>((resolve) => client.once('end', () => resolve())));
+    });
     assert.equal((await pool.query('SELECT COUNT(*)::int AS count FROM pgmigrations WHERE name = $1',
       ['1788700000000_orchestration-schema-v2'])).rows[0]!.count, 1);
     console.log(`CON01_RUNTIME ${JSON.stringify({ node: process.version,
@@ -520,11 +526,24 @@ test('Task 007B-1 late dispatch PostgreSQL regression and lock boundaries', { co
   } finally {
     try { if (app) await app.close(); }
     finally {
-      try { if (applicationPool) await applicationPool.end(); }
+      try {
+        if (applicationPool) {
+          await applicationPool.end();
+          await Promise.all(applicationClientEnds);
+        }
+      }
       finally {
         if (previousUrl === undefined) delete process.env.DATABASE_URL;
         else process.env.DATABASE_URL = previousUrl;
-        try { await admin.query(`DROP DATABASE IF EXISTS "${name}" WITH (FORCE)`); }
+        try {
+          assert.match(name, /^late_dispatch_test_[a-z0-9_]+$/);
+          assert.ok(name.length <= 63);
+          const sessions = await admin.query('SELECT pid FROM pg_stat_activity WHERE datname=$1', [name]);
+          assert.equal(sessions.rowCount, 0, 'All owned clients must close before DROP');
+          await admin.query(`DROP DATABASE "${name}"`);
+          console.log('LATE_DISPATCH_TEARDOWN', JSON.stringify({ database: name,
+            closedClients: applicationClientEnds.length, sessions: [], dropped: true, forced: false }));
+        }
         finally { await admin.end(); }
       }
     }

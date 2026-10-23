@@ -86,6 +86,8 @@ Raw ingestion is a separate supported bounded feature, not obsolete calculation-
 
 ## Registered API surface
 
+This table describes core mode. Protected Demo registration is documented below.
+
 | Method | Route | Purpose |
 |---|---|---|
 | GET | /health | Database connectivity/time (Fastify also generates HEAD) |
@@ -114,12 +116,53 @@ Secure/HttpOnly/SameSite=Strict/Path=/; plain HTTP is development/test only.
 See [the bounded specification](tasks/demo-01a-session-infrastructure.md)
 for cookie names, CSRF, internal revocation, ownership and queue policies.
 
-Ownership validators and the bounded per-session coordinator are foundations
-only: **existing Domain APIs remain unchanged and unauthenticated**. This slice
-does not provide end-to-end data isolation or make the application safe for an
-untrusted public deployment. No protected Domain API or scenario runner exists.
+Demo-01A supplied the foundations; Demo-01B-1 adds the explicit protected mode
+below. **Default core Domain APIs remain unchanged and unauthenticated**. Do not
+expose a core runtime against Demo data to untrusted users. No public-deployment
+readiness or scenario runner is implied.
 Focused verification: `npm run test:demo-session-infrastructure`, against its
 own disposable migrated PostgreSQL database, alongside the unchanged milestone.
+
+### Protected Demo runtime
+
+Demo-01B-1 (PR #20) is merged. Explicitly set APP_MODE=demo, NODE_ENV=development
+or test and EXECUTOR_TYPE=fake. Unknown/conflicting mode and production fail closed.
+Demo registers only health, sessions and protected /demo dataset/job/fake commands;
+anonymous Domain/raw/callback/internal controls are absent. All mutations require
+the cookie and shared CSRF policy. Ownership and unchanged Domain commands run in
+one per-session queue operation; different sessions have independent fakes/queues.
+See [the complete route inventory](tasks/demo-01b1-session-ownership-executor-isolation.md).
+
+Demo-01B-2 adds POST /demo/sessions/reset: valid cookie, X-Demo-Session: 1,
+matching supplied Origin and exactly {}. It reserves only an idle session;
+active/queued requests or another reset return 409 RESET_CONFLICT. Idle persisted
+RUNNING jobs do not block reset. One transaction deletes that owner's full v2/DPR
+graph and revokes the session. Only after commit release its fake, clear the
+HttpOnly cookie and return 204. No shared configuration/assets/raw/history or
+other owner's graph is deleted. Cross-owner references fail closed.
+
+Confirmed rollback: 500 DEMO_RESET_FAILED, all data/fake retained, retry allowed.
+Unresolved commit: 503 DEMO_RESET_OUTCOME_UNKNOWN, commands remain blocked until
+fresh-connection durable recovery. All unavailable-session 401 responses clear
+the correct host-only cookie; invalid-cookie creation stays 401, never silently
+allocates a replacement. After clearing, POST without a cookie creates a new user.
+Other reset errors: 400 INVALID_REQUEST and 403 DEMO_SESSION_CSRF_REJECTED.
+
+Real Demo server startup invalidates old sessions before listening because fake
+runs are not restart-durable; failure prevents listening. buildApp never does
+invalidation. Bounded service-only maintenance reclaims inactive graphs/fakes,
+logs pending work and can be retried; no admin HTTP API or worker. Single instance
+only, no production/public deployment claim. See [B2 design/maintenance/evidence](tasks/demo-01b2-session-reset-recovery.md)
+and [ADR-0010](adr/0010-demo-session-reset-and-recovery.md). Verify with:
+
+```bash
+npm run test:demo-session-infrastructure
+npm run test:demo-session-ownership-executor-isolation
+npm run test:demo-session-reset-recovery
+npm run test:milestone
+```
+
+The following internal routes apply to core mode only.
 
 Only with an injected FakeExecutor and an explicitly approved development/test environment:
 

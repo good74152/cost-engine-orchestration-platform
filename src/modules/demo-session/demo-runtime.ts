@@ -5,6 +5,7 @@ import { DemoSessionCoordinator } from './demo-session.coordinator.js';
 import { DemoSessionError } from './demo-session.errors.js';
 import { DemoOwnershipValidator } from './demo-session.ownership.js';
 import { DemoSessionService, type AuthenticatedDemoSession } from './demo-session.service.js';
+import { DemoSessionResetService, type ResetOptions } from './demo-session-reset.service.js';
 
 export function assertDemoEnvironment(nodeEnvironment?: string): void {
   if (!isApprovedFakeExecutorEnvironment(nodeEnvironment)) {
@@ -32,8 +33,9 @@ export class DemoExecutorRegistry {
 
   get size(): number { return this.instances.size; }
 
-  forSession(session: AuthenticatedDemoSession): FakeExecutor {
-    this.sessions.assertTrusted(session);
+  async forSession(session: AuthenticatedDemoSession): Promise<FakeExecutor> {
+    // Also guards a previously authenticated context retained after revocation.
+    await this.sessions.revalidate(session);
     const existing = this.instances.get(session.sessionId);
     if (existing) return existing;
     if (this.instances.size >= this.capacity) {
@@ -47,6 +49,11 @@ export class DemoExecutorRegistry {
     this.instances.set(session.sessionId, executor);
     return executor;
   }
+
+  sessionIds(): readonly string[] { return [...this.instances.keys()]; }
+
+  /** Called only after durable reset commit or confirmed inactive eligibility. */
+  releaseSession(sessionId: string): void { this.instances.delete(sessionId); }
 }
 
 /** One runtime per application, never a module-global fake or session queue. */
@@ -55,12 +62,14 @@ export class DemoRuntime {
   readonly coordinator: DemoSessionCoordinator;
   readonly ownership: DemoOwnershipValidator;
   readonly executors: DemoExecutorRegistry;
+  readonly reset: DemoSessionResetService;
 
-  constructor(readonly db: Pool, nodeEnvironment?: string, options: RegistryOptions = {}) {
+  constructor(readonly db: Pool, nodeEnvironment?: string, options: RegistryOptions = {}, resetOptions: ResetOptions = {}) {
     assertDemoEnvironment(nodeEnvironment);
     this.sessions = new DemoSessionService(db);
     this.coordinator = new DemoSessionCoordinator(this.sessions);
     this.ownership = new DemoOwnershipValidator(db, this.sessions);
     this.executors = new DemoExecutorRegistry(this.sessions, options);
+    this.reset = new DemoSessionResetService(this, resetOptions);
   }
 }

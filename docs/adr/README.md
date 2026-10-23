@@ -25,6 +25,7 @@ If a decision changes materially, prefer a new ADR that supersedes the old one i
 - [ADR-0007 — Dataset Terminal Decisions and Publication Serialization](0007-dataset-terminal-decisions-and-publication-serialization.md)
 - [ADR-0008 — Identity-Scoped Definite Dispatch Rejection](0008-identity-scoped-definite-dispatch-rejection.md)
 - [ADR-0009 — Demo Session API and Executor Boundary](0009-demo-session-api-and-executor-boundary.md)
+- [ADR-0010 — Demo Session Reset and Recovery](0010-demo-session-reset-and-recovery.md)
 
 ## Truth Boundary
 

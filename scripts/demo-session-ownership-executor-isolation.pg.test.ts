@@ -158,7 +158,7 @@ test('Demo-01B-1: session ownership and executor isolation on real PostgreSQL', 
       const accepted = await run(b, dataB.jobId); assert.equal(accepted.statusCode, 200);
       assert.equal(accepted.json().attemptStatus, 'ACCEPTED');
       error(await run(a, dataA.jobId), 502, 'EXECUTOR_DISPATCH_FAILED');
-      const fakeA = runtime.executors.forSession(a.context); const fakeB = runtime.executors.forSession(b.context);
+      const fakeA = await runtime.executors.forSession(a.context); const fakeB = await runtime.executors.forSession(b.context);
       assert.notEqual(fakeA, fakeB); assert.equal(fakeA.getExternalExecutions().length, 0);
       assert.equal(fakeB.getExternalExecutions().length, 1);
       assert.ok(fakeA.getDispatchHistory().every((c) => c.jobId === dataA.jobId));
@@ -181,7 +181,7 @@ test('Demo-01B-1: session ownership and executor isolation on real PostgreSQL', 
     await t.test('attempt controls verify ownership and do not update DB until Reconcile', async () => {
       const attempt = (await pool.query('SELECT id FROM execution_attempts WHERE calculation_job_id=$1 ORDER BY attempt_number DESC LIMIT 1', [dataB.jobId])).rows[0].id;
       const before = await state();
-      const fakeA = runtime.executors.forSession(a.context); const fakeB = runtime.executors.forSession(b.context);
+      const fakeA = await runtime.executors.forSession(a.context); const fakeB = await runtime.executors.forSession(b.context);
       const beforeA = fakeState(fakeA); const beforeB = fakeState(fakeB);
       for (const id of [attempt, randomUUID(), 'forged']) {
         error(await control(a, id, 'FAILED'), 404, 'DEMO_RESOURCE_UNAVAILABLE');
@@ -207,7 +207,7 @@ test('Demo-01B-1: session ownership and executor isolation on real PostgreSQL', 
         assert.equal((await behavior(session, scripted)).statusCode, 200);
         const first = await run(session, data.jobId); assert.equal(first.statusCode, 202);
         assert.equal(first.json().attemptStatus, 'DISPATCHING'); assert.equal(first.json().jobStatus, 'PENDING');
-        const executor = runtime.executors.forSession(session.context);
+        const executor = await runtime.executors.forSession(session.context);
         assert.equal(executor.getExternalExecutions().length, scripted === 'ACCEPT_THEN_UNKNOWN' ? 1 : 0);
         const second = await run(session, data.jobId); assert.equal(second.statusCode, 200);
         assert.equal(second.json().executionAttemptId, first.json().executionAttemptId);
@@ -248,7 +248,7 @@ test('Demo-01B-1: session ownership and executor isolation on real PostgreSQL', 
       '/demo/fake-executor/dispatch-behavior', `/demo/execution-attempts/${randomUUID()}/fake-state`];
 
     await t.test('every Demo mutation authenticates and applies shared CSRF before changes', async () => {
-      const before = await state(); const fake = runtime.executors.forSession(a.context); const fakeBefore = fakeState(fake);
+      const before = await state(); const fake = await runtime.executors.forSession(a.context); const fakeBefore = fakeState(fake);
       for (const path of protectedPaths) {
         error(await post(path), 401, 'DEMO_SESSION_UNAVAILABLE');
         error(await app.inject({ method: 'POST', url: path, payload: '{',
@@ -338,7 +338,7 @@ test('Demo-01B-1: session ownership and executor isolation on real PostgreSQL', 
         const before = await state();
         error(await run(other, otherDpr.jobId), 409, 'DEPENDENCY_NOT_READY');
         assert.deepEqual(await state(), before);
-        assert.equal(runtime.executors.forSession(other.context).getDispatchHistory().length, 0);
+        assert.equal((await runtime.executors.forSession(other.context)).getDispatchHistory().length, 0);
         const pinned = (await pool.query(`SELECT ds.company_code, d.upstream_dataset_version_id
           FROM dataset_build_snapshot_dependencies d
           JOIN dataset_build_snapshots s ON s.id=d.snapshot_id
@@ -360,11 +360,11 @@ test('Demo-01B-1: session ownership and executor isolation on real PostgreSQL', 
 
     await t.test('registry rejection tombstones and lookup outages do not cross session namespaces', async () => {
       const first = await newSession(); const second = await newSession();
-      const fakeOne = runtime.executors.forSession(first.context); const fakeTwo = runtime.executors.forSession(second.context);
+      const fakeOne = await runtime.executors.forSession(first.context); const fakeTwo = await runtime.executors.forSession(second.context);
       // Deliberately probe the same full identity directly to prove registry
       // separation, not to represent an authorized Domain dispatch. HTTP-owned
       // attempts and dispatches are covered separately above.
-      const command = { ...runtime.executors.forSession(a.context).getDispatchHistory()[0]!,
+      const command = { ...(await runtime.executors.forSession(a.context)).getDispatchHistory()[0]!,
         executionAttemptId: randomUUID(), airflowDagRunId: `registry-probe-${randomUUID()}` };
       fakeOne.enqueueBehaviors('REJECT'); fakeTwo.enqueueBehaviors('ACCEPT_THEN_UNKNOWN');
       assert.equal((await fakeOne.dispatch(command)).kind, 'REJECTED');
@@ -475,8 +475,8 @@ test('Demo-01B-1: session ownership and executor isolation on real PostgreSQL', 
       assert.deepEqual(await state(), before);
       const shared = new FakeExecutor(); const invalid = new DemoRuntime(pool, 'test', { createExecutor: () => shared });
       const one = await invalid.sessions.create(); const two = await invalid.sessions.create();
-      invalid.executors.forSession(one.session);
-      assert.throws(() => invalid.executors.forSession(two.session), /distinct/);
+      await invalid.executors.forSession(one.session);
+      await assert.rejects(invalid.executors.forSession(two.session), /distinct/);
       assert.equal(invalid.executors.size, 1);
     });
 

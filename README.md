@@ -153,6 +153,11 @@ Read the [test setup and gate rules](docs/REFERENCE.md#verification) before runn
 Task 007 / Orchestration Core v2 is complete and accepted. This is an evolving portfolio project with no production-readiness claim.
 Canonical domains remain `FAB_COST`, `CAPEX`, `DPR`, `INSURANCE`, `ONE_STD_COST` and `COWOS_S`.
 
-Demo 01A's session foundation is merged. It does not protect existing Domain APIs or provide end-to-end data isolation.
-Demo 01B-1 is not merged into this documentation baseline; protected Domain APIs and a scenario runner are not delivered here.
+Demo 01A and Demo 01B-1 are merged. Explicit APP_MODE=demo protects Demo commands
+and uses one FakeExecutor per session; default core APIs remain unauthenticated.
+Demo 01B-2 adds atomic owner-scoped Reset, backend cookie clearing and startup
+invalidation of old sessions. It remains single-instance and development/test only.
+See the [Demo API/recovery reference](docs/REFERENCE.md#protected-demo-runtime)
+and [B2 scope and verification](docs/tasks/demo-01b2-session-reset-recovery.md).
+No frontend or scenario runner is implemented.
 Real Airflow integration, cancellation, queues, background workers, automatic publication and production authentication/authorization are not implemented.
