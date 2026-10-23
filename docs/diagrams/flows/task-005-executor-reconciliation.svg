@@ -1,0 +1,98 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 1080" width="1280" height="1080" role="img" aria-labelledby="flow-title flow-desc">
+<title id="flow-title">Task 005 — Executor Reconciliation and Recovery — Complete Flow</title>
+<desc id="flow-desc">The saved job is RUNNING and its attempt ACCEPTED. FakeExecutor changes the execution to SUCCEEDED, while PostgreSQL remains unchanged. A manual POST /calculation-jobs/:jobId/reconcile or an executor callback enters the same reconciliation service. The callback only supplies execution identity; it does not prove success or failure. The service uses saved airflowDagId plus airflowDagRunId to ask the executor outside a database transaction and row locks. After a SUCCEEDED reply it starts a transaction, locks Calculation Job then Execution Attempt, rechecks identity and state, updates both to SUCCEEDED, and commits. A matching duplicate callback checks again and keeps the confirmed result, with no new attempt or execution. RUNNING confirms ACCEPTED/RUNNING for a current non-terminal attempt; confirmed SUCCEEDED or FAILED updates both states. NOT_FOUND and UNAVAILABLE leave local state unchanged. A DISPATCHING attempt can recover to ACCEPTED/RUNNING or directly to a confirmed terminal result using the same attempt. Older callbacks cannot overwrite a newer retry; contradictory terminal facts raise an invariant error. Dataset remains BUILDING in this scenario. Only manual and callback-triggered checks exist; no periodic reconciliation worker or real Airflow adapter is shown. FakeExecutor is development/test only and its in-memory state does not survive a restart.</desc>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M 0 0 L 10 5 L 0 10 Z" fill="#176270"/></marker></defs>
+<style>text { font-family: Arial, Helvetica, sans-serif; }</style>
+<rect x="0" y="0" width="1280" height="1080" rx="12" fill="#fff" stroke="none"/>
+<text x="32" y="49" font-size="32" font-weight="700" fill="#172b4d">Executor Reconciliation &amp; Recovery</text>
+<text x="32" y="84" font-size="22" font-weight="400" fill="#42526b">Task 005 · Check the executor. Save the confirmed result.</text>
+<text x="32" y="139" font-size="17" font-weight="700" fill="#176270">COMPLETE RECONCILIATION FLOW</text>
+<path d="M 58 191 V 681" stroke="#bacbe0" stroke-width="2"/>
+<rect x="32" y="164" width="360" height="92" rx="12" fill="#f0f5fc" stroke="#bacbe0"/>
+<circle cx="58" cy="191" r="15" fill="#176270" stroke="#176270"/>
+<text x="53" y="197" font-size="17" font-weight="700" fill="#fff">1</text>
+<text x="84" y="195" font-size="21" font-weight="700" fill="#172b4d">Job Running</text>
+<text x="84" y="221" font-size="17" font-weight="400" fill="#42526b">Job RUNNING · Attempt ACCEPTED</text>
+<text x="84" y="243" font-size="17" font-weight="400" fill="#42526b">Executor: RUNNING</text>
+<rect x="32" y="262" width="360" height="92" rx="12" fill="#f0f5fc" stroke="#bacbe0"/>
+<circle cx="58" cy="289" r="15" fill="#176270" stroke="#176270"/>
+<text x="53" y="295" font-size="17" font-weight="700" fill="#fff">2</text>
+<text x="84" y="293" font-size="21" font-weight="700" fill="#172b4d">Executor Finished</text>
+<text x="84" y="319" font-size="17" font-weight="400" fill="#42526b">Executor: SUCCEEDED</text>
+<text x="84" y="341" font-size="17" font-weight="400" fill="#42526b">PostgreSQL still shows RUNNING.</text>
+<rect x="32" y="360" width="360" height="92" rx="12" fill="#f0f5fc" stroke="#bacbe0"/>
+<circle cx="58" cy="387" r="15" fill="#176270" stroke="#176270"/>
+<text x="53" y="393" font-size="17" font-weight="700" fill="#fff">3</text>
+<text x="84" y="391" font-size="21" font-weight="700" fill="#172b4d">Check Execution Status</text>
+<text x="84" y="417" font-size="17" font-weight="400" fill="#42526b">Manual request or callback.</text>
+<text x="84" y="439" font-size="17" font-weight="400" fill="#42526b">Both use the same check service.</text>
+<rect x="32" y="458" width="360" height="92" rx="12" fill="#f0f5fc" stroke="#bacbe0"/>
+<circle cx="58" cy="485" r="15" fill="#176270" stroke="#176270"/>
+<text x="53" y="491" font-size="17" font-weight="700" fill="#fff">4</text>
+<text x="84" y="489" font-size="21" font-weight="700" fill="#172b4d">Ask the Executor</text>
+<text x="84" y="515" font-size="17" font-weight="400" fill="#42526b">Use the saved DAG ID + run ID.</text>
+<text x="84" y="537" font-size="17" font-weight="400" fill="#42526b">Lookup holds no DB transaction.</text>
+<rect x="32" y="556" width="360" height="92" rx="12" fill="#f0f5fc" stroke="#bacbe0"/>
+<circle cx="58" cy="583" r="15" fill="#176270" stroke="#176270"/>
+<text x="53" y="589" font-size="17" font-weight="700" fill="#fff">5</text>
+<text x="84" y="587" font-size="21" font-weight="700" fill="#172b4d">Update PostgreSQL</text>
+<text x="84" y="613" font-size="17" font-weight="400" fill="#42526b">Lock job → attempt → recheck.</text>
+<text x="84" y="635" font-size="17" font-weight="400" fill="#42526b">Update both states → COMMIT.</text>
+<rect x="32" y="654" width="360" height="92" rx="12" fill="#f0f5fc" stroke="#bacbe0"/>
+<circle cx="58" cy="681" r="15" fill="#176270" stroke="#176270"/>
+<text x="53" y="687" font-size="17" font-weight="700" fill="#fff">6</text>
+<text x="84" y="685" font-size="21" font-weight="700" fill="#172b4d">Duplicate Callback</text>
+<text x="84" y="711" font-size="17" font-weight="400" fill="#42526b">Check the same execution again.</text>
+<text x="84" y="733" font-size="17" font-weight="400" fill="#42526b">Keep the same confirmed result.</text>
+<text x="430" y="139" font-size="25" font-weight="700" fill="#172b4d">Executor result → Confirmed stored state</text>
+<text x="430" y="168" font-size="19" font-weight="400" fill="#42526b">The executor is the source of the execution result.</text>
+<rect x="430" y="195" width="335" height="205" rx="12" fill="#e2f2f3" stroke="#65a5af"/>
+<text x="450" y="232" font-size="24" font-weight="700" fill="#172b4d">Backend + PostgreSQL</text>
+<text x="450" y="273" font-size="23" font-weight="700" fill="#176270">Job: SUCCEEDED</text>
+<text x="450" y="311" font-size="22" font-weight="700" fill="#176270">Attempt: SUCCEEDED</text>
+<text x="450" y="350" font-size="21" font-weight="400" fill="#42526b">Dataset: BUILDING</text>
+<text x="450" y="381" font-size="18" font-weight="400" fill="#42526b">Confirmed result saved</text>
+<rect x="950" y="195" width="298" height="205" rx="12" fill="#e2f2f3" stroke="#65a5af"/>
+<text x="970" y="232" font-size="26" font-weight="700" fill="#172b4d">FakeExecutor</text>
+<text x="970" y="272" font-size="21" font-weight="400" fill="#42526b">Execution:</text>
+<text x="970" y="311" font-size="27" font-weight="700" fill="#176270">SUCCEEDED</text>
+<text x="970" y="381" font-size="18" font-weight="400" fill="#42526b">Development / test only</text>
+<path class="flow-arrow" d="M 765 265 H 950" fill="none" stroke="#176270" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<text x="785" y="247" font-size="18" font-weight="700" fill="#176270">check again</text>
+<path class="flow-arrow" d="M 950 344 H 765" fill="none" stroke="#176270" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<text x="794" y="327" font-size="18" font-weight="700" fill="#176270">SUCCEEDED</text>
+<rect x="430" y="435" width="320" height="52" rx="12" fill="#f0f5fc" stroke="#bacbe0"/>
+<text x="450" y="469" font-size="23" font-weight="700" fill="#172b4d">Manual /reconcile</text>
+<rect x="928" y="435" width="320" height="52" rx="12" fill="#f0f5fc" stroke="#bacbe0"/>
+<text x="948" y="469" font-size="23" font-weight="700" fill="#172b4d">Executor callback</text>
+<path class="flow-arrow" d="M 590 487 V 505 H 680 V 520" fill="none" stroke="#176270" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path class="flow-arrow" d="M 1088 487 V 505 H 1005 V 520" fill="none" stroke="#176270" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<rect x="430" y="520" width="818" height="75" rx="12" fill="#e2f2f3" stroke="#65a5af"/>
+<text x="450" y="551" font-size="24" font-weight="700" fill="#176270">Same Reconciliation Service</text>
+<text x="450" y="580" font-size="19" font-weight="400" fill="#42526b">Callback asks for a check; it does not prove the result.</text>
+<text x="430" y="625" font-size="19" font-weight="700" fill="#176270">After lookup: lock Job → lock Attempt → recheck → save or keep → COMMIT</text>
+<rect x="430" y="645" width="818" height="282" rx="12" fill="#f0f5fc" stroke="#bacbe0"/>
+<text x="450" y="680" font-size="23" font-weight="700" fill="#172b4d">Other results and matching repeats</text>
+<text x="450" y="717" font-size="20" font-weight="700" fill="#176270">RUNNING</text>
+<text x="760" y="717" font-size="20" font-weight="400" fill="#42526b">Job RUNNING · Attempt ACCEPTED</text>
+<text x="450" y="752" font-size="20" font-weight="700" fill="#176270">SUCCEEDED</text>
+<text x="760" y="752" font-size="20" font-weight="400" fill="#42526b">Job + attempt SUCCEEDED</text>
+<text x="450" y="787" font-size="20" font-weight="700" fill="#176270">FAILED</text>
+<text x="760" y="787" font-size="20" font-weight="400" fill="#42526b">Job + attempt FAILED</text>
+<text x="450" y="822" font-size="20" font-weight="700" fill="#87500f">NOT_FOUND</text>
+<text x="760" y="822" font-size="20" font-weight="400" fill="#42526b">Keep local state unchanged</text>
+<text x="450" y="857" font-size="20" font-weight="700" fill="#87500f">UNAVAILABLE</text>
+<text x="760" y="857" font-size="20" font-weight="400" fill="#42526b">Keep local state unchanged</text>
+<text x="450" y="892" font-size="20" font-weight="700" fill="#176270">Duplicate (same result)</text>
+<text x="760" y="892" font-size="20" font-weight="400" fill="#42526b">Keep the confirmed result</text>
+<text x="450" y="919" font-size="17" font-weight="400" fill="#42526b">Current attempt: check state before applying a result.</text>
+<rect x="32" y="780" width="360" height="147" rx="12" fill="#f0f5fc" stroke="#bacbe0"/>
+<text x="52" y="813" font-size="22" font-weight="700" fill="#176270">Recovery keeps the attempt</text>
+<text x="52" y="848" font-size="18" font-weight="700" fill="#172b4d">DISPATCHING + found run:</text>
+<text x="52" y="881" font-size="18" font-weight="400" fill="#42526b">Confirm ACCEPTED or final result.</text>
+<text x="52" y="914" font-size="18" font-weight="400" fill="#42526b">Same attempt; no new execution.</text>
+<rect x="32" y="948" width="1216" height="96" rx="12" fill="#e2f2f3" stroke="#65a5af"/>
+<text x="56" y="986" font-size="27" font-weight="700" fill="#176270">Duplicate notifications do not change completed results.</text>
+<text x="56" y="1023" font-size="22" font-weight="400" fill="#172b4d">Check again. No new attempt, no new run, no terminal rewrite.</text>
+<text x="32" y="1070" font-size="18" font-weight="400" fill="#42526b">No periodic worker. Fake state is in memory. Job success does not publish the dataset.</text>
+</svg>
