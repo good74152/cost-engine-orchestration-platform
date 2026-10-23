@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
+import { setImmediate } from 'node:timers/promises';
 import test from 'node:test';
 import { Client, type Pool } from 'pg';
 import { runner } from 'node-pg-migrate';
@@ -479,7 +480,13 @@ test('Demo-01B-2: scoped reset and failure recovery on real PostgreSQL', { timeo
       for (const [key, value] of Object.entries(prior)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; }
       try {
         if (created) {
-          assert.equal((await admin.query('SELECT pid FROM pg_stat_activity WHERE datname=$1', [name])).rowCount, 0);
+          const deadline = Date.now() + 5000;
+          let sessions = await admin.query('SELECT pid FROM pg_stat_activity WHERE datname=$1', [name]);
+          while (sessions.rowCount && Date.now() < deadline) {
+            await setImmediate();
+            sessions = await admin.query('SELECT pid FROM pg_stat_activity WHERE datname=$1', [name]);
+          }
+          assert.equal(sessions.rowCount, 0, 'All owned backends must exit before DROP');
           assert.match(name, /^demo_01b2_test_[a-z0-9_]+$/); await admin.query(`DROP DATABASE "${name}"`);
           console.log('DEMO_01B2_TEARDOWN', JSON.stringify({ database: name, sessions: 0, dropped: true, forced: false }));
         }

@@ -538,7 +538,14 @@ test('Task 007B-1 late dispatch PostgreSQL regression and lock boundaries', { co
         try {
           assert.match(name, /^late_dispatch_test_[a-z0-9_]+$/);
           assert.ok(name.length <= 63);
-          const sessions = await admin.query('SELECT pid FROM pg_stat_activity WHERE datname=$1', [name]);
+          // Socket end is local; PostgreSQL may still be finishing backend exit.
+          // Observe durable zero connections, with a deadline; never kill a leak.
+          const deadline = Date.now() + 5000;
+          let sessions = await admin.query('SELECT pid FROM pg_stat_activity WHERE datname=$1', [name]);
+          while (sessions.rowCount && Date.now() < deadline) {
+            await setImmediate();
+            sessions = await admin.query('SELECT pid FROM pg_stat_activity WHERE datname=$1', [name]);
+          }
           assert.equal(sessions.rowCount, 0, 'All owned clients must close before DROP');
           await admin.query(`DROP DATABASE "${name}"`);
           console.log('LATE_DISPATCH_TEARDOWN', JSON.stringify({ database: name,

@@ -98,3 +98,13 @@ the C/terminal-lifecycle fixtures, asserts zero connections and uses normal owne
 DROP instead of FORCE. No production DB helper, milestone policy, scenario or
 expected assertion changes. Separate repeated focused verification and the
 complete final gate are recorded below; initial failed evidence is retained.
+
+The first barrier-only repair passed once, but a subsequent focused run on
+5422713 exited 1 (31 pass / 1 parent fail): PostgreSQL briefly retained one exiting
+backend after local socket end. A read-only follow-up found zero connections.
+The owned leftover late_dispatch_test_2316_13099d2f7cc3 was then normally dropped;
+no persistent database was touched. Final B-1 and new B2 fixtures additionally
+observe pg_stat_activity until zero, bounded by five seconds. A real leak still
+fails visibly; no sleep-based concurrency ordering or forced termination is used.
+The full intermediate gate on 5422713 independently passed 246 entries, but is
+not substituted for final verification after the deterministic teardown repair.
