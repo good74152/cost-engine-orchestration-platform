@@ -15,7 +15,7 @@ const ownership = {
     JOIN dataset_series ds ON ds.id = dv.dataset_series_id WHERE ea.id = $1`,
 };
 
-/** Foundation only: existing Domain HTTP routes intentionally do not call this. */
+/** Used by protected Demo commands; core Domain routes retain their own contract. */
 export class DemoOwnershipValidator {
   constructor(private readonly db: Pool, private readonly sessions: DemoSessionService) {}
 
