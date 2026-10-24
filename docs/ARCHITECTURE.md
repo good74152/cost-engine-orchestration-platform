@@ -580,7 +580,8 @@ Demo mode registers health, session APIs and protected `/demo` dataset creation,
 dataset lifecycle, job Run/Reconcile and fake controls only. Original anonymous
 Domain writes, raw ingestion, executor callbacks and internal fake controls
 are not registered in that mode. Core registration remains supported unchanged.
-The complete route/body/response inventory lives in
+Demo-02A adds protected, coordinated GET reads; see section 21. The existing
+mutation route/body/response inventory lives in
 [Demo-01B-1](tasks/demo-01b1-session-ownership-executor-isolation.md).
 
 Every protected mutation authenticates a durable session and applies the shared
@@ -635,3 +636,22 @@ while work remains; there is no background worker. See the
 [B2 task and verification](tasks/demo-01b2-session-reset-recovery.md).
 This remains single-instance, development/test only, with no distributed recovery,
 frontend, scenario runner, real Airflow or production deployment guarantee.
+
+## 21. Demo Shared Configuration and Durable Reads
+
+Demo-02A supplies an explicit `seed:demo-guided` developer command, never startup
+or session side effects. It requires Demo development/test mode and a separate
+explicit DEMO_SEED_DATABASE_URL. One transaction creates or verifies only active
+CAPEX/DEMO_GUIDED_SUMMARY, demo_capex_guided and published zero-dependency version
+1 with counter 1. Existing incompatible configuration or other active CAPEX types
+fail closed; published history and session-owned data are never rewritten.
+
+Demo-only GET dataset list/detail, dataset Job list, Job detail and Attempt list
+authenticate cookies and enter the same coordinator as mutations. Durable joins
+enforce ownership; generic 404 hides missing/foreign IDs. Each response uses one
+SQL snapshot, explicit public fields and bounded keyset pagination. GET requires
+no mutation header, retains Origin/cookie restrictions and no-store, and never
+consults FakeExecutor. Reset reservations block reads; admitted/queued reads
+block Reset under existing busy rules. No core lifecycle/lock, executor, session
+policy or historical migration changes. No Scenario Runner is implemented.
+See [Demo-02A contracts, compatibility, index review and evidence](tasks/demo-02a-shared-seed-read-apis.md).
