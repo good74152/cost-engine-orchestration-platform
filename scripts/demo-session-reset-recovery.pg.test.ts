@@ -145,7 +145,7 @@ test('Demo-01B-2: scoped reset and failure recovery on real PostgreSQL', { timeo
     console.log('DEMO_01B2_RUNTIME', JSON.stringify({ node: process.version, database: name,
       postgres: (await pool.query('SHOW server_version')).rows[0].server_version,
       migrations: (await pool.query('SELECT count(*)::int AS n FROM pgmigrations')).rows[0].n }));
-    // Verify the live catalog includes exactly the reviewed incoming core/DPR FK edges.
+    // Verify exactly the reviewed core/DPR graph plus Scenario session ownership.
     const edges = (await pool.query(`SELECT conrelid::regclass::text AS child, confrelid::regclass::text AS parent
       FROM pg_constraint WHERE contype='f' ORDER BY 1,2`)).rows;
     console.log('DEMO_01B2_REVIEWED_FK_GRAPH', JSON.stringify(edges));
@@ -154,7 +154,7 @@ test('Demo-01B-2: scoped reset and failure recovery on real PostgreSQL', { timeo
       'calculation_jobs->execution_dependency_definition_versions',
       'dataset_build_snapshot_dependencies->dataset_build_snapshots',
       'dataset_build_snapshot_dependencies->dataset_versions', 'dataset_build_snapshots->dataset_versions',
-      'dataset_versions->dataset_series', 'dpr_calculation_inputs->assets',
+      'dataset_versions->dataset_series', 'demo_scenario_instances->demo_sessions', 'dpr_calculation_inputs->assets',
       'dpr_calculation_inputs->dpr_calculation_input_snapshots', 'dpr_calculation_input_snapshots->calculation_jobs',
       'dpr_results->dataset_versions', 'execution_attempts->calculation_jobs',
       'execution_dependency_definition_dependencies->execution_dependency_definition_versions',
@@ -511,7 +511,7 @@ test('Demo-01B-2: scoped reset and failure recovery on real PostgreSQL', { timeo
       assert.equal((await pool.query('SELECT count(*)::int AS n FROM assets')).rows[0].n, 1);
       assert.equal((await pool.query('SELECT count(*)::int AS n FROM raw_dpr')).rows[0].n, 1);
       assert.equal((await pool.query('SELECT count(*)::int AS n FROM calculation_types')).rows[0].n, 2);
-      assert.equal((await pool.query('SELECT count(*)::int AS n FROM pgmigrations')).rows[0].n, 7);
+      assert.equal((await pool.query('SELECT count(*)::int AS n FROM pgmigrations')).rows[0].n, 8);
     });
   } finally {
     try { await Promise.all(apps.map((app) => app.close())); if (db) { await db.end(); await Promise.all(ends); } }

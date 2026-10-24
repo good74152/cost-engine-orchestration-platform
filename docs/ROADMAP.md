@@ -80,12 +80,20 @@ and [ADR-0010](adr/0010-demo-session-reset-and-recovery.md). Task 007 financial
 lifecycles and applied migrations are unchanged. No UI/scenarios, distributed
 coordination or public deployment readiness is implied.
 
-Demo-02A, on feature/demo-02a-seed-read-apis, adds an explicit transactional
+Demo-02A (PR #26) is merged at 72f4369. It adds an explicit transactional
 minimal CAPEX seed and protected PostgreSQL Dataset/Job/Attempt read APIs.
 Reads use existing ownership/coordinator security and bounded pagination.
-It requires System Owner PR review, not automatic merge. See the
+See the
 [bounded contract and verification](tasks/demo-02a-shared-seed-read-apis.md).
 No Scenario Runner, frontend, later Demo-02 work or accepted core redesign.
+
+Demo-02B, on feature/demo-02b-scenario-persistence from freshly fetched 72f4369,
+adds durable one-Scenario-per-session Create/Get, Create idempotency, manual-mode
+isolation and same-transaction Reset/recovery/maintenance integration. It requires
+System Owner PR review, not automatic merge. See [the bounded task/evidence](tasks/demo-02b-scenario-persistence.md)
+and [ADR-0011](adr/0011-demo-scenario-persistence-and-mode-isolation.md).
+Demo-02C Step Execution/Next/ledger/idempotency/progress and frontend remain
+unimplemented; no Scenario Runner or core architecture redesign is included.
 
 ### Naming-01 — Rename COWOS_S to E2E_COST
 

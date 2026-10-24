@@ -22,7 +22,10 @@ export function demoDomainRoutes(runtime: DemoRuntime, options: DemoSessionRoute
     });
     const operate = <T>(request: FastifyRequest, command: (session: AuthenticatedDemoSession) => Promise<T>) => {
       const session = authenticated.get(request)!;
-      return runtime.coordinator.run(session, () => command(session));
+      return runtime.coordinator.run(session, async () => {
+        await runtime.scenarios.assertFreeExploration(session);
+        return command(session);
+      });
     };
 
     app.post('/demo/dataset-versions', async (request, reply) => operate(request, async (session) => {
