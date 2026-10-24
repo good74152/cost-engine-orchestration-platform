@@ -196,9 +196,101 @@ npm run test:milestone
 git diff --check
 ```
 
-Exact tested commit/tree, per-suite results, runtime versions, warnings and
-owned teardown evidence will be recorded after the final clean-revision gate.
-This command inventory is not a PASS claim.
+### Executed verification — 2026-10-24 (Asia/Taipei)
+
+Final commands ran sequentially on clean implementation commit
+495b8882c8cd54247a3d2848b1f0b323306fd0f1, tree
+915ee7c733da3e8a8bd372a66634c398351ada97. The subsequent evidence commit changes
+only this document, not tested implementation/migration/test code.
+Windows PowerShell; Node 24.18.0; npm 11.16.0; existing Compose PostgreSQL 18.6
+(Debian 18.6-1.pgdg13+2). docker compose up -d postgres_db exited 0.
+
+| Exact command | Exit | Pass | Fail | Skip |
+|---|---:|---:|---:|---:|
+| npm.cmd run build | 0 | n/a | n/a | n/a |
+| npm.cmd run test:demo-02b | 0 | 26 | 0 | 0 |
+| npm.cmd run test:demo-02a | 0 | 23 | 0 | 0 |
+| npm.cmd run test:demo-session-infrastructure | 0 | 21 | 0 | 0 |
+| npm.cmd run test:demo-session-ownership-executor-isolation | 0 | 19 | 0 | 0 |
+| npm.cmd run test:demo-session-reset-recovery | 0 | 22 | 0 | 0 |
+| npm.cmd run test:milestone | 0 | 246 | 0 | 0 |
+| git diff --check | 0 | n/a | n/a | n/a |
+| git diff 72f4369..HEAD --check | 0 | n/a | n/a | n/a |
+
+All test cancellations/TODOs were zero. Counts include Node parent/nested
+entries, not only individual assertions. Supplemental strict type checking of
+the new suite and migration also exited 0:
+
+```powershell
+npm.cmd exec -- tsc --ignoreConfig --noEmit --strict --skipLibCheck --esModuleInterop --module NodeNext --target ES2022 scripts/demo-02b-scenario-persistence.pg.test.ts migrations/1792800000000_demo-scenario-instances.ts
+```
+
+The unchanged milestone's actual children all reported exit 0, null signal/
+spawnError and no gate issues; fail/skip/cancel/TODO were zero throughout:
+
+| Child command (launched by milestone) | Exit | Pass | Fail | Skip |
+|---|---:|---:|---:|---:|
+| npm run build | 0 | n/a | n/a | n/a |
+| npm run test:milestone-runner | 0 | 20 | 0 | 0 |
+| npm run test:orchestration-schema-v2 | 0 | 30 | 0 | 0 |
+| npm run test:dataset-version-creation-v2 | 0 | 14 | 0 | 0 |
+| npm run test:first-run-immutable-build-snapshot | 0 | 19 | 0 | 0 |
+| npm run test:execution-attempt-dispatch-fake-executor | 0 | 11 | 0 | 0 |
+| npm run test:executor-reconciliation | 0 | 22 | 0 | 0 |
+| npm run test:dataset-version-terminal-lifecycle | 0 | 64 | 0 | 0 |
+| npm run test:cross-workflow-concurrency-investigation | 0 | 14 | 0 | 0 |
+| npm run test:task-007b1-late-dispatch-reconciliation | 0 | 32 | 0 | 0 |
+| npm run test:task-007c-api-contract | 0 | 12 | 0 | 0 |
+| npm run test:raw-ingestion (owned disposable DB launcher) | 0 | 1 | 0 | 0 |
+| npm run test:task-007d-end-to-end | 0 | 7 | 0 | 0 |
+
+All 13 milestone commands PASS; CON-01/CON-02 and integrated E2E A–F remain
+green. Raw ingestion used only the isolated launcher, never a persistent DB.
+No core state-machine/executor service or milestone command/gate was changed.
+Applied migrations, Demo-02A seed/read implementation, session token/company
+collision/security policies and coordinator implementation have no diff.
+
+Owned final Demo databases (all eight migrations applied):
+
+| Suite | Database | Backends at teardown | Normal DROP |
+|---|---|---:|---|
+| 02B | demo_02b_test_20184_10ecb675ef53 | 0 | yes |
+| 02A | demo_02a_test_21172_8ae34149b91d | 0 | yes |
+| 01A | demo_01a_test_2812_64ef3c96bef3 | 0 | yes |
+| 01B-1 | demo_01b1_test_4116_85c8d0956c5c | 0 | yes |
+| 01B-2 | demo_01b2_test_10872_65cfcd36c7fb | 0 | yes |
+
+After all gates, pg_database contained only postgres, template0, template1 and
+pre-existing testdb. pg_stat_activity had only the maintenance audit connection
+to postgres. No fixture database/backend remained. No forced cleanup, TRUNCATE
+or CASCADE was used by the new fixture. The new migration's empty down/up,
+representative forward preservation and populated down atomic refusal were
+executed in the new suite, not inferred from source inspection.
+
+Machine-local logs: temporary directory demo02b-final-build.log,
+demo02b-final-test-demo-02b.log, demo02b-final-test-demo-02a.log,
+demo02b-final-test-demo-session-infrastructure.log,
+demo02b-final-test-demo-session-ownership-executor-isolation.log,
+demo02b-final-test-demo-session-reset-recovery.log and
+demo02b-final-test-milestone.log. These are local execution evidence, not GitHub
+CI claims; raw logs are not committed with credentials.
+
+### Earlier fixture failure and warnings
+
+The first pre-final 02B run passed 24/24; the expanded suite passed 26/26.
+The first A1 regression exited 1: 19 pass, 2 fail, zero skip/cancel/TODO.
+Its empty rollback child still requested down 1, which now correctly removed
+the new Scenario migration rather than demo_sessions. The old assertion that
+demo_sessions was gone failed (and so did its Node parent). Updating that
+fixture to down 2 restored the same original Session rollback assertion; the
+populated Session rollback target was also adjusted. No migration guard or
+assertion was weakened. Owned teardown succeeded on that red run too. The
+corrected A1 rerun and final clean-revision rerun both passed 21/21.
+
+No runtime/build/deprecation warnings were found in the final verification logs.
+Git emitted local LF-to-CRLF conversion notices during staging; whitespace
+checks still exited 0. No accepted-architecture conflict was found. Implementation
+and this evidence remain subject to System Owner review, not automatic merge.
 
 ## Limits and Demo-02C boundary
 
