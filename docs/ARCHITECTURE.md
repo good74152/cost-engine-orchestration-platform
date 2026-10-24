@@ -600,7 +600,38 @@ executor wait. Registry allocation is bounded, with no eviction that could lose
 execution/rejection history.
 
 Isolation applies to one correctly configured Demo runtime, not an anonymous
-core app sharing that data. No multi-instance/restart recovery, Reset, cleanup,
-scenario runner or real Airflow adapter is added. Expiry/revocation denies
-future/queued admissions without cancelling admitted executor work. Demo-01B-1
-still **must not be deployed directly to the public internet**.
+core app sharing that data. Expiry/revocation denies future/queued admissions
+without cancelling admitted executor work. Demo remains **unsuitable for direct
+public internet deployment**. Demo-01B-2 adds the bounded recovery below.
+
+## 20. Demo Reset and Restart Recovery
+
+[ADR-0010](adr/0010-demo-session-reset-and-recovery.md) extends only the Demo
+data lifecycle, not financial state transitions. POST /demo/sessions/reset
+authenticates, checks CSRF and accepts exactly {}. The coordinator synchronously
+reserves an idle session without queuing; active/queued commands or another
+reset conflict. New commands reject while reserved. An idle RUNNING calculation
+does not prevent reset and is never falsely marked terminal.
+
+One transaction locks/revalidates the session, deletes its complete company-owned
+v2 and legacy DPR child graph in FK order, then revokes the session. Foreign
+snapshot references cause rollback, not wider deletion. Shared types/definitions,
+assets, raw ingestion, other owners and session/migration history remain intact.
+Only after commit is the owner's fake released and its HttpOnly cookie cleared.
+Confirmed rollback preserves the fake and permits retry. An unknown COMMIT holds
+admission blocked: a separate connection locks the session before reading durable
+revocation and, in a fresh SQL statement, remaining owned data. If unavailable,
+return 503 and retain blocking for controlled recovery. No executor call or core
+state-machine/lock protocol is changed.
+
+Real Demo server startup invalidates previous sessions before listening and fails
+closed on invalidation failure. buildApp has no startup side effect. This avoids
+pretending lost in-memory fake runs survived restart. Bounded service-only
+maintenance retries uncertain outcomes, cleans inactive owners with the same SQL
+and reclaims inactive fakes; failures/pending work are logged without credentials.
+Default batch is 50 (maximum 1000) recovery entries and inactive owners per call.
+Retained session rows prevent identity reuse. Operators must repeat maintenance
+while work remains; there is no background worker. See the
+[B2 task and verification](tasks/demo-01b2-session-reset-recovery.md).
+This remains single-instance, development/test only, with no distributed recovery,
+frontend, scenario runner, real Airflow or production deployment guarantee.

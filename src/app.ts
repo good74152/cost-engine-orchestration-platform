@@ -17,6 +17,7 @@ import { demoSessionRoutes, type DemoSessionRouteOptions } from './modules/demo-
 import { resolveAppMode } from './app-mode.js';
 import { DemoRuntime, assertDemoEnvironment } from './modules/demo-session/demo-runtime.js';
 import { demoDomainRoutes } from './modules/demo-session/demo-domain.route.js';
+import { demoSessionResetRoutes } from './modules/demo-session/demo-session-reset.route.js';
 
 export interface BuildAppOptions {
   logger?: boolean;
@@ -117,6 +118,8 @@ export async function buildApp(options: BuildAppOptions = {}) {
   };
   await app.register(demoSessionRoutes(runtime?.sessions ?? new DemoSessionService(pool), sessionOptions));
   if (runtime) {
+    runtime.reset.setLogger((event, sessionId, details) => app.log.info({ event, sessionId, ...details }));
+    await app.register(demoSessionResetRoutes(runtime, sessionOptions));
     await app.register(demoDomainRoutes(runtime, sessionOptions));
   } else {
     await app.register(datasetVersionRoutes);

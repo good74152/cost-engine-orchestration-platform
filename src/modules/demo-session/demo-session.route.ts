@@ -12,7 +12,7 @@ export function demoSessionRoutes(sessions: DemoSessionService, options: DemoSes
   const { secure, cookieName: name } = policy;
 
   return async (app: FastifyInstance) => {
-    installDemoErrorBoundary(app);
+    installDemoErrorBoundary(app, false, policy);
     app.post('/demo/sessions', async (request, reply) => {
       policy.assertMutation(request);
       if (!request.headers['content-type']?.toLowerCase().startsWith('application/json')

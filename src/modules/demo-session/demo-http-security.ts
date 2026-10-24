@@ -1,4 +1,4 @@
-import type { FastifyInstance, FastifyRequest } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { CalculationJobError } from '../calculation-job.errors.js';
 import { DatasetVersionError } from '../dataset-version/dataset-version.errors.js';
 import { DemoResourceUnavailableError, DemoSessionError } from './demo-session.errors.js';
@@ -34,9 +34,13 @@ export class DemoHttpSecurity {
       throw new DemoSessionError('DEMO_SESSION_CSRF_REJECTED', 403, 'Demo session request rejected');
     }
   }
+
+  clearCookie(reply: FastifyReply): void {
+    reply.header('Set-Cookie', `${this.cookieName}=; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Path=/; HttpOnly; SameSite=Strict${this.secure ? '; Secure' : ''}`);
+  }
 }
 
-export function installDemoErrorBoundary(app: FastifyInstance, domainErrors = false): void {
+export function installDemoErrorBoundary(app: FastifyInstance, domainErrors = false, policy?: DemoHttpSecurity): void {
   app.addHook('onRequest', async (_request, reply) => { reply.header('Cache-Control', 'no-store'); });
   app.setErrorHandler((error, request, reply) => {
     if (domainErrors && (error instanceof CalculationJobError || error instanceof DatasetVersionError)) {
@@ -47,6 +51,7 @@ export function installDemoErrorBoundary(app: FastifyInstance, domainErrors = fa
       return reply.status(error.statusCode).send({ message: error.message, code: error.code });
     }
     if (error instanceof DemoSessionError) {
+      if (error.code === 'DEMO_SESSION_UNAVAILABLE' && error.statusCode === 401) policy?.clearCookie(reply);
       return reply.status(error.statusCode).send({ message: error.message, code: error.code });
     }
     const status = (error as { statusCode?: number }).statusCode;

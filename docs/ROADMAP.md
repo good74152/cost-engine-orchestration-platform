@@ -70,6 +70,16 @@ Implementation acceptance and merge are complete. This separately authorized doc
 
 ## Backlog
 
+### Demo runtime extensions
+
+Demo-01A (PR #15) and Demo-01B-1 (PR #20) are merged. Demo-01B-2 implements
+owner-scoped Reset, cookie clearing, explicit startup invalidation and bounded
+inactive-owner cleanup on feature/demo-01b2-session-reset-recovery. It awaits
+System Owner review/merge; see the [bounded task and evidence](tasks/demo-01b2-session-reset-recovery.md)
+and [ADR-0010](adr/0010-demo-session-reset-and-recovery.md). Task 007 financial
+lifecycles and applied migrations are unchanged. No UI/scenarios, distributed
+coordination or public deployment readiness is implied.
+
 ### Naming-01 — Rename COWOS_S to E2E_COST
 
 **Status: BACKLOG — Architecture Review Required**
