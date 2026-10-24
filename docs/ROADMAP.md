@@ -72,13 +72,20 @@ Implementation acceptance and merge are complete. This separately authorized doc
 
 ### Demo runtime extensions
 
-Demo-01A (PR #15) and Demo-01B-1 (PR #20) are merged. Demo-01B-2 implements
-owner-scoped Reset, cookie clearing, explicit startup invalidation and bounded
-inactive-owner cleanup on feature/demo-01b2-session-reset-recovery. It awaits
-System Owner review/merge; see the [bounded task and evidence](tasks/demo-01b2-session-reset-recovery.md)
+Demo-01A (PR #15), Demo-01B-1 (PR #20), Demo-01B-2 (PR #24) and the company-code
+collision fix (PR #25) are merged at Demo-02A's fetched main baseline 2c44809.
+B2 provides owner-scoped Reset, cookie clearing, startup invalidation and bounded
+inactive-owner cleanup; see the [bounded task and evidence](tasks/demo-01b2-session-reset-recovery.md)
 and [ADR-0010](adr/0010-demo-session-reset-and-recovery.md). Task 007 financial
 lifecycles and applied migrations are unchanged. No UI/scenarios, distributed
 coordination or public deployment readiness is implied.
+
+Demo-02A, on feature/demo-02a-seed-read-apis, adds an explicit transactional
+minimal CAPEX seed and protected PostgreSQL Dataset/Job/Attempt read APIs.
+Reads use existing ownership/coordinator security and bounded pagination.
+It requires System Owner PR review, not automatic merge. See the
+[bounded contract and verification](tasks/demo-02a-shared-seed-read-apis.md).
+No Scenario Runner, frontend, later Demo-02 work or accepted core redesign.
 
 ### Naming-01 — Rename COWOS_S to E2E_COST
 

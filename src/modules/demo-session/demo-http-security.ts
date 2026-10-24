@@ -27,8 +27,14 @@ export class DemoHttpSecurity {
   }
 
   assertMutation(request: FastifyRequest): void {
-    if (request.headers['x-demo-session'] !== '1'
-      || request.headers['sec-fetch-site'] === 'cross-site'
+    this.assertSameOrigin(request);
+    if (request.headers['x-demo-session'] !== '1') {
+      throw new DemoSessionError('DEMO_SESSION_CSRF_REJECTED', 403, 'Demo session request rejected');
+    }
+  }
+
+  assertSameOrigin(request: FastifyRequest): void {
+    if (request.headers['sec-fetch-site'] === 'cross-site'
       || (request.headers.origin !== undefined
         && request.headers.origin !== (this.origin ?? `${request.protocol}://${request.host}`))) {
       throw new DemoSessionError('DEMO_SESSION_CSRF_REJECTED', 403, 'Demo session request rejected');

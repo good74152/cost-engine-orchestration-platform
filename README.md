@@ -119,7 +119,7 @@ Requires Node.js 24+, npm and Docker Compose. The Compose service uses PostgreSQ
 The server defaults to port 3000 on `0.0.0.0`. Use a trusted local environment: Domain APIs remain unauthenticated, and fake controls are development/test tools.
 Do not expose this application publicly. The executor factory rejects fake execution in production.
 
-A fresh database is not a configured calculation pipeline. Active calculation types and published dependency definitions must be configured in PostgreSQL; there is no general seed command or management API.
+A fresh database is not a configured calculation pipeline. Active calculation types and published dependency definitions must be configured in PostgreSQL; there is no general seed command or management API. The explicit [Demo-02A seed](docs/tasks/demo-02a-shared-seed-read-apis.md) prepares only a minimal local Demo CAPEX configuration and also documents the protected read APIs.
 Do not edit applied migrations or delete persistent data to bypass migration guards.
 See [local setup and migration notes](docs/REFERENCE.md#local-development).
 

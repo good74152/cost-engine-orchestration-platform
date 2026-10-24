@@ -18,6 +18,7 @@ import { resolveAppMode } from './app-mode.js';
 import { DemoRuntime, assertDemoEnvironment } from './modules/demo-session/demo-runtime.js';
 import { demoDomainRoutes } from './modules/demo-session/demo-domain.route.js';
 import { demoSessionResetRoutes } from './modules/demo-session/demo-session-reset.route.js';
+import { demoReadRoutes } from './modules/demo-session/demo-read.route.js';
 
 export interface BuildAppOptions {
   logger?: boolean;
@@ -121,6 +122,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
     runtime.reset.setLogger((event, sessionId, details) => app.log.info({ event, sessionId, ...details }));
     await app.register(demoSessionResetRoutes(runtime, sessionOptions));
     await app.register(demoDomainRoutes(runtime, sessionOptions));
+    await app.register(demoReadRoutes(runtime, sessionOptions));
   } else {
     await app.register(datasetVersionRoutes);
     await app.register(rawIngestionRoutes);

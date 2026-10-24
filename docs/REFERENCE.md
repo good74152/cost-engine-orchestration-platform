@@ -171,7 +171,44 @@ Only with an injected FakeExecutor and an explicitly approved development/test e
 | POST | /internal/fake-executor/executions/:dagRunId/succeed | Set in-memory fake execution to SUCCEEDED |
 | POST | /internal/fake-executor/executions/:dagRunId/fail | Set in-memory fake execution to FAILED |
 
-These controls do not reconcile DB state automatically and are not production APIs. No dataset/job read/list API is implemented. Legacy POST /calculation-jobs and job-level start/submit-validation/publish/reject/fail routes are not registered.
+These controls do not reconcile DB state automatically and are not production APIs. No core dataset/job read/list API is implemented; Demo-only reads are documented below. Legacy POST /calculation-jobs and job-level start/submit-validation/publish/reject/fail routes are not registered.
+
+### Demo-02A shared seed and reads
+
+Run `npm run seed:demo-guided` explicitly with APP_MODE=demo,
+NODE_ENV=development/test and a privately supplied DEMO_SEED_DATABASE_URL.
+No DATABASE_URL fallback or automatic startup/session/reset seed exists.
+One transaction creates or verifies active CAPEX/DEMO_GUIDED_SUMMARY with DAG
+demo_capex_guided and PUBLISHED zero-dependency definition 1/counter 1. Other
+active CAPEX types or incompatible existing configuration fail closed, without
+overwriting published history or changing session-owned data.
+
+Protected GET routes in Demo mode only:
+
+| Route | Content |
+|---|---|
+| /demo/dataset-versions | Owned Dataset page |
+| /demo/dataset-versions/:id | Owned Dataset detail |
+| /demo/dataset-versions/:id/calculation-jobs | Owned parent's Job page |
+| /demo/calculation-jobs/:id | Owned Job detail |
+| /demo/calculation-jobs/:id/execution-attempts | Owned parent's Attempt page |
+
+Use the session cookie, no mutation header. Supplied Origin must match; no
+credentialed CORS. All responses are no-store. Public statuses come only from
+PostgreSQL; GET never dispatches or queries fake state. Missing/foreign/invalid
+IDs share 404 DEMO_RESOURCE_UNAVAILABLE. Unavailable sessions return 401 and
+clear the cookie. Coordinator admission preserves 409 RESET_CONFLICT,
+429 DEMO_SESSION_QUEUE_FULL and 503 DEMO_RESET_OUTCOME_UNKNOWN.
+
+Lists return `{ items, nextCursor }`, with limit 20 by default, maximum 100.
+Dataset/Job sort by UUID ascending; Attempts by attemptNumber ascending.
+Pass returned cursors unchanged. Invalid/unsupported query fields return
+400 INVALID_REQUEST; detail endpoints accept no query fields. Parent ownership
+and a bounded page use one SQL statement, not separate inconsistent reads.
+Read admission shares Reset's existing coordinator; no second session lock.
+Full DTOs, pagination limits, seed compatibility, index review, environment
+instructions and PostgreSQL evidence: [Demo-02A](tasks/demo-02a-shared-seed-read-apis.md).
+Focused suite: `npm run test:demo-02a`; existing regression commands remain.
 
 Handled API errors use the flat envelope:
 
@@ -205,7 +242,7 @@ Requirements: Node.js 24+, npm, Docker/Compose and PostgreSQL (repository Compos
 
 The server binds port 3000 by default on 0.0.0.0; use it only in a trusted local development environment. Fake controls are not authenticated production controls. The factory rejects fake in production and fails closed without an explicit development/test environment or executor selection. There is no implemented real Airflow adapter to select.
 
-Calculation types and published dependency definitions must be configured in PostgreSQL before their corresponding workflows can succeed. There is no management API or general seed command for that configuration; the integration suites install their own fixtures. A fresh migrated database alone is not a preconfigured financial pipeline.
+Calculation types and published dependency definitions must be configured in PostgreSQL before their corresponding workflows can succeed. There is no management API or general-purpose financial seed. The explicit Demo-02A command above prepares only its minimal CAPEX configuration; integration suites install their own fixtures. A fresh migrated database alone is not a preconfigured financial pipeline.
 
 All six historical core migrations are retained, alongside the Demo 01A session migration. The v2 migration deliberately rejects unsafe/ambiguous legacy data and unsupported down conversions instead of discarding history. Do not edit applied migrations or delete/truncate a persistent developer database to bypass a migration guard.
 

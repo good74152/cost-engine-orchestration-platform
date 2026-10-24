@@ -8,6 +8,8 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "migrate": "node-pg-migrate -j ts",
+    "seed:demo-guided": "tsx scripts/seed-demo-guided-configuration.ts",
+    "test:demo-02a": "tsx --test scripts/demo-02a-seed-read-apis.pg.test.ts",
     "test:demo-session-infrastructure": "tsx --test scripts/demo-session-infrastructure.pg.test.ts",
     "test:demo-session-reset-recovery": "tsx --test scripts/demo-session-reset-recovery.pg.test.ts",
     "test:demo-session-ownership-executor-isolation": "tsx --test scripts/demo-session-ownership-executor-isolation.pg.test.ts",
