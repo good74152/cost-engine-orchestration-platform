@@ -285,3 +285,75 @@ lost HTTP response is modeled by not applying its cookie. This is not deployed
 TLS/browser/network-chaos testing. Startup fail-closed also uses a real child
 server process. No conflict with the accepted schema, core locking or executor
 contract was found. System Owner Code Review and any merge remain manual.
+
+## Code review correction — Company Code Collision Safety (2026-10-24)
+
+Baseline: merged commit d037fcfb14185ec773ee5503a60fc364b6f4d1aa;
+branch codex/demo-01b2-company-code-collision-fix. This is a bounded bug fix,
+not a new feature or architecture decision. Earlier verification above describes
+the original B2 implementation, not this subsequent correction.
+
+### Bug and repair
+
+Creation previously relied only on uniqueness within demo_sessions. A historical
+dataset_series could already use the same legal DEMO_ company code without a
+session row. Allocating that code would incorrectly claim its ownership; later
+Reset or inactive cleanup could delete historical data by company membership.
+
+The existing INSERT ... SELECT now includes WHERE NOT EXISTS against all
+dataset_series company codes, regardless of domain/year/period. The check and
+session insertion are one PostgreSQL statement. An empty RETURNING result means
+collision: consume one candidate and retry, without creating a session or
+returning that candidate's token/cookie. Keep the five-candidate limit and the
+existing unique constraints/retry for session ID, company code and token hash.
+Concurrent session allocations still converge through database uniqueness.
+Unexpected PostgreSQL failures remain sanitized, with no successful cookie or
+partially inserted session. Crypto generation, SHA-256, TTL, DTO and cookies stay
+unchanged. Cleanup/reset SQL, core locks, state machines and migrations do not change.
+
+### Safety boundary
+
+Only one Demo backend instance may write this Demo database, with no concurrent
+Core or external writer. A statement snapshot is not cross-table uniqueness:
+an arbitrary external writer could insert the same dataset company after the
+check. This fix does not claim protection against that unsupported race and
+adds no schema, locks, distributed coordination or production-security exception.
+Stronger guarantees outside this boundary require architecture review first.
+This prevents new colliding allocations; it does not relabel or automatically
+repair any already-overlapping historical/session data. Such data needs owner
+review, not guessed ownership or wider deletion.
+
+### Tests and pre-fix evidence
+
+Real disposable PostgreSQL tests add:
+
+- A: historical series using a valid DEMO_ code; first candidate rejected, second
+  accepted, only the successful token returned, rejected ID/code absent, history unchanged.
+- B: five historical collisions through the session HTTP route; sanitized 500,
+  no Set-Cookie, no inserted sessions, no token/hash/SQL details in response/logs,
+  historical rows unchanged.
+- C: original session company/ID/hash unique-collision retry/exhaustion tests retained.
+- D: original twenty concurrent HTTP creations retained; additionally force two
+  simultaneous services to propose the same company and verify one retries.
+- E: published historical DEMO_ dataset with a job, snapshot and terminal attempt;
+  colliding HTTP creation retries, new session builds real CAPEX/DPR executions,
+  Reset removes only its own graph and leaves the complete historical/shared
+  database state unchanged. The same historical fixture remains for later tests.
+
+Before the production fix, npm.cmd run test:demo-session-infrastructure exited 1:
+18 pass / 3 fail / 0 skip/cancelled/TODO. Two new assertions failed plus the parent:
+the first historical candidate was accepted (one call instead of two), and the
+exhaustion route returned 201 instead of 500. Normal owned teardown succeeded.
+An initial supplemental ES2022 script check also found test-only toSorted usage;
+it was replaced with a copied array sort, without changing assertions or targets.
+New execution evidence for this correction is recorded separately below.
+
+The first implementation's untyped comparison made PostgreSQL infer incompatible
+types for parameter $2 (42P08). That intermediate execution failed, not passed:
+infrastructure exit 1, 2 pass / 11 fail (later tests not reached); reset exit 1,
+0 pass / 22 fail; zero skips/cancellations/TODOs. A PREPARE-only diagnostic in an
+owned migrated disposable database confirmed the parse error without credentials.
+The comparison now explicitly casts $2 to varchar, matching the INSERT target
+without changing schema or candidate validation. Diagnostic and failed fixture
+databases were normally dropped. Both focused suites then passed (21 and 22);
+final clean-source verification below supersedes these intermediate executions.

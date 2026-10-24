@@ -1,16 +1,17 @@
 import 'dotenv/config';
 import assert from 'node:assert/strict';
-import { randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { setImmediate } from 'node:timers/promises';
 import test from 'node:test';
 import { Client, type Pool } from 'pg';
 import { runner } from 'node-pg-migrate';
-import type { FastifyInstance } from 'fastify';
+import Fastify, { type FastifyInstance } from 'fastify';
 import { DemoRuntime } from '../src/modules/demo-session/demo-runtime.js';
 import type { ResetOptions } from '../src/modules/demo-session/demo-session-reset.service.js';
-import { LOCAL_SESSION_COOKIE, SECURE_SESSION_COOKIE, type AuthenticatedDemoSession } from '../src/modules/demo-session/demo-session.service.js';
+import { DemoSessionService, LOCAL_SESSION_COOKIE, SECURE_SESSION_COOKIE, type AuthenticatedDemoSession } from '../src/modules/demo-session/demo-session.service.js';
+import { demoSessionRoutes } from '../src/modules/demo-session/demo-session.route.js';
 import { FakeExecutor } from '../src/executors/fake-executor.js';
 import type { DispatchCalculationCommand } from '../src/executors/calculation-executor.js';
 
@@ -160,6 +161,44 @@ test('Demo-01B-2: scoped reset and failure recovery on real PostgreSQL', { timeo
       'execution_dependency_definition_versions->calculation_types',
       'orchestration_v2_legacy_calculation_type_bridges->calculation_types', 'raw_ingestion_batches->raw_ingestion_series',
     ]);
+
+    await t.test('historical DEMO company collision retries through HTTP and Reset preserves the entire historical dataset', async () => {
+      const companyCode = `DEMO_${'A'.repeat(15)}`;
+      const seriesId = randomUUID(); const versionId = randomUUID(); const jobId = randomUUID();
+      await pool.query(`INSERT INTO dataset_series(id,domain,company_code,fiscal_year,period,last_allocated_version)
+        VALUES ($1,'CAPEX',$2,2020,'Q1',1)`, [seriesId, companyCode]);
+      await pool.query(`INSERT INTO dataset_versions(id,dataset_series_id,version,status,published_at)
+        VALUES ($1,$2,1,'PUBLISHED',now())`, [versionId, seriesId]);
+      await pool.query(`INSERT INTO calculation_jobs(id,output_dataset_version_id,calculation_type_id,
+        resolved_dependency_definition_version_id,status,started_at,finished_at)
+        SELECT $1,$2,ct.id,d.id,'SUCCEEDED',now(),now() FROM calculation_types ct
+        JOIN execution_dependency_definition_versions d ON d.calculation_type_id=ct.id
+        WHERE ct.domain='CAPEX' AND ct.code='SUMMARY' AND d.version=1`, [jobId, versionId]);
+      await pool.query('INSERT INTO dataset_build_snapshots(dataset_version_id) VALUES ($1)', [versionId]);
+      await pool.query(`INSERT INTO execution_attempts(calculation_job_id,attempt_number,status,airflow_dag_id,
+        airflow_dag_run_id,dispatch_started_at,accepted_at,finished_at)
+        VALUES ($1,1,'SUCCEEDED','historical_capex',$2,now(),now(),now())`, [jobId, `historical-${randomUUID()}`]);
+      const before = await dump(); delete before.sessions;
+      const beforeCount = (await pool.query('SELECT count(*)::int AS n FROM demo_sessions')).rows[0].n;
+      let calls = 0; const rejectedId = randomUUID();
+      const controlled = new DemoSessionService(pool, { candidate: () => ({
+        id: ++calls === 1 ? rejectedId : randomUUID(), token: randomBytes(32),
+        companyCode: calls === 1 ? companyCode : `DEMO_${'B'.repeat(15)}`,
+      }) });
+      const creationApp = Fastify({ logger: false }); apps.push(creationApp);
+      await creationApp.register(demoSessionRoutes(controlled, { nodeEnvironment: 'test', origin: 'https://demo.test' }));
+      const session = await newSession(creationApp);
+      assert.equal(calls, 2); assert.notEqual(session.context.companyCode, companyCode);
+      assert.equal((await pool.query('SELECT count(*)::int AS n FROM demo_sessions')).rows[0].n, beforeCount + 1);
+      assert.equal((await pool.query('SELECT id FROM demo_sessions WHERE id=$1 OR company_code=$2', [rejectedId, companyCode])).rowCount, 0);
+      await graph(session);
+      assert.equal((await owned(session)).attempts.length, 2);
+      const response = await reset(session); assert.equal(response.statusCode, 204); cleared(response);
+      assert.equal(await revoked(session), true); assert.equal((await owned(session)).series.length, 0);
+      const after = await dump(); delete after.sessions;
+      assert.deepEqual(after, before, 'Historical series/version/job/snapshot/attempt and all unrelated data remain byte-for-byte equal');
+      assert.equal((await pool.query('SELECT id FROM demo_sessions WHERE company_code=$1', [companyCode])).rowCount, 0);
+    });
 
     await t.test('full reset deletes interdependent v2 and DPR graph, allows idle RUNNING, preserves B/shared/history', async () => {
       const a = await newSession(); const b = await newSession(); await graph(a); const bData = await graph(b);
