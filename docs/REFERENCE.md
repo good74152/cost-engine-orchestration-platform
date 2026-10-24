@@ -210,6 +210,35 @@ Full DTOs, pagination limits, seed compatibility, index review, environment
 instructions and PostgreSQL evidence: [Demo-02A](tasks/demo-02a-shared-seed-read-apis.md).
 Focused suite: `npm run test:demo-02a`; existing regression commands remain.
 
+### Demo-02B Scenario APIs
+
+Demo-only POST /demo/scenarios accepts exactly {"scenarioType":"HAPPY_PATH"}
+with the existing cookie/CSRF policy. New creation returns 201 READY/0; same-type
+retry returns 200 and the unchanged original ID/progress/timestamps. Initial
+creation requires compatible Demo-02A config and no owner domain data. No auto
+seed or cleanup occurs on conflict. PostgreSQL UNIQUE(session_id) enforces one
+Scenario for the session lifetime. GET /demo/scenarios/current and
+GET /demo/scenarios/:id return only owned durable Scenario DTOs. Invalid/missing/
+foreign IDs share generic 404. DTO: scenarioId, scenarioType, status,
+completedStep, createdAt, updatedAt. No query fields or mutation header for GET.
+
+Create/Get use the existing coordinator. Guided sessions cannot use any manual
+Demo domain/fake mutation (409 DEMO_SCENARIO_MODE_CONFLICT); reads and Reset are
+still available, and other sessions/core behavior are unchanged. Reset includes
+Scenario deletion in its domain cleanup/revocation transaction. Unknown recovery
+checks Scenario presence as well as domain graph; inactive maintenance discovers
+Scenario-only owners. Old cookies still expire/revoke on restart, not recover
+fake execution from persisted progress.
+
+New conflicts: 409 DEMO_SCENARIO_CONFIGURATION_UNAVAILABLE,
+DEMO_SCENARIO_SESSION_NOT_EMPTY and DEMO_SCENARIO_TYPE_CONFLICT.
+503 DEMO_SCENARIO_CREATE_OUTCOME_UNKNOWN means retry Create; durable locking and
+lookup resolve same-row success or confirmed absence. Existing session/CSRF/
+resource/reset/queue errors and sanitized internal errors remain.
+No Next/step/history/progress execution API exists. Full transaction/error/model
+contracts and PostgreSQL evidence: [Demo-02B](tasks/demo-02b-scenario-persistence.md).
+Focused command: `npm run test:demo-02b`, alongside all Demo/milestone regressions.
+
 Handled API errors use the flat envelope:
 
 ```json
@@ -244,7 +273,7 @@ The server binds port 3000 by default on 0.0.0.0; use it only in a trusted local
 
 Calculation types and published dependency definitions must be configured in PostgreSQL before their corresponding workflows can succeed. There is no management API or general-purpose financial seed. The explicit Demo-02A command above prepares only its minimal CAPEX configuration; integration suites install their own fixtures. A fresh migrated database alone is not a preconfigured financial pipeline.
 
-All six historical core migrations are retained, alongside the Demo 01A session migration. The v2 migration deliberately rejects unsafe/ambiguous legacy data and unsupported down conversions instead of discarding history. Do not edit applied migrations or delete/truncate a persistent developer database to bypass a migration guard.
+All six historical core migrations are retained, alongside the Demo 01A session and Demo-02B Scenario migrations. Scenario down refuses retained Scenario data; only an empty table is reversible. The v2 migration deliberately rejects unsafe/ambiguous legacy data and unsupported down conversions instead of discarding history. Do not edit applied migrations or delete/truncate a persistent developer database to bypass a migration guard.
 
 ## Verification
 

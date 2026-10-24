@@ -655,3 +655,25 @@ consults FakeExecutor. Reset reservations block reads; admitted/queued reads
 block Reset under existing busy rules. No core lifecycle/lock, executor, session
 policy or historical migration changes. No Scenario Runner is implemented.
 See [Demo-02A contracts, compatibility, index review and evidence](tasks/demo-02a-shared-seed-read-apis.md).
+
+## 22. Demo Scenario Persistence and Mode Isolation
+
+Demo-02B adds one Scenario per durable session, enforced by UNIQUE(session_id),
+restrictive session FK and type/status/nonnegative completed-step checks.
+Only HAPPY_PATH is creatable, as READY/0. Create/Get share existing session
+authentication, cookie/Origin/CSRF rules and coordinator. Create locks and
+revalidates the session, returns an existing same-type Scenario idempotently,
+or checks compatible read-only configuration and an empty owner graph before
+inserting. It never seeds or changes progress. Unknown Create COMMIT is retried
+through the same session lock and durable lookup, not assumed rollback.
+
+Manual Demo domain/fake mutations reject guided sessions inside the existing
+queue. Their short session-lock admission ends before Domain services/executor
+work. Reads and Reset remain available. Reset deletes Scenario and domain data
+and revokes in its existing transaction. Recovery checks BOTH remaining graph
+and Scenario after the durable session lock; maintenance includes Scenario-only
+inactive owners. Startup still invalidates old credentials without recreating
+fake state. No core lifecycle/lock/executor or applied migration changes.
+No Step Runner, progress API or Step idempotency is implemented.
+See [ADR-0011](adr/0011-demo-scenario-persistence-and-mode-isolation.md) and
+[Demo-02B contracts and evidence](tasks/demo-02b-scenario-persistence.md).
