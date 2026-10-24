@@ -187,8 +187,103 @@ npm run test:milestone
 git diff --check
 ```
 
-Executed revision, results and earlier development failures will be recorded
-after final verification. Do not treat this command inventory as execution proof.
+### Executed results — 2026-10-24 (Asia/Taipei)
+
+All final commands below ran on clean implementation commit
+`818c1997aae9f25a5b3858121a0e795c4f0198d9`, tree
+`f49ae67c863e5cd9e0a8e6e0039e83cb0d497ab5`. The later evidence commit changes
+only this document. Environment: Windows PowerShell, Node 24.18.0, npm 11.16.0,
+repository Compose PostgreSQL 18.6 (Debian 18.6-1.pgdg13+2).
+`docker compose up -d postgres_db` exited 0; the existing service was running.
+
+The actual Windows commands use npm.cmd. Counts include Node parent/nested test
+entries. Every test row has zero failures, skips, cancellations and TODOs.
+
+| Command | Exit | Pass | Fail | Skip |
+|---|---:|---:|---:|---:|
+| npm.cmd run build | 0 | n/a | n/a | n/a |
+| npm.cmd run test:demo-02a | 0 | 23 | 0 | 0 |
+| npm.cmd run test:demo-session-infrastructure | 0 | 21 | 0 | 0 |
+| npm.cmd run test:demo-session-ownership-executor-isolation | 0 | 19 | 0 | 0 |
+| npm.cmd run test:demo-session-reset-recovery | 0 | 22 | 0 | 0 |
+| npm.cmd run test:milestone | 0 | 246 | 0 | 0 |
+| git diff --check | 0 | n/a | n/a | n/a |
+| git diff 2c44809..HEAD --check | 0 | n/a | n/a | n/a |
+
+Supplemental script type checking also exited 0:
+
+```powershell
+npm.cmd exec -- tsc --ignoreConfig --noEmit --strict --skipLibCheck --esModuleInterop --module NodeNext --target ES2022 scripts/demo-02a-seed-read-apis.pg.test.ts scripts/seed-demo-guided-configuration.ts
+```
+
+The unchanged milestone's actual child results (npm commands are launched by
+the runner, including its isolated raw-ingestion launcher):
+
+| Child command | Exit | Pass | Fail | Skip |
+|---|---:|---:|---:|---:|
+| npm run build | 0 | n/a | n/a | n/a |
+| npm run test:milestone-runner | 0 | 20 | 0 | 0 |
+| npm run test:orchestration-schema-v2 | 0 | 30 | 0 | 0 |
+| npm run test:dataset-version-creation-v2 | 0 | 14 | 0 | 0 |
+| npm run test:first-run-immutable-build-snapshot | 0 | 19 | 0 | 0 |
+| npm run test:execution-attempt-dispatch-fake-executor | 0 | 11 | 0 | 0 |
+| npm run test:executor-reconciliation | 0 | 22 | 0 | 0 |
+| npm run test:dataset-version-terminal-lifecycle | 0 | 64 | 0 | 0 |
+| npm run test:cross-workflow-concurrency-investigation | 0 | 14 | 0 | 0 |
+| npm run test:task-007b1-late-dispatch-reconciliation | 0 | 32 | 0 | 0 |
+| npm run test:task-007c-api-contract | 0 | 12 | 0 | 0 |
+| npm run test:raw-ingestion (owned disposable DB only) | 0 | 1 | 0 | 0 |
+| npm run test:task-007d-end-to-end | 0 | 7 | 0 | 0 |
+
+All 13 milestone commands reported PASS, exit 0, null signal/spawnError and no
+gate issues. CON-01/CON-02 remain green. Raw ingestion was not run against a
+persistent developer database. No existing test or milestone gate was weakened.
+
+Final Demo fixture teardown evidence:
+
+| Suite | Owned DB | Final sessions | Normal DROP |
+|---|---|---:|---|
+| 02A | demo_02a_test_9084_306feb1c15cb | 0 | yes |
+| 01A | demo_01a_test_39720_8393837894cf | 0 | yes |
+| 01B-1 | demo_01b1_test_29936_0ce7ee54dfc9 | 0 | yes |
+| 01B-2 | demo_01b2_test_39552_4470c51cb397 | 0 | yes |
+
+Each Demo fixture applied all seven migrations; no migration changed. The new
+suite's real query plans showed a small company-filtered series scan, the
+existing job/version index plus a small sort, and an ordered Attempt range scan
+on uq_execution_attempt_job_number. These are local-workload observations, not
+large-volume performance proof. After all gates, pg_database contained only
+postgres, template0, template1 and the pre-existing testdb. pg_stat_activity
+contained only the single maintenance verification connection; no fixture DB
+or fixture backend remained. No forced cleanup was needed.
+
+Local full logs are in the executing machine's temporary directory:
+demo02a-final-build.log, demo02a-final-test-demo-02a.log,
+demo02a-final-test-demo-session-infrastructure.log,
+demo02a-final-test-demo-session-ownership-executor-isolation.log,
+demo02a-final-test-demo-session-reset-recovery.log and
+demo02a-final-test-milestone.log. They are not committed or CI results.
+
+### Earlier development results and warnings
+
+Before the implementation commit, the first build exited 1 on a TypeScript
+generic inference error in the Dataset/Job detail route. An async callback fixed
+the union result type. The first supplemental type check exited 1 on the test
+environment override type; NodeJS.ProcessEnv fixed it.
+
+The first PostgreSQL 02A run exited 1: 18 pass, 2 fail, zero skip/cancel/TODO
+(one failed child plus its parent). Its core-mode negative test accidentally
+retained APP_MODE=demo, correctly triggering the existing conflicting-mode guard.
+The fixture now temporarily clears that environment value and restores it;
+no production guard was relaxed. Normal owned teardown succeeded even on red.
+The next expanded run passed 21/21, and the final expanded suite passed 23/23.
+These earlier results are not after-fix regressions or substituted PASS evidence.
+
+No runtime/build/deprecation warnings were found in the final verification logs.
+Git staging emitted its normal local LF-to-CRLF conversion notices for six new
+files; diff whitespace checks still passed. No architecture conflict was found.
+Core lifecycle/First Run/dispatch/reconciliation, session allocation/collision
+protection, Reset/coordinator and executor implementations remain unchanged.
 
 ## Limits and review
 
