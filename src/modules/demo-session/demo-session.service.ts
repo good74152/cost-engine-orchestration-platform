@@ -70,10 +70,16 @@ export class DemoSessionService {
           `WITH instant AS (SELECT date_trunc('milliseconds', clock_timestamp()) AS now)
            INSERT INTO demo_sessions (id, company_code, token_hash, created_at, expires_at)
            SELECT $1, $2, $3, now, now + INTERVAL '4 hours' FROM instant
+           WHERE NOT EXISTS (SELECT 1 FROM dataset_series WHERE company_code = $2::varchar)
            RETURNING id, company_code, expires_at`,
           [candidate.id, candidate.companyCode, hash],
         );
-        return { session: this.context(result.rows[0]!), token: candidate.token.toString('base64url') };
+        // Existing datasets must never become owned by a newly allocated session.
+        // Session collisions still use the unique-constraint retry below. This
+        // statement assumes the approved single Demo backend/no external writer.
+        const row = result.rows[0];
+        if (!row) continue;
+        return { session: this.context(row), token: candidate.token.toString('base64url') };
       } catch (error: unknown) {
         const pg = error as { code?: string; constraint?: string } | null;
         if (pg?.code === '23505' && [

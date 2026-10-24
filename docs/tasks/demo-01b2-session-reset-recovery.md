@@ -285,3 +285,181 @@ lost HTTP response is modeled by not applying its cookie. This is not deployed
 TLS/browser/network-chaos testing. Startup fail-closed also uses a real child
 server process. No conflict with the accepted schema, core locking or executor
 contract was found. System Owner Code Review and any merge remain manual.
+
+## Code review correction — Company Code Collision Safety (2026-10-24)
+
+Baseline: merged commit d037fcfb14185ec773ee5503a60fc364b6f4d1aa;
+branch codex/demo-01b2-company-code-collision-fix. This is a bounded bug fix,
+not a new feature or architecture decision. Earlier verification above describes
+the original B2 implementation, not this subsequent correction.
+
+### Bug and repair
+
+Creation previously relied only on uniqueness within demo_sessions. A historical
+dataset_series could already use the same legal DEMO_ company code without a
+session row. Allocating that code would incorrectly claim its ownership; later
+Reset or inactive cleanup could delete historical data by company membership.
+
+The existing INSERT ... SELECT now includes WHERE NOT EXISTS against all
+dataset_series company codes, regardless of domain/year/period. The check and
+session insertion are one PostgreSQL statement. An empty RETURNING result means
+collision: consume one candidate and retry, without creating a session or
+returning that candidate's token/cookie. Keep the five-candidate limit and the
+existing unique constraints/retry for session ID, company code and token hash.
+Concurrent session allocations still converge through database uniqueness.
+Unexpected PostgreSQL failures remain sanitized, with no successful cookie or
+partially inserted session. Crypto generation, SHA-256, TTL, DTO and cookies stay
+unchanged. Cleanup/reset SQL, core locks, state machines and migrations do not change.
+
+### Safety boundary
+
+Only one Demo backend instance may write this Demo database, with no concurrent
+Core or external writer. A statement snapshot is not cross-table uniqueness:
+an arbitrary external writer could insert the same dataset company after the
+check. This fix does not claim protection against that unsupported race and
+adds no schema, locks, distributed coordination or production-security exception.
+Stronger guarantees outside this boundary require architecture review first.
+This prevents new colliding allocations; it does not relabel or automatically
+repair any already-overlapping historical/session data. Such data needs owner
+review, not guessed ownership or wider deletion.
+
+### Tests and pre-fix evidence
+
+Real disposable PostgreSQL tests add:
+
+- A: historical series using a valid DEMO_ code; first candidate rejected, second
+  accepted, only the successful token returned, rejected ID/code absent, history unchanged.
+- B: five historical collisions through the session HTTP route; sanitized 500,
+  no Set-Cookie, no inserted sessions, no token/hash/SQL details in response/logs,
+  historical rows unchanged.
+- C: original session company/ID/hash unique-collision retry/exhaustion tests retained.
+- D: original twenty concurrent HTTP creations retained; additionally force two
+  simultaneous services to propose the same company and verify one retries.
+- E: published historical DEMO_ dataset with a job, snapshot and terminal attempt;
+  colliding HTTP creation retries, new session builds real CAPEX/DPR executions,
+  Reset removes only its own graph and leaves the complete historical/shared
+  database state unchanged. The same historical fixture remains for later tests.
+
+Before the production fix, npm.cmd run test:demo-session-infrastructure exited 1:
+18 pass / 3 fail / 0 skip/cancelled/TODO. Two new assertions failed plus the parent:
+the first historical candidate was accepted (one call instead of two), and the
+exhaustion route returned 201 instead of 500. Normal owned teardown succeeded.
+An initial supplemental ES2022 script check also found test-only toSorted usage;
+it was replaced with a copied array sort, without changing assertions or targets.
+New execution evidence for this correction is recorded separately below.
+
+The first implementation's untyped comparison made PostgreSQL infer incompatible
+types for parameter $2 (42P08). That intermediate execution failed, not passed:
+infrastructure exit 1, 2 pass / 11 fail (later tests not reached); reset exit 1,
+0 pass / 22 fail; zero skips/cancellations/TODOs. A PREPARE-only diagnostic in an
+owned migrated disposable database confirmed the parse error without credentials.
+The comparison now explicitly casts $2 to varchar, matching the INSERT target
+without changing schema or candidate validation. Diagnostic and failed fixture
+databases were normally dropped. Both focused suites then passed (21 and 22);
+final clean-source verification below supersedes these intermediate executions.
+
+### Final correction verification — 2026-10-24 (Asia/Taipei)
+
+Runtime-tested source: 6d7c57431ae665b2d2a0059bac9054a211ef2a46.
+Exact tested tree: cfa0870e6c7c3d0b8e0afcae476da2a0a1fcc1cf.
+The working tree was clean throughout the final commands below. The later
+evidence-only documentation commit is not a separately runtime-tested source.
+Environment: Windows, Node.js v24.18.0, npm 11.16.0, PostgreSQL 18.6
+(Debian 18.6-1.pgdg13+2), existing Compose postgres_db/test_postgres service.
+No dependency or infrastructure change. Private test URLs were not printed.
+
+| Exact command | Exit | Pass | Fail | Skip | Cancelled | TODO |
+|---|---:|---:|---:|---:|---:|---:|
+| npm.cmd run build | 0 | n/a | n/a | n/a | n/a | n/a |
+| npm.cmd run test:demo-session-infrastructure | 0 | 21 | 0 | 0 | 0 | 0 |
+| npm.cmd run test:demo-session-ownership-executor-isolation | 0 | 19 | 0 | 0 | 0 | 0 |
+| npm.cmd run test:demo-session-reset-recovery | 0 | 22 | 0 | 0 | 0 | 0 |
+| npm.cmd run test:milestone | 0 | 246 | 0 | 0 | 0 | 0 |
+| git diff --check | 0 | n/a | n/a | n/a | n/a | n/a |
+| git diff --check d037fcfb14185ec773ee5503a60fc364b6f4d1aa | 0 | n/a | n/a | n/a | n/a | n/a |
+
+Supplemental strict script check: exit 0, no diagnostics, counters n/a:
+
+```powershell
+npm.cmd exec -- tsc --ignoreConfig --noEmit --strict --skipLibCheck --esModuleInterop --module NodeNext --target ES2022 scripts/demo-session-infrastructure.pg.test.ts scripts/demo-session-reset-recovery.pg.test.ts
+```
+
+All thirteen milestone children ran. Every child exited 0, status PASS,
+signal/spawnError null, issues empty; every test child's fail/skip/cancelled/TODO
+was 0. The runner, scripts and core assertions were not changed for this correction.
+
+| Child npm run command | Pass |
+|---|---:|
+| build | n/a |
+| test:milestone-runner | 20 |
+| test:orchestration-schema-v2 | 30 |
+| test:dataset-version-creation-v2 | 14 |
+| test:first-run-immutable-build-snapshot | 19 |
+| test:execution-attempt-dispatch-fake-executor | 11 |
+| test:executor-reconciliation | 22 |
+| test:dataset-version-terminal-lifecycle | 64 |
+| test:cross-workflow-concurrency-investigation | 14 |
+| test:task-007b1-late-dispatch-reconciliation | 32 |
+| test:task-007c-api-contract | 12 |
+| test:raw-ingestion (existing owned isolated launcher) | 1 |
+| test:task-007d-end-to-end | 7 |
+
+Tests A–E above are green, including the two formerly red historical collision
+assertions, original company/ID/hash uniqueness tests, twenty HTTP creations,
+forced two-session collision and HTTP creation/Run/Reset preservation of the
+historical graph. Existing unexpected PostgreSQL-error sanitization, rollback,
+cookie/TTL/hash/DTO and production-safety regressions pass unchanged. CON-01 and
+CON-02 are green. Counts include parents: infrastructure is 20 subtests + parent;
+ownership/isolation 18 + parent; reset/recovery 21 + parent. Not unique-test counts
+across repeated suites. No failed intermediate execution is called PASS here.
+
+Final disposable Demo databases were migrated through all seven migrations and
+normally dropped after zero-connection checks (forced=false):
+
+- demo_01a_test_9900_90835649632b.
+- demo_01b1_test_3084_68b8b409a2b8.
+- demo_01b2_test_35116_e42c75cd2d6a.
+
+Milestone teardown also confirmed normal DROP for terminal lifecycle
+dataset_lifecycle_test_30040_10fc5605628c (ten closed clients), late dispatch
+late_dispatch_test_21832_547da97a3892 (seven clients), and API contracts
+task_007c_test_2096_df8aae4190bb; sessions=[] for each. The isolated launcher
+dropped raw_milestone_test_25536_7f3542a2bf01; E2E dropped
+task_007d_e2e_13072_f6662a9d4f45. Pre/post read-only inventory matched exactly:
+postgres, template0, template1, testdb. No fixture connection remained. No
+persistent developer database/schema/history was modified. The local service
+role had CREATEDB=true/SUPERUSER=true; validated owned targets, not role sandboxing,
+provided the test boundary. Do not use a production connection source.
+
+The complete correction diff was reviewed: only these four files changed:
+
+- src/modules/demo-session/demo-session.service.ts — single-statement guard and empty-result retry.
+- scripts/demo-session-infrastructure.pg.test.ts — A/B plus forced concurrent collision; C/D retained.
+- scripts/demo-session-reset-recovery.pg.test.ts — historical full-graph Reset safety test E.
+- docs/tasks/demo-01b2-session-reset-recovery.md — bounded correction and new evidence.
+
+This scope check exited 0 with an empty diff on the tested source:
+
+```powershell
+git diff --exit-code d037fcfb14185ec773ee5503a60fc364b6f4d1aa -- . ':!src/modules/demo-session/demo-session.service.ts' ':!scripts/demo-session-infrastructure.pg.test.ts' ':!scripts/demo-session-reset-recovery.pg.test.ts' ':!docs/tasks/demo-01b2-session-reset-recovery.md'
+```
+
+Thus applied migrations, cleanup/reset services, state machines, canonical
+identity, transaction/lock order, executor contract, security checks, dependencies
+and ADRs remain unchanged. No TRUNCATE/CASCADE or historical-data repair was added.
+No accepted-architecture conflict was found inside the stated single-writer limit.
+
+Warnings: intermediate red/typing failures are recorded above, separately from
+the final pass. Final build/tests emitted no unexpected runtime/compiler warnings,
+skip/cancellation/TODO or teardown failure. Git emitted informational LF-to-CRLF
+guidance; diff checks passed. The existing remote alias may emit a moved-repository
+notice on push. Full final stdout is retained locally in temporary
+demo-collision-verified-*.log files, without credentials.
+
+PR #24 was already merged as d037fcf before this correction. Its metadata may be
+updated with these findings and the correction branch reference, but that cannot
+change its historical merge or incorporate this fix into main. Do not reopen,
+rewrite the merge or automatically merge anything. This branch is submitted for
+owner review; integrating it requires a separate authorized PR/workflow. No new
+PR is created by this correction's delivery. Single-instance/no external writer
+and the existing browser/network-test limitations still apply.

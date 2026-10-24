@@ -242,6 +242,70 @@ test('Demo 01A: real PostgreSQL session foundation, not protected Domain APIs',
         assert.equal(calls, 5); assert.equal(await count(), before);
       });
 
+      await t.test('historical DEMO company collision skips the first candidate without claiming historical data', async () => {
+        const companyCode = `DEMO_${'A'.repeat(15)}`;
+        await pool.query(`INSERT INTO dataset_series
+          (id,domain,company_code,fiscal_year,period,last_allocated_version)
+          VALUES ($1,'CAPEX',$2,2020,'Q1',0)`, [randomUUID(), companyCode]);
+        const beforeHistory = await history(); const before = await count();
+        const candidates = [
+          { id: randomUUID(), token: randomBytes(32), companyCode },
+          { id: randomUUID(), token: randomBytes(32), companyCode: `DEMO_${'B'.repeat(15)}` },
+        ];
+        let calls = 0;
+        const controlled = new DemoSessionService(pool, { candidate: () => candidates[calls++]! });
+        const created = await controlled.create();
+        assert.equal(calls, 2); assert.equal(created.session.companyCode, candidates[1]!.companyCode);
+        assert.ok(created.token === candidates[1]!.token.toString('base64url'), 'Return only the accepted candidate token');
+        assert.equal(await count(), before + 1);
+        assert.equal((await pool.query('SELECT id FROM demo_sessions WHERE id=$1 OR company_code=$2',
+          [candidates[0]!.id, companyCode])).rowCount, 0);
+        assert.deepEqual(await history(), beforeHistory);
+      });
+
+      await t.test('five historical company collisions exhaust safely without cookie, session or credential details', async () => {
+        const companyCode = `DEMO_${'C'.repeat(15)}`;
+        await pool.query(`INSERT INTO dataset_series
+          (id,domain,company_code,fiscal_year,period,last_allocated_version)
+          VALUES ($1,'CAPEX',$2,2020,'Q1',0)`, [randomUUID(), companyCode]);
+        const beforeHistory = await history(); const before = await count();
+        const candidates: { id: string; token: Buffer; companyCode: string }[] = [];
+        const controlled = new DemoSessionService(pool, { candidate: () => {
+          const candidate = { id: randomUUID(), token: randomBytes(32), companyCode };
+          candidates.push(candidate); return candidate;
+        } });
+        const log: string[] = [];
+        const target = Fastify({ logger: { stream: new Writable({ write(chunk, _encoding, done) {
+          log.push(String(chunk)); done();
+        } }), redact: ['req.headers.cookie', 'res.headers["set-cookie"]'] } }); apps.push(target);
+        await target.register(demoSessionRoutes(controlled, { nodeEnvironment: 'test' }));
+        const response = await post(undefined, target);
+        expectError(response, 500, 'INTERNAL_SERVER_ERROR');
+        assert.equal(candidates.length, 5); assert.equal(response.headers['set-cookie'], undefined);
+        assert.equal(await count(), before); assert.deepEqual(await history(), beforeHistory);
+        const output = response.body + log.join('');
+        assert.doesNotMatch(output, /token_hash|constraint|SELECT |INSERT |postgresql:\/\//i);
+        for (const candidate of candidates) {
+          assert.ok(!output.includes(candidate.token.toString('base64url')), 'No candidate token in response/log');
+          assert.ok(!output.includes(createHash('sha256').update(candidate.token).digest('hex')), 'No token hash in response/log');
+        }
+      });
+
+      await t.test('simultaneous sessions with the same candidate company retry through PostgreSQL uniqueness', async () => {
+        const companyCode = `DEMO_${'D'.repeat(15)}`;
+        const calls = [0, 0]; const before = await count(); const beforeHistory = await history();
+        const creators = [0, 1].map((index) => new DemoSessionService(pool, { candidate: () => {
+          calls[index] = calls[index]! + 1;
+          return { id: randomUUID(), token: randomBytes(32),
+            companyCode: calls[index] === 1 ? companyCode : `DEMO_${index === 0 ? 'E'.repeat(15) : 'F'.repeat(15)}` };
+        } }));
+        const created = await Promise.all(creators.map((creator) => creator.create()));
+        assert.equal(new Set(created.map((row) => row.session.companyCode)).size, 2);
+        assert.deepEqual([...calls].sort((left, right) => left - right), [1, 2]); assert.equal(await count(), before + 2);
+        assert.equal((await pool.query('SELECT id FROM demo_sessions WHERE company_code=$1', [companyCode])).rowCount, 1);
+        assert.deepEqual(await history(), beforeHistory);
+      });
+
       await t.test('PostgreSQL rejects invalid hash, expiry, code, nulls and duplicate writes', async () => {
         const existing = await sessions.create();
         const query = `INSERT INTO demo_sessions (id, company_code, token_hash, created_at, expires_at)
