@@ -156,6 +156,122 @@ npm run test:milestone
 git diff --check
 ```
 
-Final revision, actual counts, warnings and teardown evidence are recorded below
-after execution. Unexecuted commands are not PASS. System Owner review is required;
-do not automatically approve or merge.
+### Executed verification — 2026-10-25 (Asia/Taipei)
+
+All final commands ran sequentially on clean implementation commit
+89e59216ec97b0d53c70fa4e3bbaae8a30f4dba2, tree
+a54be102e74599a647071ea78e38ec443a769689. The following evidence-only commit
+changes this document, not the tested implementation/migration/test sources.
+Windows PowerShell; Node 24.18.0; npm 11.16.0; Compose PostgreSQL 18.6
+(Debian 18.6-1.pgdg13+2). docker compose up -d postgres_db exited 0.
+
+| Exact command | Exit | Pass | Fail | Skip |
+|---|---:|---:|---:|---:|
+| npm.cmd run build | 0 | n/a | n/a | n/a |
+| npm.cmd run test:demo-02c | 0 | 27 | 0 | 0 |
+| npm.cmd run test:demo-02b | 0 | 26 | 0 | 0 |
+| npm.cmd run test:demo-02a | 0 | 23 | 0 | 0 |
+| npm.cmd run test:demo-session-infrastructure | 0 | 21 | 0 | 0 |
+| npm.cmd run test:demo-session-ownership-executor-isolation | 0 | 19 | 0 | 0 |
+| npm.cmd run test:demo-session-reset-recovery | 0 | 22 | 0 | 0 |
+| npm.cmd run test:milestone | 0 | 246 | 0 | 0 |
+| git diff --check | 0 | n/a | n/a | n/a |
+| git diff 876d030..HEAD --check | 0 | n/a | n/a | n/a |
+
+All cancellations and TODOs are zero. Counts include Node parent/nested entries,
+not just individual assertions. Total: 138 Demo entries plus 246 milestone entries.
+Supplemental strict type checking of the new test and migration exited 0:
+
+```powershell
+npm.cmd exec -- tsc --ignoreConfig --noEmit --strict --skipLibCheck --esModuleInterop --module NodeNext --target ES2022 scripts/demo-02c-happy-path.pg.test.ts migrations/1792900000000_demo-scenario-step-executions.ts
+```
+
+The unchanged milestone launched these commands. Each test had zero fail, skip,
+cancel and TODO; every child had null signal/spawnError and no gate issues:
+
+| Child command | Exit | Pass | Fail | Skip |
+|---|---:|---:|---:|---:|
+| npm run build | 0 | n/a | n/a | n/a |
+| npm run test:milestone-runner | 0 | 20 | 0 | 0 |
+| npm run test:orchestration-schema-v2 | 0 | 30 | 0 | 0 |
+| npm run test:dataset-version-creation-v2 | 0 | 14 | 0 | 0 |
+| npm run test:first-run-immutable-build-snapshot | 0 | 19 | 0 | 0 |
+| npm run test:execution-attempt-dispatch-fake-executor | 0 | 11 | 0 | 0 |
+| npm run test:executor-reconciliation | 0 | 22 | 0 | 0 |
+| npm run test:dataset-version-terminal-lifecycle | 0 | 64 | 0 | 0 |
+| npm run test:cross-workflow-concurrency-investigation | 0 | 14 | 0 | 0 |
+| npm run test:task-007b1-late-dispatch-reconciliation | 0 | 32 | 0 | 0 |
+| npm run test:task-007c-api-contract | 0 | 12 | 0 | 0 |
+| npm run test:raw-ingestion (owned disposable PostgreSQL database) | 0 | 1 | 0 | 0 |
+| npm run test:task-007d-end-to-end | 0 | 7 | 0 | 0 |
+
+All 13 milestone commands PASS. CON-01/CON-02 and E2E Flow A–F are green.
+Raw ingestion used only the isolated launcher. No milestone gate was weakened.
+
+Final Demo fixture teardown (each applied all nine migrations):
+
+| Suite | Owned DB | Final backends | Normal DROP |
+|---|---|---:|---|
+| 02C | demo_02c_test_17956_80fbb99c6672 | 0 | yes |
+| 02B | demo_02b_test_38784_1507116447b9 | 0 | yes |
+| 02A | demo_02a_test_9068_b213026134f0 | 0 | yes |
+| 01A | demo_01a_test_36100_54d676c11717 | 0 | yes |
+| 01B-1 | demo_01b1_test_28964_171446bbf99f | 0 | yes |
+| 01B-2 | demo_01b2_test_256_932923e960e1 | 0 | yes |
+
+After every gate completed, pg_database contained only postgres, template0,
+template1 and the pre-existing testdb. pg_stat_activity contained only the audit
+connection to postgres. No fixture database/backend remained. Final verification
+needed no forced cleanup, TRUNCATE or CASCADE. Empty ledger down/up, preservation
+of a pre-ledger Scenario and atomic refusal of populated down ran in the new
+suite. Existing Session/Scenario rollback guards also remain green.
+
+Machine-local logs are in the executing machine's temporary directory:
+demo02c-final-build.log, demo02c-final-test-demo-02c.log,
+demo02c-final-test-demo-02b.log, demo02c-final-test-demo-02a.log,
+demo02c-final-test-demo-session-infrastructure.log,
+demo02c-final-test-demo-session-ownership-executor-isolation.log,
+demo02c-final-test-demo-session-reset-recovery.log and
+demo02c-final-test-milestone.log. These are executed local results, not claims
+about GitHub CI. Credentials/raw logs are not committed.
+
+### Development failures and warnings — not final results
+
+The first build exposed TS18048 on an optional attempt; an explicit existence
+guard fixed it. Docker was initially stopped; Docker Desktop and the existing
+Compose service were started before PostgreSQL verification. No new service.
+
+The first draft 02C run exited 1 (0 pass, 2 fail, zero skip/cancel/TODO). Static
+imports from DemoRuntime initialized the core global pool before the fixture
+selected its disposable database. It read the source testdb's six migrations and
+then inadvertently seeded two shared configuration rows there. This was a test
+isolation defect, not valid verification evidence. No dataset/job/session data
+was created there. Read-only inspection identified exactly the newly created
+type/definition by UUID, identical microsecond creation time and absence of job
+references. A guarded transaction removed only those two rows; the first guard
+using millisecond precision correctly refused without changing anything, then
+the exact microsecond guard succeeded. No historical/domain/session rows were
+removed. Domain service loading is now lazy, and the new fixture verifies
+current_database before any seed/fixture write. All final tests used only their
+owned disposable databases. This incident is disclosed, not presented as PASS.
+
+The next two runs exited 1 (3 pass, 23 fail each). The new ledger trigger wrongly
+required resource IDs in Step 1's pre-creation intent while completing the step.
+It now distinguishes the frozen canonical intent from the bound completion
+result. A later draft run was stopped after a fixture barrier self-wait (15 pass,
+3 fail reported, zero skip/cancel/TODO). It also exposed a fault-client URL-port
+override mistake and a fixture INSERT missing its required UUID. Those fixtures
+were corrected. The stopped process's explicitly identified owned disposable DB
+was normally dropped after verifying zero backends; no DROP FORCE was used.
+The next two complete runs passed 26/26; the expanded settled-write recovery suite
+and pre-final run passed 27/27. Only the final clean-revision table above is the
+release evidence; earlier red results are retained here rather than hidden.
+
+No runtime/build/deprecation warnings occur in the final logs. Git emitted local
+LF-to-CRLF staging notices; both whitespace checks still passed. No accepted
+architecture conflict was found. Applied migrations, core lifecycle/First Run/
+dispatch/reconciliation/executor implementations, 02A seed, token/cookie/company
+collision policies, and the session coordinator implementation have no diff.
+Only the new ledger migration is added. New UI/other scenarios/background or
+real Airflow work is absent. System Owner review is required; no automatic
+approval or merge.
