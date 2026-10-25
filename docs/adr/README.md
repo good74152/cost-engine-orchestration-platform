@@ -27,6 +27,7 @@ If a decision changes materially, prefer a new ADR that supersedes the old one i
 - [ADR-0009 — Demo Session API and Executor Boundary](0009-demo-session-api-and-executor-boundary.md)
 - [ADR-0010 — Demo Session Reset and Recovery](0010-demo-session-reset-and-recovery.md)
 - [ADR-0011 — Demo Scenario Persistence and Mode Isolation](0011-demo-scenario-persistence-and-mode-isolation.md)
+- [ADR-0012 — Guided Scenario Step Idempotency and Recovery](0012-demo-scenario-step-idempotency.md)
 
 ## Truth Boundary
 

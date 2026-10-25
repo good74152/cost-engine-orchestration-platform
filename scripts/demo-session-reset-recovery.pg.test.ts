@@ -154,7 +154,8 @@ test('Demo-01B-2: scoped reset and failure recovery on real PostgreSQL', { timeo
       'calculation_jobs->execution_dependency_definition_versions',
       'dataset_build_snapshot_dependencies->dataset_build_snapshots',
       'dataset_build_snapshot_dependencies->dataset_versions', 'dataset_build_snapshots->dataset_versions',
-      'dataset_versions->dataset_series', 'demo_scenario_instances->demo_sessions', 'dpr_calculation_inputs->assets',
+      'dataset_versions->dataset_series', 'demo_scenario_instances->demo_sessions',
+      'demo_scenario_step_executions->demo_scenario_instances', 'dpr_calculation_inputs->assets',
       'dpr_calculation_inputs->dpr_calculation_input_snapshots', 'dpr_calculation_input_snapshots->calculation_jobs',
       'dpr_results->dataset_versions', 'execution_attempts->calculation_jobs',
       'execution_dependency_definition_dependencies->execution_dependency_definition_versions',
@@ -511,7 +512,7 @@ test('Demo-01B-2: scoped reset and failure recovery on real PostgreSQL', { timeo
       assert.equal((await pool.query('SELECT count(*)::int AS n FROM assets')).rows[0].n, 1);
       assert.equal((await pool.query('SELECT count(*)::int AS n FROM raw_dpr')).rows[0].n, 1);
       assert.equal((await pool.query('SELECT count(*)::int AS n FROM calculation_types')).rows[0].n, 2);
-      assert.equal((await pool.query('SELECT count(*)::int AS n FROM pgmigrations')).rows[0].n, 8);
+      assert.equal((await pool.query('SELECT count(*)::int AS n FROM pgmigrations')).rows[0].n, 9);
     });
   } finally {
     try { await Promise.all(apps.map((app) => app.close())); if (db) { await db.end(); await Promise.all(ends); } }

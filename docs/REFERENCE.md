@@ -235,9 +235,29 @@ DEMO_SCENARIO_SESSION_NOT_EMPTY and DEMO_SCENARIO_TYPE_CONFLICT.
 503 DEMO_SCENARIO_CREATE_OUTCOME_UNKNOWN means retry Create; durable locking and
 lookup resolve same-row success or confirmed absence. Existing session/CSRF/
 resource/reset/queue errors and sanitized internal errors remain.
-No Next/step/history/progress execution API exists. Full transaction/error/model
+Demo-02B alone adds no step execution; Demo-02C below supplies Next. Full transaction/error/model
 contracts and PostgreSQL evidence: [Demo-02B](tasks/demo-02b-scenario-persistence.md).
 Focused command: `npm run test:demo-02b`, alongside all Demo/milestone regressions.
+
+### Demo-02C Happy Path Next
+
+Demo-only POST /demo/scenarios/:id/next accepts exactly expectedStep (integer
+1–6) and requestId (UUID), using the same cookie/CSRF/Origin/coordinator. It runs
+one explicit HAPPY_PATH step. 200 returns the original stored COMPLETED response;
+unconfirmed dispatch is 202 PENDING with the same attempt. No caller resource or
+executor selectors. GET /demo/scenarios/:id/pending-step returns only the pending
+stepNumber/requestId or null, from PostgreSQL without writes/fake access. Existing
+Scenario GET DTOs and guided manual-write blocking are unchanged.
+
+Same request replays its original result even after later steps. Different request
+or wrong order: 409 DEMO_SCENARIO_STEP_CONFLICT. Inconsistent resources/progress:
+409 DEMO_SCENARIO_STATE_CONFLICT. Unconfirmed commit/executor truth:
+503 DEMO_SCENARIO_STEP_OUTCOME_UNKNOWN, retry the same request. Existing 400/401/
+403/404/reset/queue contracts remain, including cookie clearing and no-store.
+Reset removes ledger/Scenario/domain and revokes atomically. Startup still
+invalidates old cookies; fake memory is not recreated. A populated ledger down
+is deliberately unsupported. Focused command: npm run test:demo-02c. Full DTO,
+six-step recovery, failure evidence and limits: [Demo-02C](tasks/demo-02c-happy-path-step-execution.md).
 
 Handled API errors use the flat envelope:
 
@@ -273,7 +293,11 @@ The server binds port 3000 by default on 0.0.0.0; use it only in a trusted local
 
 Calculation types and published dependency definitions must be configured in PostgreSQL before their corresponding workflows can succeed. There is no management API or general-purpose financial seed. The explicit Demo-02A command above prepares only its minimal CAPEX configuration; integration suites install their own fixtures. A fresh migrated database alone is not a preconfigured financial pipeline.
 
-All six historical core migrations are retained, alongside the Demo 01A session and Demo-02B Scenario migrations. Scenario down refuses retained Scenario data; only an empty table is reversible. The v2 migration deliberately rejects unsafe/ambiguous legacy data and unsupported down conversions instead of discarding history. Do not edit applied migrations or delete/truncate a persistent developer database to bypass a migration guard.
+All six historical core migrations are retained, alongside Demo session, Scenario
+and Step ledger migrations. Scenario/ledger down refuses retained data; only empty
+tables are reversible. The v2 migration rejects unsafe/ambiguous legacy data and
+unsupported down conversions instead of discarding history. Do not edit applied
+migrations or delete/truncate a persistent developer database to bypass a guard.
 
 ## Verification
 

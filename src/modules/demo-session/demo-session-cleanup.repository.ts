@@ -5,6 +5,8 @@ export class DemoCleanupIntegrityError extends Error {}
 /** The company comes from a locked demo_sessions row, never an HTTP selector. */
 export async function deleteOwnedDemoData(client: PoolClient, company: string, sessionId: string): Promise<void> {
   // Same locked session and same transaction as its domain cleanup/revocation.
+  await client.query(`DELETE FROM demo_scenario_step_executions WHERE scenario_id IN
+    (SELECT id FROM demo_scenario_instances WHERE session_id=$1)`, [sessionId]);
   await client.query('DELETE FROM demo_scenario_instances WHERE session_id=$1', [sessionId]);
   const foreign = await client.query(`SELECT 1
     FROM dataset_build_snapshot_dependencies d

@@ -7,6 +7,7 @@ import { DemoOwnershipValidator } from './demo-session.ownership.js';
 import { DemoSessionService, type AuthenticatedDemoSession } from './demo-session.service.js';
 import { DemoSessionResetService, type ResetOptions } from './demo-session-reset.service.js';
 import { DemoScenarioService, type ScenarioCreateOptions } from '../demo-scenario/demo-scenario.service.js';
+import { DemoStepService, type StepOptions } from '../demo-scenario/demo-step.service.js';
 
 export function assertDemoEnvironment(nodeEnvironment?: string): void {
   if (!isApprovedFakeExecutorEnvironment(nodeEnvironment)) {
@@ -65,8 +66,9 @@ export class DemoRuntime {
   readonly executors: DemoExecutorRegistry;
   readonly reset: DemoSessionResetService;
   readonly scenarios: DemoScenarioService;
+  readonly steps: DemoStepService;
 
-  constructor(readonly db: Pool, nodeEnvironment?: string, options: RegistryOptions = {}, resetOptions: ResetOptions = {}, scenarioOptions: ScenarioCreateOptions = {}) {
+  constructor(readonly db: Pool, nodeEnvironment?: string, options: RegistryOptions = {}, resetOptions: ResetOptions = {}, scenarioOptions: ScenarioCreateOptions = {}, stepOptions: StepOptions = {}) {
     assertDemoEnvironment(nodeEnvironment);
     this.sessions = new DemoSessionService(db);
     this.coordinator = new DemoSessionCoordinator(this.sessions);
@@ -74,5 +76,6 @@ export class DemoRuntime {
     this.executors = new DemoExecutorRegistry(this.sessions, options);
     this.reset = new DemoSessionResetService(this, resetOptions);
     this.scenarios = new DemoScenarioService(db, this.sessions, scenarioOptions);
+    this.steps = new DemoStepService(this, stepOptions);
   }
 }

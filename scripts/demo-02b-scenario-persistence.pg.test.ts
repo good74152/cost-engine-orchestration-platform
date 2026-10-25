@@ -93,8 +93,8 @@ test('Demo-02B: scenario persistence, isolation, idempotency and reset recovery'
       database: name, migrations: (await pool.query('SELECT count(*)::int AS n FROM pgmigrations')).rows[0].n }));
 
     await t.test('fresh up, empty supported down and forward again preserve existing schema', async () => {
-      assert.equal((await pool.query('SELECT count(*)::int AS n FROM pgmigrations')).rows[0].n, 8);
-      await migrate('down',1);
+      assert.equal((await pool.query('SELECT count(*)::int AS n FROM pgmigrations')).rows[0].n, 9);
+      await migrate('down',2);
       assert.equal((await pool.query("SELECT to_regclass('demo_scenario_instances') AS table_name")).rows[0].table_name, null);
       assert.equal((await pool.query("SELECT to_regclass('demo_sessions') AS table_name")).rows[0].table_name, 'demo_sessions');
       // Representative pre-02B Session/domain data must survive the new up.
@@ -103,7 +103,7 @@ test('Demo-02B: scenario persistence, isolation, idempotency and reset recovery'
         VALUES(gen_random_uuid(),'CAPEX',$1,2025,'Q1',0)`,[retained.context.companyCode]);
       const priorSeries=(await pool.query('SELECT to_jsonb(ds) AS row FROM dataset_series ds WHERE company_code=$1',[retained.context.companyCode])).rows;
       const priorSession=(await pool.query('SELECT id,company_code,created_at,expires_at,revoked_at FROM demo_sessions WHERE id=$1',[retained.context.sessionId])).rows;
-      await migrate('up'); assert.equal((await pool.query('SELECT count(*)::int AS n FROM pgmigrations')).rows[0].n, 8);
+      await migrate('up'); assert.equal((await pool.query('SELECT count(*)::int AS n FROM pgmigrations')).rows[0].n, 9);
       assert.deepEqual((await pool.query('SELECT to_jsonb(ds) AS row FROM dataset_series ds WHERE company_code=$1',[retained.context.companyCode])).rows,priorSeries);
       assert.deepEqual((await pool.query('SELECT id,company_code,created_at,expires_at,revoked_at FROM demo_sessions WHERE id=$1',[retained.context.sessionId])).rows,priorSession);
     });
@@ -212,7 +212,7 @@ test('Demo-02B: scenario persistence, isolation, idempotency and reset recovery'
       error(await post('/demo/scenarios?limit=1',s,{scenarioType:'HAPPY_PATH'}),400,'INVALID_REQUEST');
       error(await get('/demo/scenarios/current?sessionId=forged',a),400,'INVALID_REQUEST');
       error(await get(`/demo/scenarios/${idA}?limit=1`,a),400,'INVALID_REQUEST'); assert.deepEqual(await dump(),before);
-      assert.equal((await post(`/demo/scenarios/${idA}/next`,a,{})).statusCode,404);
+      error(await post(`/demo/scenarios/${idA}/next`,a,{}),400,'INVALID_REQUEST');
       const different = await newSession();
       await pool.query("INSERT INTO demo_scenario_instances(session_id,scenario_type) VALUES ($1,'FAILURE_RETRY')",[different.context.sessionId]);
       error(await create(different),409,'DEMO_SCENARIO_TYPE_CONFLICT');
@@ -357,7 +357,7 @@ test('Demo-02B: scenario persistence, isolation, idempotency and reset recovery'
     });
 
     await t.test('populated Scenario down refuses atomically and preserves data/migration marker', async () => {
-      const before = await dump(); await assert.rejects(migrate('down',1),/retained scenario data/); assert.deepEqual(await dump(),before);
+      const before = await dump(); await assert.rejects(migrate('down',2),/retained scenario data/); assert.deepEqual(await dump(),before);
     });
 
     await t.test('reset atomically removes owner Scenario/domain graph, revokes and releases fake; other owners/shared configuration survive', async () => {

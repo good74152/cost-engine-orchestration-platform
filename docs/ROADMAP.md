@@ -87,13 +87,17 @@ See the
 [bounded contract and verification](tasks/demo-02a-shared-seed-read-apis.md).
 No Scenario Runner, frontend, later Demo-02 work or accepted core redesign.
 
-Demo-02B, on feature/demo-02b-scenario-persistence from freshly fetched 72f4369,
-adds durable one-Scenario-per-session Create/Get, Create idempotency, manual-mode
-isolation and same-transaction Reset/recovery/maintenance integration. It requires
-System Owner PR review, not automatic merge. See [the bounded task/evidence](tasks/demo-02b-scenario-persistence.md)
+Demo-02B is merged via PR #27 at 876d030. It adds durable one-Scenario-per-session
+Create/Get, Create idempotency, manual-mode isolation and same-transaction
+Reset/recovery/maintenance integration. See [the bounded task/evidence](tasks/demo-02b-scenario-persistence.md)
 and [ADR-0011](adr/0011-demo-scenario-persistence-and-mode-isolation.md).
-Demo-02C Step Execution/Next/ledger/idempotency/progress and frontend remain
-unimplemented; no Scenario Runner or core architecture redesign is included.
+Demo-02C starts from that freshly
+fetched main on feature/demo-02c-happy-path-execution. It adds only six explicit
+HAPPY_PATH steps, durable request/intent/result ledger, safe Domain-progress
+recovery, pending-step read and same-transaction Reset integration. Implementation
+awaits System Owner review, not automatic merge. See [bounded contracts/evidence](tasks/demo-02c-happy-path-step-execution.md)
+and [ADR-0012](adr/0012-demo-scenario-step-idempotency.md). Other Scenario types,
+frontend, automatic/background execution and distributed Demo remain deferred.
 
 ### Naming-01 — Rename COWOS_S to E2E_COST
 

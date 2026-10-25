@@ -447,7 +447,7 @@ test('Demo-02A: explicit seed and session-scoped durable reads', { timeout: 240_
         const plan = await pool.query(`EXPLAIN (ANALYZE,FORMAT JSON) ${sql}`, [...args]);
         console.log('DEMO_02A_QUERY_PLAN', JSON.stringify(plan.rows));
       }
-      assert.equal((await pool.query('SELECT count(*)::int AS n FROM pgmigrations')).rows[0].n, 8);
+      assert.equal((await pool.query('SELECT count(*)::int AS n FROM pgmigrations')).rows[0].n, 9);
     });
   } finally {
     try { await Promise.all(apps.map((app) => app.close())); if (db) { await db.end(); await Promise.all(ends); } }
