@@ -224,3 +224,144 @@ do not automatically merge or start deployment work.
 
 Executed source revisions, exact commands/counters, warnings, screenshots and
 owned-database teardown evidence are recorded below after final verification.
+
+### Executed final verification — 2026-10-27 (Asia/Taipei)
+
+All final commands ran sequentially on clean commit
+899d6f6a197d514b2b6cfee7613ba1c9f66f0033, tree
+16aeb92062cb60b2cfaf341c1265719da1df9950. The later evidence-only commit updates
+this document, not the tested frontend, smoke, backend, migration or screenshot
+sources. Windows PowerShell, Node 24.18.0, npm 11.16.0, PostgreSQL 18.6
+(Debian 18.6-1.pgdg13+2), Playwright 1.64.1 / Chromium 156.0.8078.4.
+The existing Compose postgres_db service was running; docker compose up -d
+postgres_db exited 0. Frontend install/audit reported zero vulnerabilities.
+
+| Exact command | Exit | Pass | Fail | Skip |
+|---|---:|---:|---:|---:|
+| npm.cmd run ui:typecheck | 0 | n/a | n/a | n/a |
+| npm.cmd run ui:test | 0 | 40 | 0 | 0 |
+| npm.cmd run ui:build | 0 | n/a | n/a | n/a |
+| npm.cmd run ui:smoke | 0 | 10 | 0 | 0 |
+| npm.cmd run build | 0 | n/a | n/a | n/a |
+| npm.cmd run test:demo-02e | 0 | 37 | 0 | 0 |
+| npm.cmd run test:demo-02d | 0 | 25 | 0 | 0 |
+| npm.cmd run test:demo-02c | 0 | 27 | 0 | 0 |
+| npm.cmd run test:milestone | 0 | 246 | 0 | 0 |
+| git diff --check | 0 | n/a | n/a | n/a |
+| git diff 0c80b44..HEAD --check | 0 | n/a | n/a | n/a |
+
+Vitest: three files, 40/40 individual cases. Node PG/Browser counts include parent
+and nested entries. Total 385 pass, zero fail/skip; all reported Node cancellation
+and TODO counters are zero. No automatic mutation retry, synthetic browser-state
+fallback or waived gate was used.
+
+Supplemental smoke-script strict type checking exited 0 on the same clean commit:
+
+```powershell
+npm.cmd --prefix frontend exec -- tsc --ignoreConfig --noEmit --strict --skipLibCheck --esModuleInterop --module ESNext --moduleResolution Bundler --target ES2022 --allowImportingTsExtensions frontend/scripts/browser-smoke.ts
+```
+
+The production bundle contains no MockApi/sample test session or fixture IDs;
+source-import and bundle scans confirmed the mock stays in tests. UI build:
+34 transformed modules; JS 303.93 kB / 94.42 kB gzip; CSS 21.68 kB / 6.00 kB gzip.
+No backend source, applied migration, root lockfile, existing test or milestone
+runner changed. No backend API gap or accepted-architecture conflict was found.
+
+#### Complete milestone child results
+
+The unchanged runner launched all 13 commands. Each reported PASS, exit 0,
+null signal/spawnError, no gate issues and zero fail/skip/cancel/TODO:
+
+| Child command | Exit | Pass | Fail | Skip |
+|---|---:|---:|---:|---:|
+| npm run build | 0 | n/a | n/a | n/a |
+| npm run test:milestone-runner | 0 | 20 | 0 | 0 |
+| npm run test:orchestration-schema-v2 | 0 | 30 | 0 | 0 |
+| npm run test:dataset-version-creation-v2 | 0 | 14 | 0 | 0 |
+| npm run test:first-run-immutable-build-snapshot | 0 | 19 | 0 | 0 |
+| npm run test:execution-attempt-dispatch-fake-executor | 0 | 11 | 0 | 0 |
+| npm run test:executor-reconciliation | 0 | 22 | 0 | 0 |
+| npm run test:dataset-version-terminal-lifecycle | 0 | 64 | 0 | 0 |
+| npm run test:cross-workflow-concurrency-investigation | 0 | 14 | 0 | 0 |
+| npm run test:task-007b1-late-dispatch-reconciliation | 0 | 32 | 0 | 0 |
+| npm run test:task-007c-api-contract | 0 | 12 | 0 | 0 |
+| npm run test:raw-ingestion (owned disposable PostgreSQL database) | 0 | 1 | 0 | 0 |
+| npm run test:task-007d-end-to-end | 0 | 7 | 0 | 0 |
+
+CON-01/CON-02, late response recovery and E2E Flow A–F remain green. Raw ingestion
+ran only through its owned isolated launcher, never against a persistent DB.
+
+#### Real Browser evidence and owned cleanup
+
+All nine Browser subcases plus their parent passed using real HTTP and PostgreSQL:
+explicit Cookie session start and proxy security; full Happy Path with an actual
+aborted browser HTTP response after backend commit; full Failure Retry preserving
+the entire failed Attempt 1 row; E 202/reload/same-request recovery with one fake
+execution and unchanged full attempt identity; owner denial and foreign-Origin
+403; manual commands through publication; prior manual-fake Create refusal;
+responsive layouts and mobile operations; no uncaught JS error or credential
+storage. Mobile checks complete six Guided steps, resource/history reads and
+exploration allocation at 390px, rather than checking only a static landing page.
+Browser setup succeeded; no unavailable-environment result is labelled PASS.
+
+Final owned fixtures each applied eleven migrations, closed actual clients,
+verified zero remaining backends and normally dropped only their named database:
+
+| Suite | Database | Backends | Normal DROP |
+|---|---|---:|---|
+| Browser/Backend | demo03_browser_19900_4f50a7ecbbcb | 0 | yes |
+| Demo-02E | demo_02e_test_28320_e4ce326b58f0 | 0 | yes |
+| Demo-02D | demo_02d_test_40368_3b6fae641f00 | 0 | yes |
+| Demo-02C | demo_02c_test_13172_47917281a028 | 0 | yes |
+
+The unchanged raw launcher dropped raw_milestone_test_40248_9a70d671b37f. Some
+pre-existing core/raw fixture cleanup uses FORCE; this task does not claim those
+helpers use normal DROP or that FORCE terminated zero clients. The four fixtures
+above separately prove zero backends and normal DROP without FORCE. A final
+read-only maintenance audit found only postgres/template0/template1/pre-existing
+testdb, with only the audit connection to postgres. No fixture/backend remained.
+
+Committed screenshots were captured in the successful explicit capture run
+against demo03_browser_24412_d10850d4a68e, which also verified zero backends and
+normal DROP. They show the same production UI as the final tested commit; the
+later source correction changed only a smoke-selector line, not UI rendering.
+Final verification wrote screenshots to its temporary directory and left the
+tracked evidence clean. Desktop, Lost ACK and mobile images were visually
+inspected. No generated screenshot or browser-side backend simulation was used.
+
+#### Earlier failures and warnings — separate from final PASS
+
+The first supplemental UI type check rejected two RTL ByRole calls using an
+unsupported exact option (exit 1); removing that option fixed the test types.
+The first mock run exited 1 with 34 pass / 2 fail: a singular text selector found
+both Header and Session card company codes. Correct plural/scoped selectors
+resolved it. The next run passed 36/36; expanded suites passed 38/38 and 40/40.
+
+The first real Browser run exited 1 with 7 pass / 3 fail (two failed children and
+their parent): the harness read the Cookie before the Start response settled,
+and its dispatch select label was ambiguous. Waiting for the actual response and
+giving the control an explicit accessible label fixed those cases. Subsequent
+development/capture runs passed 10/10.
+
+The first clean-revision gate on a5e18b8 passed ui:typecheck, 40 UI tests and
+ui:build, then failed the expanded mobile smoke (8 pass / 2 fail, child plus
+parent). Its Start helper chose the intentionally hidden mobile Header company
+span. Commit 899d6f6 scopes that assertion to the visible Session card. The gate
+correctly stopped before build and all backend suites; they were NOT RUN in that
+attempt and are not counted as PASS. The complete rerun on 899d6f6 is the final
+table above. Every failed Browser fixture still normally dropped its owned DB
+with zero backends; no persistent data repair or backend security change occurred.
+
+Final build/test/runtime logs have no warnings/deprecations. Git emitted local
+LF-to-CRLF staging notices, and the existing old-name remote may emit its rename
+redirect on push. Both whitespace checks passed. Local logs are in the executing
+machine's temporary directory: demo03-verified-ui-typecheck.log,
+demo03-verified-ui-test.log, demo03-verified-ui-build.log,
+demo03-verified-ui-smoke.log, demo03-verified-build.log,
+demo03-verified-test-demo-02e.log, demo03-verified-test-demo-02d.log,
+demo03-verified-test-demo-02c.log and demo03-verified-test-milestone.log. Earlier
+development/first-gate logs retain their separate names. Raw logs/credentials are
+not committed. These are local executed results, not GitHub CI or deployment proof.
+
+System Owner review is required. Only Demo-03 is delivered; no auto-merge or
+Demo-04 deployment work is authorized by this verification.
