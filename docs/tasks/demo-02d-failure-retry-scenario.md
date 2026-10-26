@@ -184,8 +184,116 @@ npm.cmd run test:milestone
 git diff --check
 ```
 
-Final executed revision, counts, warnings and owned teardown are recorded after
-verification. Unexecuted commands are never PASS.
+### Executed verification — 2026-10-26 (Asia/Taipei)
+
+All final commands ran sequentially on clean implementation commit
+7acaae07336aab4b04bf44570891cb4c7ae7a9cd, tree
+c6c93efedbb431643bb06474d52198a8d7bd85e4. The subsequent evidence-only commit
+updates this document, not the tested code/migration/test sources. Environment:
+Windows PowerShell; Node 24.18.0; npm 11.16.0; PostgreSQL 18.6
+(Debian 18.6-1.pgdg13+2), using the existing Compose service.
+docker compose up -d postgres_db exited 0.
+
+| Exact command | Exit | Pass | Fail | Skip |
+|---|---:|---:|---:|---:|
+| npm.cmd run build | 0 | n/a | n/a | n/a |
+| npm.cmd run test:demo-02d | 0 | 25 | 0 | 0 |
+| npm.cmd run test:demo-02c | 0 | 27 | 0 | 0 |
+| npm.cmd run test:demo-02b | 0 | 26 | 0 | 0 |
+| npm.cmd run test:demo-02a | 0 | 23 | 0 | 0 |
+| npm.cmd run test:demo-session-infrastructure | 0 | 21 | 0 | 0 |
+| npm.cmd run test:demo-session-ownership-executor-isolation | 0 | 19 | 0 | 0 |
+| npm.cmd run test:demo-session-reset-recovery | 0 | 22 | 0 | 0 |
+| npm.cmd run test:milestone | 0 | 246 | 0 | 0 |
+| git diff --check | 0 | n/a | n/a | n/a |
+| git diff 6427346..HEAD --check | 0 | n/a | n/a | n/a |
+
+All cancellations/TODOs are zero. Counts include Node parent/nested entries, not
+only individual assertions. Total: 163 Demo entries plus 246 milestone entries.
+Supplemental strict test/migration type checking also exited 0:
+
+```powershell
+npm.cmd exec -- tsc --ignoreConfig --noEmit --strict --skipLibCheck --esModuleInterop --module NodeNext --target ES2022 scripts/demo-02d-failure-retry.pg.test.ts migrations/1793000000000_demo-failure-retry-scenario.ts
+```
+
+The unchanged milestone runner launched all 13 commands below. Each reported
+PASS, exit 0, null signal/spawnError and no gate issues. Every test's fail, skip,
+cancel and TODO counts are zero:
+
+| Child command | Exit | Pass | Fail | Skip |
+|---|---:|---:|---:|---:|
+| npm run build | 0 | n/a | n/a | n/a |
+| npm run test:milestone-runner | 0 | 20 | 0 | 0 |
+| npm run test:orchestration-schema-v2 | 0 | 30 | 0 | 0 |
+| npm run test:dataset-version-creation-v2 | 0 | 14 | 0 | 0 |
+| npm run test:first-run-immutable-build-snapshot | 0 | 19 | 0 | 0 |
+| npm run test:execution-attempt-dispatch-fake-executor | 0 | 11 | 0 | 0 |
+| npm run test:executor-reconciliation | 0 | 22 | 0 | 0 |
+| npm run test:dataset-version-terminal-lifecycle | 0 | 64 | 0 | 0 |
+| npm run test:cross-workflow-concurrency-investigation | 0 | 14 | 0 | 0 |
+| npm run test:task-007b1-late-dispatch-reconciliation | 0 | 32 | 0 | 0 |
+| npm run test:task-007c-api-contract | 0 | 12 | 0 | 0 |
+| npm run test:raw-ingestion (owned disposable PostgreSQL database) | 0 | 1 | 0 | 0 |
+| npm run test:task-007d-end-to-end | 0 | 7 | 0 | 0 |
+
+CON-01/CON-02 and E2E Flow A–F remain green. Raw ingestion used the isolated
+launcher only, never a persistent developer database. No milestone child or gate
+was changed or weakened.
+
+All final Demo fixtures reached ten applied migrations and normally dropped
+their owned databases after closing actual clients and checking zero backends:
+
+| Suite | Owned database | Backends at teardown | Normal DROP |
+|---|---|---:|---|
+| 02D | demo_02d_test_26748_511eb22f8f7c | 0 | yes |
+| 02C | demo_02c_test_38952_e8b9192136c6 | 0 | yes |
+| 02B | demo_02b_test_36676_73e39eb6582c | 0 | yes |
+| 02A | demo_02a_test_8328_8a63bea6aa06 | 0 | yes |
+| 01A | demo_01a_test_29424_8d43ad15c0f6 | 0 | yes |
+| 01B-1 | demo_01b1_test_23172_6134e84f0b6a | 0 | yes |
+| 01B-2 | demo_01b2_test_23332_5d2656dabb47 | 0 | yes |
+
+The isolated raw launcher also reported normal owned teardown for
+raw_milestone_test_33080_efa55bcf93c9. After all gates, pg_database contained
+only postgres, template0, template1 and pre-existing testdb. pg_stat_activity
+showed only the audit connection to postgres, no fixture database/backend.
+No forced DROP, TRUNCATE, CASCADE, source-database fixture write or repair was
+needed in Demo-02D verification.
+
+Migration behavior was executed, not inferred: forward over a completed original
+six-step Scenario preserved every row; supported down restored the exact original
+02C validator and data; forward again succeeded; unsupported pre-02D non-Happy
+ledger migration and retained Failure Retry down both failed atomically with
+unchanged data/markers. Existing Session/Scenario/ledger down assertions still
+target and verify their original guards under the additional migration.
+
+Before-final development results are separate from this clean-revision evidence:
+the first Demo-02D suite exited 0 (23 pass), expanded with the settled Attempt 2
+writer and queued-expiration tests it exited 0 (25 pass). Preliminary Demo-02C
+and 02B reruns exited 0 (27/26 pass); build and strict type checks exited 0.
+There were no red Demo-02D runs to relabel as PASS. Intentionally injected SQL,
+dispatch, commit-transport and reset failures are asserted test cases, not suite
+failures. All owned development fixtures were normally dropped too.
+
+Final runtime/build logs contain no warnings/deprecations. Git emitted local
+LF-to-CRLF staging notices; whitespace checks passed. The remote still uses the
+repository's former name and may report its normal rename redirect on push; this
+is not a test warning or a change to the configured remote.
+
+Local execution logs (not GitHub CI evidence) are in the executing machine's
+temporary directory: demo02d-final-build.log, demo02d-final-test-demo-02d.log,
+demo02d-final-test-demo-02c.log, demo02d-final-test-demo-02b.log,
+demo02d-final-test-demo-02a.log, demo02d-final-test-demo-session-infrastructure.log,
+demo02d-final-test-demo-session-ownership-executor-isolation.log,
+demo02d-final-test-demo-session-reset-recovery.log and
+demo02d-final-test-milestone.log. Raw logs/credentials are not committed.
+
+The complete diff was reviewed. No accepted architecture conflict was found.
+Only the new forward migration is added; all nine historical migrations are
+unchanged. Core Run/Retry/preparation/reconciliation/dataset/executor code,
+02A seed, session security/coordinator/Reset implementation and raw ingestion
+have no diff. The existing runner's A/B/unknown-commit architecture is reused.
+No Demo-02E or other non-goal implementation is included.
 
 ## Limits and review
 
