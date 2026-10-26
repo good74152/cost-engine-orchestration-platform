@@ -308,3 +308,100 @@ validation branch was weakened. No accepted architecture conflict was found.
 All ten historical migrations, Core Run/Retry/preparation/reconciliation/lifecycle,
 FakeExecutor/interface, session security/coordinator/Reset, seed and raw ingestion
 implementations have no diff. No frontend, deployment or later task was added.
+
+### Review-fix executed verification — 2026-10-27 (Asia/Taipei)
+
+This is separate AFTER-FIX evidence, not a reclassification of the original run
+above. All final commands ran sequentially on clean review-fix commit
+d8f2193ccadfbfb97aa34f1c4bbbded8cdfd9813, tree
+6df765ac71a833629cda44a1bd3e1685ec2cf02e. The later evidence-only commit changes
+only this document. Windows PowerShell, Node 24.18.0, npm 11.16.0, PostgreSQL
+18.6 (Debian 18.6-1.pgdg13+2); docker compose up -d postgres_db exited 0.
+
+| Exact command | Exit | Pass | Fail | Skip |
+|---|---:|---:|---:|---:|
+| npm.cmd run build | 0 | n/a | n/a | n/a |
+| npm.cmd run test:demo-02e | 0 | 37 | 0 | 0 |
+| npm.cmd run test:demo-02d | 0 | 25 | 0 | 0 |
+| npm.cmd run test:demo-02c | 0 | 27 | 0 | 0 |
+| npm.cmd run test:demo-02b | 0 | 26 | 0 | 0 |
+| npm.cmd run test:demo-02a | 0 | 23 | 0 | 0 |
+| npm.cmd run test:demo-session-infrastructure | 0 | 21 | 0 | 0 |
+| npm.cmd run test:demo-session-ownership-executor-isolation | 0 | 19 | 0 | 0 |
+| npm.cmd run test:demo-session-reset-recovery | 0 | 22 | 0 | 0 |
+| npm.cmd run test:milestone | 0 | 246 | 0 | 0 |
+| git diff --check | 0 | n/a | n/a | n/a |
+| git diff 1cd4a0d..HEAD --check | 0 | n/a | n/a | n/a |
+| git diff 13a8907..HEAD --check | 0 | n/a | n/a | n/a |
+
+All cancellation/TODO counters are zero. Counts include parent/nested entries:
+200 Demo plus 246 milestone, total 446. The four additional Demo suites cover
+shared runtime wiring, ownership/security and Reset regressions. Supplemental
+strict checking on the clean review-fix commit also exited 0:
+
+```powershell
+npm.cmd exec -- tsc --ignoreConfig --noEmit --strict --skipLibCheck --esModuleInterop --module NodeNext --target ES2022 scripts/demo-02e-lost-response-recovery.pg.test.ts
+```
+
+All 13 unchanged milestone children reported PASS, exit 0, null signal/spawnError,
+no gate issues, and zero fail/skip/cancel/TODO:
+
+| Child command | Exit | Pass |
+|---|---:|---:|
+| npm run build | 0 | n/a |
+| npm run test:milestone-runner | 0 | 20 |
+| npm run test:orchestration-schema-v2 | 0 | 30 |
+| npm run test:dataset-version-creation-v2 | 0 | 14 |
+| npm run test:first-run-immutable-build-snapshot | 0 | 19 |
+| npm run test:execution-attempt-dispatch-fake-executor | 0 | 11 |
+| npm run test:executor-reconciliation | 0 | 22 |
+| npm run test:dataset-version-terminal-lifecycle | 0 | 64 |
+| npm run test:cross-workflow-concurrency-investigation | 0 | 14 |
+| npm run test:task-007b1-late-dispatch-reconciliation | 0 | 32 |
+| npm run test:task-007c-api-contract | 0 | 12 |
+| npm run test:raw-ingestion (owned disposable PostgreSQL database) | 0 | 1 |
+| npm run test:task-007d-end-to-end | 0 | 7 |
+
+CON-01/CON-02 and E2E Flow A–F remain green. New route tests reject both prior
+manual behaviors for all three types without changing PostgreSQL or fake memory,
+then Reset/new-session creation completes each normal flow. E still performs
+202 then 200 with identical attempt/full command and one external execution.
+Create replay preserves pending/accepted/Retry/terminal state and the exact fake
+instance. Deterministic barriers prove both Manual/Create queue orders. The
+preliminary development suite also exited 0 (37 pass); no review-fix build,
+strict-check or PostgreSQL suite failed. This does not claim a before-fix test run.
+
+All eight final Demo suites applied eleven migrations, verified zero backends
+after actual client shutdown, and normally dropped their owned databases:
+
+| Suite | Owned database | Backends | Normal DROP |
+|---|---|---:|---|
+| 02E | demo_02e_test_32380_9684b89a9c76 | 0 | yes |
+| 02D | demo_02d_test_31804_a8f944cb193b | 0 | yes |
+| 02C | demo_02c_test_34664_a83f22810c83 | 0 | yes |
+| 02B | demo_02b_test_32796_fca36ac7e30e | 0 | yes |
+| 02A | demo_02a_test_38932_4916a61e420c | 0 | yes |
+| 01A | demo_01a_test_18224_7e9f264ede9a | 0 | yes |
+| 01B-1 | demo_01b1_test_20904_4918f23f48fd | 0 | yes |
+| 01B-2 | demo_01b2_test_35056_f63719e96e1f | 0 | yes |
+
+The unchanged isolated raw launcher dropped raw_milestone_test_10148_06a08d12d7be.
+Existing core/raw FORCE cleanup policies are unchanged; no claim is made about
+how many clients FORCE terminated. The eight Demo drops used no FORCE. Final
+read-only audit found only postgres/template0/template1/pre-existing testdb and
+the audit connection to postgres; no owned fixture or backend remained.
+
+Final runtime/build logs had no warnings/deprecations. Git emitted LF-to-CRLF
+notices; whitespace checks passed. The existing old-name remote redirects on
+push. Logs remain local in the executing machine's temporary directory as
+demo02e-review-final-build.log and demo02e-review-final-test-<suite>.log (colons
+replaced with hyphens). No credentials or raw logs are committed. These are local
+results, not GitHub CI evidence.
+
+Review-fix files: DemoScenarioService, DemoRuntime's read-only registry inspection
+and dependency wiring, the 02E PostgreSQL suite, Architecture, Reference and this
+task document. Complete diff review found no Core Run/executor/interface,
+migration, ownership/security, coordinator or Reset implementation changes. The
+explicitly authorized refusal strategy preserves existing fake identity history;
+no architecture conflict or new infrastructure was introduced. PR #30 remains
+subject to System Owner review; no automatic merge or Frontend work.
