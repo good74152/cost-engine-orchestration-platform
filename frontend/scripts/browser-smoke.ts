@@ -55,7 +55,7 @@ test('Demo-03: real Chromium, Vite proxy and unchanged PostgreSQL backend',{time
   const publicSession=async()=>{const r=await context.request.get(origin+'/demo/sessions/current');assert.equal(r.status(),200);return r.json();};
   const start=async()=>{const response=page.waitForResponse(r=>new URL(r.url()).pathname==='/demo/sessions'&&r.request().method()==='POST');
    await page.getByRole('button',{name:'Start demo session',exact:true}).click();const result=await response;assert.ok([200,201].includes(result.status()));
-   await page.getByText((await result.json()).companyCode,{exact:true}).first().waitFor();};
+   await page.locator('.session-card').getByText((await result.json()).companyCode,{exact:true}).waitFor();};
   const reset=async()=>{await page.getByRole('button',{name:'Reset session',exact:true}).click();await page.getByRole('button',{name:'Confirm reset',exact:true}).click();await page.getByRole('button',{name:'Start demo session',exact:true}).waitFor();
    assert.equal((await page.evaluate(()=>Object.keys(localStorage).filter(k=>k.startsWith('fcp.step.v1:')))).length,0);};
   const choose=async(type:ScenarioType)=>{await page.getByRole('link',{name:'Guided Demo',exact:true}).click();await page.getByRole('button',{name:'Start '+catalog[type].title,exact:true}).click();await page.waitForURL(/\/guided\/[0-9a-f-]+$/);};
