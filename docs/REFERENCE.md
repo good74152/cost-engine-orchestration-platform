@@ -262,8 +262,8 @@ six-step recovery, failure evidence and limits: [Demo-02C](tasks/demo-02c-happy-
 ### Demo-02D Failure Retry
 
 POST /demo/scenarios now accepts FAILURE_RETRY as well as HAPPY_PATH. Same-type
-creation is idempotent; cross-type is 409 DEMO_SCENARIO_TYPE_CONFLICT. Lost-response
-Scenario creation remains unavailable (400 INVALID_REQUEST). Next keeps exactly
+creation is idempotent; cross-type is 409 DEMO_SCENARIO_TYPE_CONFLICT. Demo-02E below
+also enables Lost Response Recovery. Next keeps exactly
 expectedStep/requestId; type-specific bounds are 1–6 and 1–9 respectively.
 
 Failure Retry explicitly simulates/reconciles Attempt 1 FAILED, then uses core
@@ -281,6 +281,32 @@ Happy Path safety. Its down explicitly refuses retained FAILURE_RETRY Scenarios;
 supported down preserves Happy Path data and restores the original validator.
 Focused suite: npm run test:demo-02d. Full nine steps, private Retry intent,
 history protection, migration and test evidence: [Demo-02D](tasks/demo-02d-failure-retry-scenario.md).
+
+### Demo-02E Lost Response Recovery
+
+POST /demo/scenarios also accepts LOST_RESPONSE_RECOVERY. It uses six steps and
+only Attempt 1. First Step 2 really creates one session-owned fake execution,
+then a Demo-only stateless decorator converts ACCEPTED to UNKNOWN. HTTP 202
+returns PENDING with progress 1, Job PENDING and Attempt DISPATCHING. Same-request
+retry preserves the full stable DAG/run identity; ALREADY_EXISTS passes through
+to Core, which confirms ACCEPTED/RUNNING. Only then is Step 2 COMPLETED/200.
+Steps 3–6 reuse fake success, reconciliation, validation and publication.
+
+Ledger request ownership/replay, pending reads, A/B unknown-COMMIT confirmation,
+security, per-session fakes and Reset are unchanged. No public behavior control,
+new identity store or Core Run/executor contract change. A forward migration
+enforces E's six-step/one-attempt bindings without relaxing Happy/Failure rules;
+down refuses retained E Scenarios and otherwise restores the exact 02D validator.
+Focused command: npm run test:demo-02e. Full contracts, identity persistence,
+recovery boundaries and executed evidence: [Demo-02E](tasks/demo-02e-lost-response-recovery.md).
+
+First Guided Scenario creation also requires an unallocated session FakeExecutor.
+Prior manual fake behavior (even without Dataset rows) returns 409
+DEMO_SCENARIO_SESSION_NOT_EMPTY with a reset instruction. Use Reset and a new
+Session; Create never clears fake execution/rejection/script history. This
+conservative check applies to all three types only on first insertion. Existing
+same-type Scenario Create remains 200 at any progress, retaining the same fake
+and executions; different-type remains 409 DEMO_SCENARIO_TYPE_CONFLICT.
 
 Handled API errors use the flat envelope:
 

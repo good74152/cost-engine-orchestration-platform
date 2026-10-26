@@ -721,3 +721,35 @@ type-specific step/result/binding rules in PostgreSQL and retains the exact 02C
 validator for supported down; any retained Failure Retry Scenario blocks down.
 No applied migration, core state machine, executor, lock or session policy change.
 See [Demo-02D contracts and verification](tasks/demo-02d-failure-retry-scenario.md).
+
+## 25. Demo Lost Dispatch Response Recovery
+
+Demo-02E adds LOST_RESPONSE_RECOVERY within the same six-step/sole-Attempt-1
+protocol as Happy Path. Only its Step 2 uses a stateless Demo executor decorator:
+delegate to the session fake first, convert only actual ACCEPTED to UNKNOWN,
+preserve ALREADY_EXISTS/REJECTED/UNKNOWN and delegate status lookup unchanged.
+This simulates executor acknowledgement loss after real external creation, not
+browser response loss. It enqueues no fake behavior and owns no mutable state.
+
+Core persists the Attempt and full DAG/run identity before dispatch; PENDING
+ledger intent binds its sole Job. Exact durable relational binding and the core
+identity convention govern recovery. First UNKNOWN stays PENDING/202 at progress
+1; same request reuses DISPATCHING, and ALREADY_EXISTS confirms ACCEPTED/RUNNING
+before Step 2 completion. No second attempt, Job, snapshot or dataset version.
+Subsequent steps bind the original UUIDs/full identity. Original-result replay,
+fresh-connection A/B confirmation, separate Domain commits, session isolation and
+Reset/restart rules are unchanged. No transaction spans an executor call.
+
+Review admission hardening also requires no allocated session fake for FIRST
+Scenario creation. Prior manual behavior can exist without a Dataset; reject it
+with DEMO_SCENARIO_SESSION_NOT_EMPTY rather than clearing execution/rejection or
+script history. Existing-Scenario lookup remains first, so Create replay never
+resets an active or completed Scenario's fake. Reset/new Session is the supported
+path from prior manual fake use to any new Guided Scenario.
+
+A new forward migration adds E-specific six-step success/one-attempt validation
+while preserving Happy/Failure rules. Supported down restores the exact prior
+validator, preserving both histories; any retained E Scenario blocks rollback
+atomically. Core Run, state machines, executor interface, applied migrations,
+security and lock ordering are unchanged. Single instance, development/test and
+no external writer limits remain. See [contracts and PostgreSQL evidence](tasks/demo-02e-lost-response-recovery.md).

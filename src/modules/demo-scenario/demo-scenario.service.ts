@@ -4,6 +4,7 @@ import { DemoResourceUnavailableError, DemoSessionError } from '../demo-session/
 import { insertScenario, lockScenarioSession, readScenario, requireEmptyScenarioSession, requireGuidedConfiguration,
   type DemoScenarioDto } from './demo-scenario.repository.js';
 import type { RunnableScenarioType } from './demo-step.plan.js';
+import type { DemoExecutorRegistry } from '../demo-session/demo-runtime.js';
 
 export interface ScenarioCreateOptions {
   // Test-only transport/barrier seams, never HTTP input or executor calls.
@@ -12,6 +13,7 @@ export interface ScenarioCreateOptions {
 }
 export class DemoScenarioService {
   constructor(private readonly db: Pool, private readonly sessions: DemoSessionService,
+    private readonly executors: Pick<DemoExecutorRegistry, 'hasSession'>,
     private readonly options: ScenarioCreateOptions = {}) {}
 
   async create(session: AuthenticatedDemoSession, type: RunnableScenarioType = 'HAPPY_PATH'): Promise<{ scenario: DemoScenarioDto; created: boolean }> {
@@ -25,6 +27,13 @@ export class DemoScenarioService {
       if (!scenario) {
         await requireGuidedConfiguration(client);
         await requireEmptyScenarioSession(client, session.companyCode);
+        // An allocated manual fake can retain queued behavior or identity history.
+        // Never erase it. Only FIRST creation requires a pristine session; an
+        // existing Scenario above must keep its exact executor on Create replay.
+        if (this.executors.hasSession(session.sessionId)) {
+          throw new DemoSessionError('DEMO_SCENARIO_SESSION_NOT_EMPTY', 409,
+            'Demo scenario requires an unused executor session; reset the session');
+        }
         scenario = await insertScenario(client, session.sessionId, type);
         created = scenario !== null;
         // Explicit unique-conflict recovery; never expose a PostgreSQL 23505.

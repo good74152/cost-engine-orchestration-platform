@@ -34,6 +34,7 @@ export class DemoExecutorRegistry {
   }
 
   get size(): number { return this.instances.size; }
+  hasSession(sessionId: string): boolean { return this.instances.has(sessionId); }
 
   async forSession(session: AuthenticatedDemoSession): Promise<FakeExecutor> {
     // Also guards a previously authenticated context retained after revocation.
@@ -75,7 +76,7 @@ export class DemoRuntime {
     this.ownership = new DemoOwnershipValidator(db, this.sessions);
     this.executors = new DemoExecutorRegistry(this.sessions, options);
     this.reset = new DemoSessionResetService(this, resetOptions);
-    this.scenarios = new DemoScenarioService(db, this.sessions, scenarioOptions);
+    this.scenarios = new DemoScenarioService(db, this.sessions, this.executors, scenarioOptions);
     this.steps = new DemoStepService(this, stepOptions);
   }
 }
