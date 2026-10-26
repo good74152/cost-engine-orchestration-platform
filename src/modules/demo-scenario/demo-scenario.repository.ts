@@ -1,6 +1,7 @@
 import type { Client, Pool, PoolClient } from 'pg';
 import { DemoSessionError, DemoSessionUnavailableError } from '../demo-session/demo-session.errors.js';
 import type { AuthenticatedDemoSession } from '../demo-session/demo-session.service.js';
+import type { RunnableScenarioType } from './demo-step.plan.js';
 
 export interface DemoScenarioDto {
   scenarioId: string;
@@ -47,9 +48,9 @@ export async function requireEmptyScenarioSession(client: PoolClient, company: s
   if (existing.rowCount) throw new DemoSessionError('DEMO_SCENARIO_SESSION_NOT_EMPTY', 409, 'Demo scenario session is not empty');
 }
 
-export async function insertScenario(client: PoolClient, sessionId: string): Promise<DemoScenarioDto | null> {
+export async function insertScenario(client: PoolClient, sessionId: string, type: RunnableScenarioType = 'HAPPY_PATH'): Promise<DemoScenarioDto | null> {
   const result = await client.query<{ item: DemoScenarioDto }>(`INSERT INTO demo_scenario_instances
-    (session_id,scenario_type,status,completed_step) VALUES ($1,'HAPPY_PATH','READY',0)
-    ON CONFLICT (session_id) DO NOTHING RETURNING ${projection}`, [sessionId]);
+    (session_id,scenario_type,status,completed_step) VALUES ($1,$2,'READY',0)
+    ON CONFLICT (session_id) DO NOTHING RETURNING ${projection}`, [sessionId,type]);
   return result.rows[0]?.item ?? null;
 }

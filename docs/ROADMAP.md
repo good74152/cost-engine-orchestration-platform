@@ -91,13 +91,20 @@ Demo-02B is merged via PR #27 at 876d030. It adds durable one-Scenario-per-sessi
 Create/Get, Create idempotency, manual-mode isolation and same-transaction
 Reset/recovery/maintenance integration. See [the bounded task/evidence](tasks/demo-02b-scenario-persistence.md)
 and [ADR-0011](adr/0011-demo-scenario-persistence-and-mode-isolation.md).
-Demo-02C starts from that freshly
-fetched main on feature/demo-02c-happy-path-execution. It adds only six explicit
+Demo-02C is merged via PR #28 at 6427346. It adds six explicit
 HAPPY_PATH steps, durable request/intent/result ledger, safe Domain-progress
-recovery, pending-step read and same-transaction Reset integration. Implementation
-awaits System Owner review, not automatic merge. See [bounded contracts/evidence](tasks/demo-02c-happy-path-step-execution.md)
-and [ADR-0012](adr/0012-demo-scenario-step-idempotency.md). Other Scenario types,
-frontend, automatic/background execution and distributed Demo remain deferred.
+recovery, pending-step read and same-transaction Reset integration.
+See [bounded contracts/evidence](tasks/demo-02c-happy-path-step-execution.md)
+and [ADR-0012](adr/0012-demo-scenario-step-idempotency.md).
+
+Demo-02D starts from freshly fetched 6427346 on feature/demo-02d-failure-retry-scenario.
+It adds only the nine-step FAILURE_RETRY flow, binding new Attempt 2 to the same
+Job/frozen inputs while preserving failed Attempt 1. It reuses the existing ledger,
+idempotency, transaction and Reset protocols; a forward migration enforces type
+bounds/bindings without changing applied migrations or core Retry. System Owner
+review is required, not automatic merge. See [bounded contracts/evidence](tasks/demo-02d-failure-retry-scenario.md).
+LOST_RESPONSE_RECOVERY/02E, frontend, deployment, background execution and
+distributed Demo remain deferred.
 
 ### Naming-01 — Rename COWOS_S to E2E_COST
 

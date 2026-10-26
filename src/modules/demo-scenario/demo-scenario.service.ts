@@ -3,6 +3,7 @@ import type { AuthenticatedDemoSession, DemoSessionService } from '../demo-sessi
 import { DemoResourceUnavailableError, DemoSessionError } from '../demo-session/demo-session.errors.js';
 import { insertScenario, lockScenarioSession, readScenario, requireEmptyScenarioSession, requireGuidedConfiguration,
   type DemoScenarioDto } from './demo-scenario.repository.js';
+import type { RunnableScenarioType } from './demo-step.plan.js';
 
 export interface ScenarioCreateOptions {
   // Test-only transport/barrier seams, never HTTP input or executor calls.
@@ -13,7 +14,7 @@ export class DemoScenarioService {
   constructor(private readonly db: Pool, private readonly sessions: DemoSessionService,
     private readonly options: ScenarioCreateOptions = {}) {}
 
-  async create(session: AuthenticatedDemoSession): Promise<{ scenario: DemoScenarioDto; created: boolean }> {
+  async create(session: AuthenticatedDemoSession, type: RunnableScenarioType = 'HAPPY_PATH'): Promise<{ scenario: DemoScenarioDto; created: boolean }> {
     this.sessions.assertTrusted(session);
     const client = await this.db.connect(); let commitSent = false; let discard = false;
     try {
@@ -24,13 +25,13 @@ export class DemoScenarioService {
       if (!scenario) {
         await requireGuidedConfiguration(client);
         await requireEmptyScenarioSession(client, session.companyCode);
-        scenario = await insertScenario(client, session.sessionId);
+        scenario = await insertScenario(client, session.sessionId, type);
         created = scenario !== null;
         // Explicit unique-conflict recovery; never expose a PostgreSQL 23505.
         scenario ??= await readScenario(client, session.sessionId);
       }
       if (!scenario) throw new Error('Scenario insert did not resolve durable state');
-      if (scenario.scenarioType !== 'HAPPY_PATH') {
+      if (scenario.scenarioType !== type) {
         throw new DemoSessionError('DEMO_SCENARIO_TYPE_CONFLICT', 409, 'Demo scenario type conflict');
       }
       await this.options.beforeCommit?.();

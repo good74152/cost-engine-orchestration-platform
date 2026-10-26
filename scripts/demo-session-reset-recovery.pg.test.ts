@@ -512,7 +512,7 @@ test('Demo-01B-2: scoped reset and failure recovery on real PostgreSQL', { timeo
       assert.equal((await pool.query('SELECT count(*)::int AS n FROM assets')).rows[0].n, 1);
       assert.equal((await pool.query('SELECT count(*)::int AS n FROM raw_dpr')).rows[0].n, 1);
       assert.equal((await pool.query('SELECT count(*)::int AS n FROM calculation_types')).rows[0].n, 2);
-      assert.equal((await pool.query('SELECT count(*)::int AS n FROM pgmigrations')).rows[0].n, 9);
+      assert.equal((await pool.query('SELECT count(*)::int AS n FROM pgmigrations')).rows[0].n, 10);
     });
   } finally {
     try { await Promise.all(apps.map((app) => app.close())); if (db) { await db.end(); await Promise.all(ends); } }

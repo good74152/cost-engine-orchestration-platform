@@ -1,5 +1,6 @@
 import type { Client, Pool, PoolClient } from 'pg';
 import type { AuthenticatedDemoSession } from '../demo-session/demo-session.service.js';
+import type { RunnableScenarioType } from './demo-step.plan.js';
 
 export interface StepResult {
   datasetVersionId: string;
@@ -7,10 +8,11 @@ export interface StepResult {
   datasetStatus: string;
   jobStatus: string;
   executionAttemptId?: string;
+  attemptNumber?: number;
   attemptStatus?: string;
   datasetBuildSnapshotId?: string;
   resolvedDependencyDefinitionVersionId?: string;
-  externalStatus?: 'SUCCEEDED';
+  externalStatus?: 'SUCCEEDED' | 'FAILED';
 }
 export interface StepResponse {
   scenarioId: string; stepNumber: number; requestId: string;
@@ -23,14 +25,18 @@ export interface StepIntent {
   datasetVersionId?: string; jobId?: string; executionAttemptId?: string;
   datasetBuildSnapshotId?: string; resolvedDependencyDefinitionVersionId?: string;
   airflowDagId?: string; airflowDagRunId?: string;
+  previousExecutionAttemptId?: string; previousAttemptStatus?: 'FAILED';
+  previousAttemptHistory?: Record<string, unknown>; expectedAttemptNumber?: 2;
 }
 export interface StepLedger {
   id: string; scenario_id: string; step_number: number; request_id: string;
+  scenario_type: RunnableScenarioType;
   status: 'PENDING' | 'COMPLETED'; intent: StepIntent; result: StepResponse | null;
 }
 export async function readLedgers(db: Pool | PoolClient | Client, scenarioId: string): Promise<StepLedger[]> {
-  return (await db.query<StepLedger>(`SELECT id,scenario_id,step_number,request_id,status,intent,result
-    FROM demo_scenario_step_executions WHERE scenario_id=$1 ORDER BY step_number`, [scenarioId])).rows;
+  return (await db.query<StepLedger>(`SELECT l.id,scenario_id,step_number,request_id,l.status,intent,result,sc.scenario_type
+    FROM demo_scenario_step_executions l JOIN demo_scenario_instances sc ON sc.id=l.scenario_id
+    WHERE scenario_id=$1 ORDER BY step_number`, [scenarioId])).rows;
 }
 
 export interface GuidedState {
@@ -38,7 +44,7 @@ export interface GuidedState {
   versions: { id: string; version: number; status: string }[];
   jobs: { id: string; dataset: string; status: string; type: string; domain: string; definition: string | null }[];
   snapshots: { id: string; dataset: string; dependencies: number }[];
-  attempts: { id: string; job: string; number: number; status: string; dag: string; run: string }[];
+  attempts: { id: string; job: string; number: number; status: string; dag: string; run: string; history: Record<string, unknown> }[];
   definitions: { id: string; version: number; status: string; dependencies: number }[];
 }
 /** One SQL snapshot, exact canonical series, NEVER latest-version resolution. */
@@ -54,7 +60,7 @@ export async function readGuidedState(db: Pool | PoolClient, session: Authentica
       (SELECT count(*) FROM dataset_build_snapshot_dependencies d WHERE d.snapshot_id=b.id))),'[]')
       FROM dataset_versions v JOIN dataset_build_snapshots b ON b.dataset_version_id=v.id WHERE v.dataset_series_id=ds.id),
     'attempts',(SELECT coalesce(jsonb_agg(jsonb_build_object('id',a.id,'job',j.id,'number',a.attempt_number,
-      'status',a.status,'dag',a.airflow_dag_id,'run',a.airflow_dag_run_id)),'[]')
+      'status',a.status,'dag',a.airflow_dag_id,'run',a.airflow_dag_run_id,'history',to_jsonb(a))),'[]')
       FROM dataset_versions v JOIN calculation_jobs j ON j.output_dataset_version_id=v.id
       JOIN execution_attempts a ON a.calculation_job_id=j.id WHERE v.dataset_series_id=ds.id),
     'definitions',(SELECT coalesce(jsonb_agg(jsonb_build_object('id',d.id,'version',d.version,'status',d.status,

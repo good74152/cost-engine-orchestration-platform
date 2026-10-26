@@ -701,3 +701,23 @@ unknown recovery/maintenance include retained ledgers. Startup invalidation and
 single-instance/no-external-writer limits remain. No other Scenario/UI/background
 runner is added. See [ADR-0012](adr/0012-demo-scenario-step-idempotency.md) and
 [contracts, recovery and evidence](tasks/demo-02c-happy-path-step-execution.md).
+
+## 24. Demo Failure and Retry
+
+Demo-02D extends the same Step protocol with FAILURE_RETRY, not another ledger or
+core Retry implementation. Six-step HAPPY_PATH remains intact. FAILURE_RETRY has
+nine steps: create, Run, fake failure, reconcile failure, Retry, fake success,
+reconcile success, validation and publication. A confirmed failed Job is an
+expected IN_PROGRESS/4 result. Only final publication completes the Scenario/9.
+
+Retry intent freezes the same dataset/job/snapshot/definition, failed Attempt 1
+and its complete terminal history, and expected Attempt number 2. Existing core
+Run creates the new identity. Accepted recovery only fills progress; ambiguous
+dispatch reuses Attempt 2, while rejection never allocates Attempt 3. Later steps
+bind only Attempt 2 and preserve Attempt 1 unchanged. No Domain status SQL or
+executor call is added inside Scenario transactions. Existing Reset handles both
+Attempts in its original atomic owner cleanup. A forward migration validates
+type-specific step/result/binding rules in PostgreSQL and retains the exact 02C
+validator for supported down; any retained Failure Retry Scenario blocks down.
+No applied migration, core state machine, executor, lock or session policy change.
+See [Demo-02D contracts and verification](tasks/demo-02d-failure-retry-scenario.md).

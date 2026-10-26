@@ -259,6 +259,29 @@ invalidates old cookies; fake memory is not recreated. A populated ledger down
 is deliberately unsupported. Focused command: npm run test:demo-02c. Full DTO,
 six-step recovery, failure evidence and limits: [Demo-02C](tasks/demo-02c-happy-path-step-execution.md).
 
+### Demo-02D Failure Retry
+
+POST /demo/scenarios now accepts FAILURE_RETRY as well as HAPPY_PATH. Same-type
+creation is idempotent; cross-type is 409 DEMO_SCENARIO_TYPE_CONFLICT. Lost-response
+Scenario creation remains unavailable (400 INVALID_REQUEST). Next keeps exactly
+expectedStep/requestId; type-specific bounds are 1–6 and 1–9 respectively.
+
+Failure Retry explicitly simulates/reconciles Attempt 1 FAILED, then uses core
+Run to create only Attempt 2 against the same Job and frozen inputs. Steps 3–9
+can recover progress independently of committed Domain facts. Failure result
+DTOs identify the actual attemptNumber/UUID; historical responses never change.
+UNKNOWN Retry is PENDING/202 with the same Attempt 2 and FAILED logical Job.
+Definite dispatch rejection is 409 DEMO_SCENARIO_STATE_CONFLICT and requires Reset
+in this bounded flow, never Attempt 3. Existing auth/CSRF/ownership/queue/Reset,
+503 unknown-outcome and PostgreSQL-only pending-read contracts remain unchanged.
+No client execution selector or new public fake-control API is added.
+
+New forward migration validates both flow bounds/bindings and preserves original
+Happy Path safety. Its down explicitly refuses retained FAILURE_RETRY Scenarios;
+supported down preserves Happy Path data and restores the original validator.
+Focused suite: npm run test:demo-02d. Full nine steps, private Retry intent,
+history protection, migration and test evidence: [Demo-02D](tasks/demo-02d-failure-retry-scenario.md).
+
 Handled API errors use the flat envelope:
 
 ```json
