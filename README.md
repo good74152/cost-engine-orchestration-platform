@@ -20,6 +20,7 @@ For design decisions and test evidence, use [Explore the Engineering Design](#ex
 | PostgreSQL | Persistent state, transactions and constraints |
 | FakeExecutor | Simulates external job execution for development and tests |
 | Docker Compose | Local PostgreSQL environment |
+| React / Vite / Tailwind CSS | Interactive local Demo dashboard |
 
 ## System Architecture
 
@@ -135,6 +136,67 @@ Privately configure `TEST_DATABASE_URL` (fallback: `DATABASE_URL`) for a safe te
 **Do not run the standalone raw-ingestion test against a persistent database**; the milestone runner uses an isolated launcher.
 Read the [test setup and gate rules](docs/REFERENCE.md#verification) before running database tests.
 
+## Interactive Demo Dashboard
+
+The React frontend presents all three guided scenarios, Free Exploration and
+session-owned Dataset / Job / Attempt history. It displays backend state; it
+does not run financial calculations or invent executor results.
+
+After the private local PostgreSQL/.env setup above, use a **dedicated local Demo
+database** and run from the repository root (Windows uses npm.cmd):
+
+```powershell
+npm.cmd ci
+npm.cmd --prefix frontend ci
+docker compose up -d postgres_db
+# Privately configure DATABASE_URL for your local Demo database.
+npm.cmd run migrate -- up
+$env:APP_MODE='demo'
+$env:NODE_ENV='development'
+$env:EXECUTOR_TYPE='fake'
+# Privately set DEMO_SEED_DATABASE_URL to that same migrated Demo database.
+npm.cmd run seed:demo-guided
+npm.cmd run dev
+```
+
+In a second terminal, run `npm.cmd run ui:dev` and open http://localhost:5173.
+The backend defaults to port 3000. Vite forwards relative /demo requests while
+preserving browser Host/Origin and HttpOnly Cookie semantics. No CORS bypass.
+Start a session explicitly, choose a guided scenario, then run one step at a time.
+For Lost Response Step 2, select **Recover original execution** after its 202.
+Reset requires confirmation; then start a new session to switch modes/scenarios.
+For Free Exploration, create CAPEX, Run, set fake success/failure, Reconcile,
+then explicitly validate/publish or choose another eligible lifecycle command.
+The local seed configures only CAPEX / DEMO_GUIDED_SUMMARY. Other domains require
+backend configuration. These are development settings, not a public deployment.
+
+```powershell
+npm.cmd run ui:typecheck
+npm.cmd run ui:test
+npm.cmd run ui:build
+# Optional real Chromium/backend smoke, against its OWN disposable test DB:
+# Privately configure TEST_DATABASE_URL for a safe CREATE DATABASE test service.
+npm.cmd --prefix frontend exec -- playwright install chromium
+npm.cmd run ui:smoke
+```
+
+Full UI routes, contracts, identity recovery, local setup and executed verification:
+[Demo-03](docs/tasks/demo-03-frontend-ui.md). Deployment is deferred to Demo-04.
+
+### Frontend screenshots
+
+Actual Chromium captures against a disposable PostgreSQL database, with real
+session-owned state. FakeExecutor simulates external execution; no financial
+results or mock financial metrics are shown.
+
+![Interactive Demo overview](docs/images/demo-03/dashboard.png)
+
+![Lost ACK pending state and original-execution recovery](docs/images/demo-03/lost-response-pending.png)
+
+[Failure Retry history](docs/images/demo-03/failure-retry.png) ·
+[Free Exploration](docs/images/demo-03/free-exploration.png) ·
+[Mobile dashboard](docs/images/demo-03/dashboard-mobile.png)
+
 ## Explore the Engineering Design
 
 | Document | What You Can Learn |
@@ -166,5 +228,7 @@ Demo-02D adds the nine-step [Failure Retry Scenario](docs/tasks/demo-02d-failure
 using the same Job/frozen inputs and a new Attempt without rewriting failed history.
 Demo-02E adds the six-step [Lost Response Recovery Scenario](docs/tasks/demo-02e-lost-response-recovery.md):
 an external fake execution exists before its ACK is lost; retry confirms the same identity.
-No frontend or automatic background execution is implemented.
+Demo-03 adds the interactive local [Frontend Dashboard](docs/tasks/demo-03-frontend-ui.md)
+with explicit actions and durable-state recovery. Automatic background execution
+and public deployment remain unimplemented.
 Real Airflow integration, cancellation, queues, background workers, automatic publication and production authentication/authorization are not implemented.
