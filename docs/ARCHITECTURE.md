@@ -753,3 +753,29 @@ validator, preserving both histories; any retained E Scenario blocks rollback
 atomically. Core Run, state machines, executor interface, applied migrations,
 security and lock ordering are unchanged. Single instance, development/test and
 no external writer limits remain. See [contracts and PostgreSQL evidence](tasks/demo-02e-lost-response-recovery.md).
+
+## 26. Demo Frontend Presentation
+
+Demo-03 adds a separate React/TypeScript/Vite application under frontend/ with
+React Router, Tailwind CSS and Vitest/RTL. It is a view and explicit command
+client for existing protected Demo APIs, not a second orchestration engine.
+No backend source, migration, canonical identity, lifecycle, ledger, executor,
+ownership, transaction, lock or Reset protocol changes.
+
+The browser manages HttpOnly credentials; fetch uses include and every Demo POST
+uses the existing CSRF header. The local Vite proxy preserves browser Host/Origin.
+Session start and all mutations are explicit. Confirmed Reset clears only UI
+state/request scope after 204; failure/unknown outcome is retained visibly.
+
+Only non-sensitive session/scenario/step/request UUID mappings enter localStorage,
+before Step POST. Same-step retries and reloads reuse the server's pending ID.
+Latest Scenario GET progress is authoritative even after original-result replay
+or lost HTTP responses. 202 is pending; 503 is unknown; neither implies failure,
+rollback, a new attempt or permission to auto-advance. Domain cards use read DTOs,
+including all opaque cursor pages. A fake acknowledgement is not live monitoring
+or a reconciled DB result. Guided/manual isolation remains backend-enforced.
+
+Mock UI tests and a real Chromium/Vite/Backend smoke against an independently
+owned PostgreSQL database verify the interface. Genuine screenshots are retained.
+Single-instance/development-only limits remain. No public deployment, background
+polling, new calculation logic or Demo-04 work. See [Demo-03](tasks/demo-03-frontend-ui.md).

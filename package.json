@@ -4,6 +4,11 @@
   "description": "Backend orchestration platform for versioned cost-engine datasets and Airflow/ETL execution workflows.",
   "main": "index.js",
   "scripts": {
+    "ui:dev": "npm --prefix frontend run dev",
+    "ui:build": "npm --prefix frontend run build",
+    "ui:typecheck": "npm --prefix frontend run typecheck",
+    "ui:test": "npm --prefix frontend run test",
+    "ui:smoke": "npm --prefix frontend run smoke",
     "dev": "tsx watch src/server.ts",
     "build": "tsc",
     "start": "node dist/server.js",

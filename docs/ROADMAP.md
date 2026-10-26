@@ -103,13 +103,20 @@ Job/frozen inputs while preserving failed Attempt 1. It reuses the existing ledg
 idempotency, transaction and Reset protocols; a forward migration enforces type
 bounds/bindings without changing applied migrations or core Retry.
 See [bounded contracts/evidence](tasks/demo-02d-failure-retry-scenario.md).
-Demo-02E starts from freshly fetched 13a8907 on feature/demo-02e-lost-response-recovery.
+Demo-02E is merged via PR #30 at 0c80b44, including manual-fake admission hardening.
 It adds only the six-step LOST_RESPONSE_RECOVERY flow: a Demo-only executor
 decorator loses an actual acceptance ACK, then existing Core dispatch recovery
 confirms the same Attempt 1 and full external identity. It retains ledger A/B,
 security/Reset and Happy/Failure rules; only a forward validator migration is
 added. See [bounded contracts/evidence](tasks/demo-02e-lost-response-recovery.md).
-System Owner review is required; no automatic merge. Frontend, deployment,
+Demo-03 starts from freshly fetched 0c80b44 on feature/demo-03-frontend-ui.
+It adds a React/Vite/Tailwind dashboard, three explicit Guided flows, Free
+Exploration, session management and paged resource/history views. Browser request
+IDs persist by session/scenario/step; PostgreSQL progress stays authoritative.
+The UI does not implement backend state transitions or fake execution results.
+Vitest/RTL and actual Chromium/Backend/PostgreSQL smoke evidence accompany real
+screenshots. See [bounded contracts and verification](tasks/demo-03-frontend-ui.md).
+System Owner review is required; no automatic merge. Demo-04 deployment,
 background execution and distributed Demo remain deferred.
 
 ### Naming-01 — Rename COWOS_S to E2E_COST

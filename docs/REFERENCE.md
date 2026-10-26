@@ -318,6 +318,31 @@ Representative contracts: 400 INVALID_REQUEST/INVALID_DOMAIN/INVALID_PERIOD; 404
 
 ## Local development
 
+### Interactive frontend (Demo-03)
+
+frontend/ provides React routes for Dashboard, Guided Demo, Free Exploration,
+Dataset detail/history and About. Root scripts ui:dev, ui:typecheck, ui:test and
+ui:build delegate to that package; install both root and frontend lockfiles.
+Start the existing Demo backend on 3000 and Vite on 5173 after explicit migration
+and the local guided seed. See [the complete setup](tasks/demo-03-frontend-ui.md#reproducible-local-development).
+
+All requests are relative /demo with credentials: include; POST also supplies
+X-Demo-Session: 1 and JSON. Vite changeOrigin: false retains the browser's Host
+and Origin. No Cookie/token storage, CORS bypass or backend contract change.
+Only a user starts a session. Backend 401 invalidates UI scope; only confirmed
+Reset 204 clears it as successful Reset. Error/unknown Reset retains state.
+
+Guided request mappings are saved before POST under session/scenario/step scope.
+Reload GETs Session, Scenario and Pending Step; server progress/pending identity
+wins over browser storage. 202/503/network retry reuses the same request UUID,
+never auto-advances and never infers a financial status. Resource reads follow
+all nextCursor pages; fake status acknowledgements are not live executor reads.
+
+ui:smoke uses actual Chromium, a Vite proxy and an unchanged Demo backend on an
+owned template0 PostgreSQL fixture with normal DROP/zero-backend verification.
+It never uses a persistent DB as its data target. Configure the safe test service
+privately and install Playwright Chromium first. No deployment is implemented.
+
 Requirements: Node.js 24+, npm, Docker/Compose and PostgreSQL (repository Compose uses PostgreSQL 18).
 
 1. Install dependencies with `npm ci`.
