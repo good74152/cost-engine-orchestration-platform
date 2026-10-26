@@ -188,8 +188,8 @@ git diff --check
 
 All final commands ran sequentially on clean implementation commit
 7acaae07336aab4b04bf44570891cb4c7ae7a9cd, tree
-c6c93efedbb431643bb06474d52198a8d7bd85e4. The subsequent evidence-only commit
-updates this document, not the tested code/migration/test sources. Environment:
+c6c93efedbb431643bb06474d52198a8d7bd85e4. The subsequent evidence-only commits
+update this document, not the tested code/migration/test sources. Environment:
 Windows PowerShell; Node 24.18.0; npm 11.16.0; PostgreSQL 18.6
 (Debian 18.6-1.pgdg13+2), using the existing Compose service.
 docker compose up -d postgres_db exited 0.
@@ -253,12 +253,16 @@ their owned databases after closing actual clients and checking zero backends:
 | 01B-1 | demo_01b1_test_23172_6134e84f0b6a | 0 | yes |
 | 01B-2 | demo_01b2_test_23332_5d2656dabb47 | 0 | yes |
 
-The isolated raw launcher also reported normal owned teardown for
-raw_milestone_test_33080_efa55bcf93c9. After all gates, pg_database contained
+The unchanged isolated raw launcher reported owned teardown for
+raw_milestone_test_33080_efa55bcf93c9. Its pre-existing cleanup uses DROP DATABASE
+WITH (FORCE), as do several other existing core milestone fixtures. Those helpers
+were not changed by Demo-02D; this report does not claim they use normal DROP or
+that their FORCE clause terminated zero clients. The seven Demo suites above
+separately prove zero backends and normal DROP without FORCE. After all gates, pg_database contained
 only postgres, template0, template1 and pre-existing testdb. pg_stat_activity
 showed only the audit connection to postgres, no fixture database/backend.
-No forced DROP, TRUNCATE, CASCADE, source-database fixture write or repair was
-needed in Demo-02D verification.
+The new Demo-02D fixture needed no forced DROP, TRUNCATE, CASCADE, source-database
+fixture write or repair.
 
 Migration behavior was executed, not inferred: forward over a completed original
 six-step Scenario preserved every row; supported down restored the exact original
