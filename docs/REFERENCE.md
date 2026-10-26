@@ -300,6 +300,14 @@ down refuses retained E Scenarios and otherwise restores the exact 02D validator
 Focused command: npm run test:demo-02e. Full contracts, identity persistence,
 recovery boundaries and executed evidence: [Demo-02E](tasks/demo-02e-lost-response-recovery.md).
 
+First Guided Scenario creation also requires an unallocated session FakeExecutor.
+Prior manual fake behavior (even without Dataset rows) returns 409
+DEMO_SCENARIO_SESSION_NOT_EMPTY with a reset instruction. Use Reset and a new
+Session; Create never clears fake execution/rejection/script history. This
+conservative check applies to all three types only on first insertion. Existing
+same-type Scenario Create remains 200 at any progress, retaining the same fake
+and executions; different-type remains 409 DEMO_SCENARIO_TYPE_CONFLICT.
+
 Handled API errors use the flat envelope:
 
 ```json

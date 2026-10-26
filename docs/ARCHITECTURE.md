@@ -740,6 +740,13 @@ Subsequent steps bind the original UUIDs/full identity. Original-result replay,
 fresh-connection A/B confirmation, separate Domain commits, session isolation and
 Reset/restart rules are unchanged. No transaction spans an executor call.
 
+Review admission hardening also requires no allocated session fake for FIRST
+Scenario creation. Prior manual behavior can exist without a Dataset; reject it
+with DEMO_SCENARIO_SESSION_NOT_EMPTY rather than clearing execution/rejection or
+script history. Existing-Scenario lookup remains first, so Create replay never
+resets an active or completed Scenario's fake. Reset/new Session is the supported
+path from prior manual fake use to any new Guided Scenario.
+
 A new forward migration adds E-specific six-step success/one-attempt validation
 while preserving Happy/Failure rules. Supported down restores the exact prior
 validator, preserving both histories; any retained E Scenario blocks rollback

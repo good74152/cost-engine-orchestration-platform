@@ -21,6 +21,8 @@ const source = process.env.TEST_DATABASE_URL ?? process.env.DATABASE_URL;
 if (!source) throw new Error('Demo-02E requires a safe disposable PostgreSQL test service');
 function connection(name: string) { const url=new URL(source!);url.pathname='/'+name;return url.toString(); }
 function barrier() {let release!:()=>void;const promise=new Promise<void>(r=>{release=r;});return {promise,release};}
+const fakeState=(fake:FakeExecutor)=>JSON.stringify(fake,(_key,value:unknown)=>
+  value instanceof Map?[...value]:value instanceof Set?[...value]:value);
 class BlockingFake extends FakeExecutor {
   block=false;readonly entered=barrier();readonly finish=barrier();
   override async dispatch(command: DispatchCalculationCommand) {
@@ -102,6 +104,66 @@ test('Demo-02E: Lost Response recovery, durable identity and isolation',{timeout
       const concurrent=await newSession(null);const results=await Promise.all(Array.from({length:20},()=>create(concurrent)));
       assert.equal(results.filter(r=>r.statusCode===201).length,1);assert.equal(results.filter(r=>r.statusCode===200).length,19);
       assert.equal(new Set(results.map(r=>r.json().scenarioId)).size,1);
+    });
+    for(const type of ['LOST_RESPONSE_RECOVERY','HAPPY_PATH','FAILURE_RETRY'])for(const behavior of ['REJECT','UNKNOWN_WITHOUT_CREATION'])
+      await t.test('manual '+behavior+' before '+type+' Create fails closed unchanged; Reset/new session runs the normal flow',async()=>{
+        const s=await newSession(null);
+        const manual=await post('/demo/fake-executor/dispatch-behavior',s,{behavior});assert.equal(manual.statusCode,200,manual.body);
+        assert.equal(await state(s),null);const fake=await runtime.executors.forSession(s.context);
+        const before=await dump();const memory=fakeState(fake);
+        for(let i=0;i<2;i++){
+          const rejected=await create(s,type);error(rejected,409,'DEMO_SCENARIO_SESSION_NOT_EMPTY');
+          assert.match(rejected.json().message,/reset the session/);assert.equal(rejected.headers['set-cookie'],undefined);
+          assert.deepEqual(await dump(),before);assert.equal(fakeState(fake),memory);
+          assert.equal(await runtime.executors.forSession(s.context),fake);
+        }
+        assert.equal((await pool.query('SELECT count(*)::int AS n FROM demo_scenario_instances WHERE session_id=$1',[s.context.sessionId])).rows[0].n,0);
+        assert.equal(fake.getDispatchHistory().length,0);assert.equal(fake.getExternalExecutions().length,0);
+        assert.equal((await post('/demo/sessions/reset',s)).statusCode,204);assert.equal(runtime.executors.hasSession(s.context.sessionId),false);
+        const fresh=await newSession(type);assert.notEqual(fresh.context.companyCode,s.context.companyCode);await through(fresh,1);
+        const first=await next(fresh,2);assert.equal(first.statusCode,type==='LOST_RESPONSE_RECOVERY'?202:200,first.body);
+        if(type==='LOST_RESPONSE_RECOVERY'){
+          const recovered=await next(fresh,2);assert.equal(recovered.statusCode,200,recovered.body);
+          assert.equal(recovered.json().stepResult.executionAttemptId,first.json().stepResult.executionAttemptId);
+          const commands=(await runtime.executors.forSession(fresh.context)).getDispatchHistory();assert.equal(commands.length,2);assert.deepEqual(commands[0],commands[1]);
+        }
+        await through(fresh,type==='FAILURE_RETRY'?9:6,3);
+        const d=(await state(fresh))!;assert.equal(d.versions.length,1);assert.equal(d.jobs.length,1);assert.equal(d.attempts.length,type==='FAILURE_RETRY'?2:1);
+        assert.equal(d.versions[0]!.status,'PUBLISHED');assert.equal((await runtime.executors.forSession(fresh.context)).getExternalExecutions().length,type==='FAILURE_RETRY'?2:1);
+      });
+    for(const type of ['LOST_RESPONSE_RECOVERY','HAPPY_PATH','FAILURE_RETRY'])
+      await t.test(type+' repeated Create preserves the SAME live and terminal execution, scripts, identity and progress',async()=>{
+        const s=await newSession(type);await through(s,1);const first=await next(s,2);
+        assert.equal(first.statusCode,type==='LOST_RESPONSE_RECOVERY'?202:200,first.body);
+        const fake=await runtime.executors.forSession(s.context);
+        const replay=async()=>{
+          const before=await dump();const memory=fakeState(fake);const original=(await get('/demo/scenarios/current',s)).json();
+          for(let i=0;i<3;i++){const r=await create(s,type);assert.equal(r.statusCode,200,r.body);assert.deepEqual(r.json(),original);}
+          error(await create(s,type==='HAPPY_PATH'?'FAILURE_RETRY':'HAPPY_PATH'),409,'DEMO_SCENARIO_TYPE_CONFLICT');
+          assert.deepEqual(await dump(),before);assert.equal(await runtime.executors.forSession(s.context),fake);assert.equal(fakeState(fake),memory);
+        };
+        await replay();
+        if(type==='LOST_RESPONSE_RECOVERY'){const recovered=await next(s,2);assert.equal(recovered.statusCode,200,recovered.body);assert.equal(recovered.json().stepResult.executionAttemptId,first.json().stepResult.executionAttemptId);await replay();}
+        if(type==='FAILURE_RETRY'){await through(s,5,3);await replay();await through(s,9,6);}else await through(s,6,3);
+        await replay();assert.equal(fake.getExternalExecutions().length,type==='FAILURE_RETRY'?2:1);
+      });
+    await t.test('coordinator orders manual behavior before Create, and Create before manual behavior without contamination',async()=>{
+      for(const manualFirst of [true,false]){
+        const s=await newSession(null);const entered=barrier();const finish=barrier();const firstAdmitted=barrier();const admitted=barrier();let queued=0;
+        const run=runtime.coordinator.run.bind(runtime.coordinator);const original=runtime.coordinator.run;
+        const held=run(s.context,async()=>{entered.release();await finish.promise;});await entered.promise;
+        runtime.coordinator.run=(session,body)=>{const operation=run(session,body);if(session.sessionId===s.context.sessionId){if(++queued===1)firstAdmitted.release();if(queued===2)admitted.release();}return operation;};
+        let manual:Promise<Response>|undefined;let guided:Promise<Response>|undefined;
+        try{
+          if(manualFirst){manual=Promise.resolve(post('/demo/fake-executor/dispatch-behavior',s,{behavior:'REJECT'}));await firstAdmitted.promise;guided=Promise.resolve(create(s));}
+          else{guided=Promise.resolve(create(s));await firstAdmitted.promise;manual=Promise.resolve(post('/demo/fake-executor/dispatch-behavior',s,{behavior:'REJECT'}));}
+          await admitted.promise;finish.release();await held;
+          const [m,g]=await Promise.all([manual,guided]);
+          if(manualFirst){assert.equal(m.statusCode,200,m.body);error(g,409,'DEMO_SCENARIO_SESSION_NOT_EMPTY');assert.equal(await state(s),null);}
+          else{assert.equal(g.statusCode,201,g.body);s.id=g.json().scenarioId;error(m,409,'DEMO_SCENARIO_MODE_CONFLICT');
+            assert.equal(runtime.executors.hasSession(s.context.sessionId),false);await through(s,1);assert.equal((await next(s,2)).statusCode,202);assert.equal((await next(s,2)).statusCode,200);}
+        }finally{runtime.coordinator.run=original;finish.release();await held;await Promise.all([manual,guided]);}
+      }
     });
     const completed=await newSession();const responses:StepResponse[]=[];
     await t.test('first Step 2 is 202 with real execution, durable DISPATCHING/PENDING, pending ledger/progress and strict request ownership',async()=>{

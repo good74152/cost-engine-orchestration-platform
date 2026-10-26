@@ -145,6 +145,37 @@ historical migrations and session security are unchanged. Only Demo-02E is added
 
 ## PostgreSQL verification
 
+### Review fix: reject prior manual executor configuration
+
+Before this fix, manual POST /demo/fake-executor/dispatch-behavior could enqueue
+REJECT or UNKNOWN_WITHOUT_CREATION without creating any Dataset. The empty-domain
+check then admitted a new Scenario whose first dispatch consumed that behavior.
+This could prevent the intended real execution / lost ACK / same-identity recovery.
+
+First Scenario creation now also requires that the session has no allocated
+FakeExecutor in its runtime registry. An existing fake returns the existing
+409 DEMO_SCENARIO_SESSION_NOT_EMPTY with an explicit reset instruction, before
+Scenario insertion. This deliberately conservative rule also rejects an allocated
+but unused fake or a prior ACCEPT configuration. It does not inspect, clear or
+replace execution, rejection, default behavior or script state. Use the supported
+Reset and create a new Session before starting a Guided Scenario. No new reset
+semantics or executor API is introduced.
+
+The check runs only after the durable existing-Scenario lookup, inside the existing
+session coordinator and short Create transaction. Same-type Create for an existing
+Scenario still returns its original durable DTO at READY, pending UNKNOWN, accepted,
+Retry or terminal progress. Different-type Create remains TYPE_CONFLICT. Neither
+path clears a fake or changes a run identity. Unknown Create COMMIT still resolves
+through the original durable lookup. Single-instance and no-external-writer limits
+remain; PostgreSQL transactions, Core Run and executor contracts are unchanged.
+
+New PostgreSQL route cases cover both manual behaviors before all three Scenario
+types, no mutation on refusal, existing Reset/new-session recovery, normal E
+202-to-200 recovery, full Happy/Failure completion, repeated Create at active and
+terminal phases, and barrier-ordered Manual/Create races in both directions.
+Review-fix verification is recorded separately below; earlier evidence remains
+the exact pre-review implementation run, not evidence for this fix.
+
 scripts/demo-02e-lost-response-recovery.pg.test.ts owns a template0 disposable
 database, verifies current_database before fixture writes, and applies all eleven
 migrations. It closes actual clients, verifies zero backends and normally drops
