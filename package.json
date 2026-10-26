@@ -13,6 +13,7 @@
     "test:demo-02b": "tsx --test scripts/demo-02b-scenario-persistence.pg.test.ts",
     "test:demo-02c": "tsx --test scripts/demo-02c-happy-path.pg.test.ts",
     "test:demo-02d": "tsx --test scripts/demo-02d-failure-retry.pg.test.ts",
+    "test:demo-02e": "tsx --test scripts/demo-02e-lost-response-recovery.pg.test.ts",
     "test:demo-session-infrastructure": "tsx --test scripts/demo-session-infrastructure.pg.test.ts",
     "test:demo-session-reset-recovery": "tsx --test scripts/demo-session-reset-recovery.pg.test.ts",
     "test:demo-session-ownership-executor-isolation": "tsx --test scripts/demo-session-ownership-executor-isolation.pg.test.ts",

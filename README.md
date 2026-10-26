@@ -164,5 +164,7 @@ steps with a durable request ledger and recovery. See the
 [Demo-02C contract and verification](docs/tasks/demo-02c-happy-path-step-execution.md).
 Demo-02D adds the nine-step [Failure Retry Scenario](docs/tasks/demo-02d-failure-retry-scenario.md)
 using the same Job/frozen inputs and a new Attempt without rewriting failed history.
-No frontend, Lost Response Scenario or automatic background execution is implemented.
+Demo-02E adds the six-step [Lost Response Recovery Scenario](docs/tasks/demo-02e-lost-response-recovery.md):
+an external fake execution exists before its ACK is lost; retry confirms the same identity.
+No frontend or automatic background execution is implemented.
 Real Airflow integration, cancellation, queues, background workers, automatic publication and production authentication/authorization are not implemented.

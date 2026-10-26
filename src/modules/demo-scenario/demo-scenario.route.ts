@@ -23,7 +23,7 @@ export function demoScenarioRoutes(runtime: DemoRuntime, options: DemoSessionRou
     };
     app.post('/demo/scenarios', async (request, reply) => operate(request, async (session) => {
       const { scenarioType } = exactDemoBody(request.body, ['scenarioType']);
-      if (scenarioType !== 'HAPPY_PATH' && scenarioType !== 'FAILURE_RETRY') throw new DemoSessionError('INVALID_REQUEST', 400, 'Unsupported scenario type');
+      if (scenarioType !== 'HAPPY_PATH' && scenarioType !== 'FAILURE_RETRY' && scenarioType !== 'LOST_RESPONSE_RECOVERY') throw new DemoSessionError('INVALID_REQUEST', 400, 'Unsupported scenario type');
       const result = await runtime.scenarios.create(session, scenarioType);
       return reply.status(result.created ? 201 : 200).send(result.scenario);
     }));

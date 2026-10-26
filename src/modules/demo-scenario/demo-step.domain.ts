@@ -4,6 +4,7 @@ import { DemoSessionError } from '../demo-session/demo-session.errors.js';
 import { CalculationJobError } from '../calculation-job.errors.js';
 import { isDeepStrictEqual } from 'node:util';
 import { stepPlan, type StepPlan } from './demo-step.plan.js';
+import { LostAcknowledgementExecutor } from './lost-acknowledgement-executor.js';
 import { readGuidedState, readSettledGuidedState, type GuidedState, type StepIntent, type StepLedger, type StepResult } from './demo-step.repository.js';
 
 export const stateConflict = () => new DemoSessionError('DEMO_SCENARIO_STATE_CONFLICT', 409, 'Guided resources do not match the step contract');
@@ -50,7 +51,7 @@ export function successResult(state: GuidedState | null, ledger: StepLedger): St
   }
   return { datasetVersionId: version.id, jobId: job.id, datasetStatus: version.status, jobStatus: job.status,
     ...(attempt ? { executionAttemptId: attempt.id, attemptStatus: attempt.status,
-      ...(plan.scenarioType === 'FAILURE_RETRY' ? { attemptNumber: attempt.number } : {}),
+      ...(plan.scenarioType !== 'HAPPY_PATH' ? { attemptNumber: attempt.number } : {}),
       datasetBuildSnapshotId: snapshot!.id, resolvedDependencyDefinitionVersionId: job.definition! } : {}),
     ...(plan.operation === 'FAKE' ? { externalStatus: plan.outcome } : {}) };
 }
@@ -84,7 +85,9 @@ export async function executeGuidedStep(runtime: DemoRuntime, session: Authentic
         || (attempt && !['PREPARED','DISPATCHING'].includes(attempt.status))
         || (version.status === 'BUILDING' && !snapshot)) throw stateConflict();
       const executor = await runtime.executors.forSession(session);
-      try { await runCalculationJobService(job.id, executor); }
+      const dispatchExecutor = plan.scenarioType === 'LOST_RESPONSE_RECOVERY' && n === 2
+        ? new LostAcknowledgementExecutor(executor) : executor;
+      try { await runCalculationJobService(job.id, dispatchExecutor); }
       catch (error) {
         if (error instanceof CalculationJobError && ['EXECUTOR_DISPATCH_FAILED','DEPENDENCY_NOT_READY','DEPENDENCY_DEFINITION_NOT_READY'].includes(error.code)) throw stateConflict();
         throw error;

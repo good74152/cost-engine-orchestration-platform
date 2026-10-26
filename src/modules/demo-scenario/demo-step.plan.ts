@@ -1,4 +1,4 @@
-export type RunnableScenarioType = 'HAPPY_PATH' | 'FAILURE_RETRY';
+export type RunnableScenarioType = 'HAPPY_PATH' | 'FAILURE_RETRY' | 'LOST_RESPONSE_RECOVERY';
 export interface StepPlan {
   scenarioType: RunnableScenarioType;
   step: number;
@@ -8,15 +8,15 @@ export interface StepPlan {
   outcome: 'FAILED' | 'SUCCEEDED';
 }
 
-// Only the two accepted, fixed teaching flows. Not a configurable workflow engine.
+// Only the accepted fixed teaching flows. Not a configurable workflow engine.
 export function stepCount(type: string): number {
-  if (type === 'HAPPY_PATH') return 6;
+  if (type === 'HAPPY_PATH' || type === 'LOST_RESPONSE_RECOVERY') return 6;
   if (type === 'FAILURE_RETRY') return 9;
   throw new Error('Unsupported guided scenario');
 }
 export function stepPlan(type: string, step: number): StepPlan {
   const count = stepCount(type);
-  const operations = type === 'HAPPY_PATH'
+  const operations = type !== 'FAILURE_RETRY'
     ? ['CREATE','RUN','FAKE','RECONCILE','VALIDATE','PUBLISH'] as const
     : ['CREATE','RUN','FAKE','RECONCILE','RUN','FAKE','RECONCILE','VALIDATE','PUBLISH'] as const;
   const operation = operations[step - 1];

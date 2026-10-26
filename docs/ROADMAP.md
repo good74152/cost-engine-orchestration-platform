@@ -97,14 +97,20 @@ recovery, pending-step read and same-transaction Reset integration.
 See [bounded contracts/evidence](tasks/demo-02c-happy-path-step-execution.md)
 and [ADR-0012](adr/0012-demo-scenario-step-idempotency.md).
 
-Demo-02D starts from freshly fetched 6427346 on feature/demo-02d-failure-retry-scenario.
+Demo-02D is merged via PR #29 at 13a8907.
 It adds only the nine-step FAILURE_RETRY flow, binding new Attempt 2 to the same
 Job/frozen inputs while preserving failed Attempt 1. It reuses the existing ledger,
 idempotency, transaction and Reset protocols; a forward migration enforces type
-bounds/bindings without changing applied migrations or core Retry. System Owner
-review is required, not automatic merge. See [bounded contracts/evidence](tasks/demo-02d-failure-retry-scenario.md).
-LOST_RESPONSE_RECOVERY/02E, frontend, deployment, background execution and
-distributed Demo remain deferred.
+bounds/bindings without changing applied migrations or core Retry.
+See [bounded contracts/evidence](tasks/demo-02d-failure-retry-scenario.md).
+Demo-02E starts from freshly fetched 13a8907 on feature/demo-02e-lost-response-recovery.
+It adds only the six-step LOST_RESPONSE_RECOVERY flow: a Demo-only executor
+decorator loses an actual acceptance ACK, then existing Core dispatch recovery
+confirms the same Attempt 1 and full external identity. It retains ledger A/B,
+security/Reset and Happy/Failure rules; only a forward validator migration is
+added. See [bounded contracts/evidence](tasks/demo-02e-lost-response-recovery.md).
+System Owner review is required; no automatic merge. Frontend, deployment,
+background execution and distributed Demo remain deferred.
 
 ### Naming-01 — Rename COWOS_S to E2E_COST
 

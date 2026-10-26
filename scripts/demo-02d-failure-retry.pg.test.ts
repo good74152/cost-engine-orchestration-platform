@@ -74,7 +74,7 @@ test('Demo-02D: bounded Failure Retry, immutable history, durable recovery and i
     await t.test('forward migration preserves populated Happy Path; down restores EXACT applied validator and data; forward again',async()=>{
       const old=(await pool.query("SELECT pg_get_functiondef('validate_demo_step_binding()'::regprocedure) AS body")).rows[0].body;
       const happy=await newSession('HAPPY_PATH');await through(happy,6);const before=await dump();
-      await migrate('up');const after=await dump();assert.deepEqual({...after,pgmigrations:before.pgmigrations},before);
+      await migrate('up',1);const after=await dump();assert.deepEqual({...after,pgmigrations:before.pgmigrations},before);
       await migrate('down',1);assert.deepEqual(await dump(),before);
       assert.equal((await pool.query("SELECT pg_get_functiondef('validate_demo_step_binding()'::regprocedure) AS body")).rows[0].body,old);
       const untouched=(await ledgers(happy))[0];
@@ -83,15 +83,15 @@ test('Demo-02D: bounded Failure Retry, immutable history, durable recovery and i
       const legacy=await newSession(null);await pool.query("INSERT INTO demo_scenario_instances(id,session_id,scenario_type) VALUES($1,$2,'FAILURE_RETRY')",[legacy.id=randomUUID(),legacy.context.sessionId]);
       await pool.query(`INSERT INTO demo_scenario_step_executions(scenario_id,step_number,request_id,intent) VALUES($1,1,$2,$3)`,[legacy.id,legacy.requests[0],
         {domain:'CAPEX',companyCode:legacy.context.companyCode,fiscalYear:2026,period:'Q4',expectedVersion:1,calculationTypeCode:'DEMO_GUIDED_SUMMARY'}]);
-      const guard=await dump();await assert.rejects(migrate('up'),/Cannot reinterpret/);assert.deepEqual(await dump(),guard);
+      const guard=await dump();await assert.rejects(migrate('up',1),/Cannot reinterpret/);assert.deepEqual(await dump(),guard);
       await pool.query('DELETE FROM demo_scenario_step_executions WHERE scenario_id=$1',[legacy.id]);await pool.query('DELETE FROM demo_scenario_instances WHERE id=$1',[legacy.id]);
-      await migrate('up');assert.equal((await pool.query('SELECT count(*)::int AS n FROM pgmigrations')).rows[0].n,10);
+      await migrate('up');assert.equal((await pool.query('SELECT count(*)::int AS n FROM pgmigrations')).rows[0].n,11);
     });
-    console.log('DEMO_02D_RUNTIME',JSON.stringify({node:process.version,postgres:(await pool.query('SHOW server_version')).rows[0].server_version,database:name,migrations:10}));
-    await t.test('Create supports exactly Happy/Failure, same-type retry and cross-type conflict; one Scenario per session',async()=>{
+    console.log('DEMO_02D_RUNTIME',JSON.stringify({node:process.version,postgres:(await pool.query('SHOW server_version')).rows[0].server_version,database:name,migrations:11}));
+    await t.test('Create supports Happy/Failure, same-type retry and cross-type conflict; one Scenario per session',async()=>{
       const s=await newSession();const original=(await get('/demo/scenarios/current',s)).json();const before=await dump();
       assert.deepEqual((await create(s)).json(),original);assert.equal((await create(s)).statusCode,200);
-      error(await create(s,'HAPPY_PATH'),409,'DEMO_SCENARIO_TYPE_CONFLICT');error(await create(s,'LOST_RESPONSE_RECOVERY'),400,'INVALID_REQUEST');
+      error(await create(s,'HAPPY_PATH'),409,'DEMO_SCENARIO_TYPE_CONFLICT');error(await create(s,'UNKNOWN'),400,'INVALID_REQUEST');
       assert.deepEqual(await dump(),before);assert.deepEqual(await progress(s),{status:'READY',completed_step:0});
       await assert.rejects(pool.query("INSERT INTO demo_scenario_instances(session_id,scenario_type) VALUES($1,'HAPPY_PATH')",[s.context.sessionId]),e=>(e as {code:string}).code==='23505');
       const simultaneous=await newSession(null);const results=await Promise.all(Array.from({length:20},()=>create(simultaneous)));
@@ -193,7 +193,7 @@ test('Demo-02D: bounded Failure Retry, immutable history, durable recovery and i
         await assert.rejects(pool.query(`UPDATE demo_scenario_step_executions SET status='COMPLETED',completed_at=now(),result=$2 WHERE id=$1`,[before.id,l.result]));}
       finally{await pool.query('UPDATE execution_attempts SET last_dispatch_error=$2 WHERE id=$1',[first.id,first.history.last_dispatch_error]);}
       assert.equal((await next(pending,5)).statusCode,200);
-      const dumpBefore=await dump();await assert.rejects(migrate('down',1),/retained Failure Retry scenarios/);assert.deepEqual(await dump(),dumpBefore);
+      const dumpBefore=await dump();await assert.rejects(migrate('down',2),/retained Failure Retry scenarios/);assert.deepEqual(await dump(),dumpBefore);
     });
     for(const unknown of [false,true])await t.test(`J: concurrent Retry same/different requests and next-step order (${unknown?'UNKNOWN':'ACCEPTED'}), locks released during dispatch`,async()=>{
       const s=await newSession();await through(s,1);const fake=new BlockingFake();assigned.push(fake);await through(s,4,2);fake.block=true;

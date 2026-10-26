@@ -27,7 +27,7 @@ export class DemoStepService {
     const owned = await client.query('SELECT id FROM demo_scenario_instances WHERE id=$1 AND session_id=$2 FOR UPDATE', [id, session.sessionId]);
     if (!owned.rowCount) throw new DemoResourceUnavailableError();
     const scenario = (await readScenario(client, session.sessionId, id))!;
-    if (scenario.scenarioType !== 'HAPPY_PATH' && scenario.scenarioType !== 'FAILURE_RETRY') throw stateConflict();
+    if (scenario.scenarioType !== 'HAPPY_PATH' && scenario.scenarioType !== 'FAILURE_RETRY' && scenario.scenarioType !== 'LOST_RESPONSE_RECOVERY') throw stateConflict();
     await client.query('SELECT id FROM demo_scenario_step_executions WHERE scenario_id=$1 ORDER BY step_number FOR UPDATE', [id]);
     return { scenario, ledgers: await readLedgers(client, id) };
   }
@@ -159,7 +159,7 @@ export class DemoStepService {
         scenarioStatus: 'IN_PROGRESS', stepResult: { datasetVersionId: resources.version.id, jobId: resources.job.id,
           datasetStatus: resources.version.status, jobStatus: resources.job.status,
           executionAttemptId: resources.attempt!.id, attemptStatus: resources.attempt!.status,
-          ...(ledger.scenario_type === 'FAILURE_RETRY' ? {attemptNumber:resources.attempt!.number} : {}) } };
+          ...(ledger.scenario_type !== 'HAPPY_PATH' ? {attemptNumber:resources.attempt!.number} : {}) } };
     }
     return this.complete(session, ledger, result);
   }
