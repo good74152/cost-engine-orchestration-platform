@@ -23,8 +23,8 @@ export function demoScenarioRoutes(runtime: DemoRuntime, options: DemoSessionRou
     };
     app.post('/demo/scenarios', async (request, reply) => operate(request, async (session) => {
       const { scenarioType } = exactDemoBody(request.body, ['scenarioType']);
-      if (scenarioType !== 'HAPPY_PATH') throw new DemoSessionError('INVALID_REQUEST', 400, 'Unsupported scenario type');
-      const result = await runtime.scenarios.create(session);
+      if (scenarioType !== 'HAPPY_PATH' && scenarioType !== 'FAILURE_RETRY') throw new DemoSessionError('INVALID_REQUEST', 400, 'Unsupported scenario type');
+      const result = await runtime.scenarios.create(session, scenarioType);
       return reply.status(result.created ? 201 : 200).send(result.scenario);
     }));
     app.get('/demo/scenarios/current', async (request) => operate(request, (session) => runtime.scenarios.get(session)));
@@ -35,7 +35,7 @@ export function demoScenarioRoutes(runtime: DemoRuntime, options: DemoSessionRou
     app.post<{ Params: { id: string } }>('/demo/scenarios/:id/next', async (request, reply) => operate(request, async (session) => {
       if (!validResourceId(request.params.id)) throw new DemoResourceUnavailableError();
       const { expectedStep, requestId } = exactDemoBody(request.body, ['expectedStep', 'requestId']);
-      if (typeof expectedStep !== 'number' || !Number.isInteger(expectedStep) || expectedStep < 1 || expectedStep > 6
+      if (typeof expectedStep !== 'number' || !Number.isInteger(expectedStep) || expectedStep < 1 || expectedStep > 9
         || typeof requestId !== 'string' || !validResourceId(requestId)) {
         throw new DemoSessionError('INVALID_REQUEST', 400, 'Invalid step request');
       }

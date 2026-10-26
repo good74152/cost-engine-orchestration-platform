@@ -162,5 +162,7 @@ and [B2 scope and verification](docs/tasks/demo-01b2-session-reset-recovery.md).
 Demo-02B adds durable Scenario Create/Get; Demo-02C adds explicit Happy Path Next
 steps with a durable request ledger and recovery. See the
 [Demo-02C contract and verification](docs/tasks/demo-02c-happy-path-step-execution.md).
-No frontend, other Scenario runner or automatic background execution is implemented.
+Demo-02D adds the nine-step [Failure Retry Scenario](docs/tasks/demo-02d-failure-retry-scenario.md)
+using the same Job/frozen inputs and a new Attempt without rewriting failed history.
+No frontend, Lost Response Scenario or automatic background execution is implemented.
 Real Airflow integration, cancellation, queues, background workers, automatic publication and production authentication/authorization are not implemented.
