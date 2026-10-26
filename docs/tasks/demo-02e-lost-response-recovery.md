@@ -162,3 +162,118 @@ test:demo-02c; test:demo-02b; test:demo-02a; test:demo-session-infrastructure;
 test:demo-session-ownership-executor-isolation; test:demo-session-reset-recovery;
 test:milestone; git diff --check. Executed clean-revision evidence follows after
 verification. System Owner review is required; no automatic approval or merge.
+
+### Executed verification — 2026-10-27 (Asia/Taipei)
+
+All final commands ran sequentially on clean implementation commit
+b5009ac06aa66609c7854ad4a4b2b8c14d373e23, tree
+c8e39ffa37d4a1b7e12d49761e47351419e5a058. The later evidence-only commit changes
+this document, not the tested implementation/migration/test sources. Environment:
+Windows PowerShell, Node 24.18.0, npm 11.16.0, PostgreSQL 18.6
+(Debian 18.6-1.pgdg13+2). docker compose up -d postgres_db exited 0.
+
+| Exact command | Exit | Pass | Fail | Skip |
+|---|---:|---:|---:|---:|
+| npm.cmd run build | 0 | n/a | n/a | n/a |
+| npm.cmd run test:demo-02e | 0 | 27 | 0 | 0 |
+| npm.cmd run test:demo-02d | 0 | 25 | 0 | 0 |
+| npm.cmd run test:demo-02c | 0 | 27 | 0 | 0 |
+| npm.cmd run test:demo-02b | 0 | 26 | 0 | 0 |
+| npm.cmd run test:demo-02a | 0 | 23 | 0 | 0 |
+| npm.cmd run test:demo-session-infrastructure | 0 | 21 | 0 | 0 |
+| npm.cmd run test:demo-session-ownership-executor-isolation | 0 | 19 | 0 | 0 |
+| npm.cmd run test:demo-session-reset-recovery | 0 | 22 | 0 | 0 |
+| npm.cmd run test:milestone | 0 | 246 | 0 | 0 |
+| git diff --check | 0 | n/a | n/a | n/a |
+| git diff 13a8907..HEAD --check | 0 | n/a | n/a | n/a |
+
+All cancellations/TODOs are zero. Counts include Node parent/nested entries,
+not individual assertions: 190 Demo plus 246 milestone entries, total 436.
+Supplemental strict test/migration type checking also exited 0 on this commit:
+
+```powershell
+npm.cmd exec -- tsc --ignoreConfig --noEmit --strict --skipLibCheck --esModuleInterop --module NodeNext --target ES2022 scripts/demo-02e-lost-response-recovery.pg.test.ts migrations/1793100000000_demo-lost-response-recovery.ts
+```
+
+The unchanged milestone runner launched all 13 child commands below. Every child
+reported PASS, exit 0, null signal/spawnError and no gate issues; every test had
+zero fail, skip, cancel and TODO:
+
+| Child command | Exit | Pass | Fail | Skip |
+|---|---:|---:|---:|---:|
+| npm run build | 0 | n/a | n/a | n/a |
+| npm run test:milestone-runner | 0 | 20 | 0 | 0 |
+| npm run test:orchestration-schema-v2 | 0 | 30 | 0 | 0 |
+| npm run test:dataset-version-creation-v2 | 0 | 14 | 0 | 0 |
+| npm run test:first-run-immutable-build-snapshot | 0 | 19 | 0 | 0 |
+| npm run test:execution-attempt-dispatch-fake-executor | 0 | 11 | 0 | 0 |
+| npm run test:executor-reconciliation | 0 | 22 | 0 | 0 |
+| npm run test:dataset-version-terminal-lifecycle | 0 | 64 | 0 | 0 |
+| npm run test:cross-workflow-concurrency-investigation | 0 | 14 | 0 | 0 |
+| npm run test:task-007b1-late-dispatch-reconciliation | 0 | 32 | 0 | 0 |
+| npm run test:task-007c-api-contract | 0 | 12 | 0 | 0 |
+| npm run test:raw-ingestion (owned disposable PostgreSQL database) | 0 | 1 | 0 | 0 |
+| npm run test:task-007d-end-to-end | 0 | 7 | 0 | 0 |
+
+CON-01/CON-02 and E2E Flow A–F remain green. Raw ingestion used its existing
+isolated launcher only. No persistent developer database was a test target.
+
+All final Demo fixtures applied eleven migrations, closed actual clients,
+verified zero remaining backends and normally dropped their owned databases:
+
+| Suite | Owned database | Backends | Normal DROP |
+|---|---|---:|---|
+| 02E | demo_02e_test_3904_49a056f03d16 | 0 | yes |
+| 02D | demo_02d_test_34984_2f33b6a5d6d6 | 0 | yes |
+| 02C | demo_02c_test_19884_4202ce8ab740 | 0 | yes |
+| 02B | demo_02b_test_34376_a872b3b77789 | 0 | yes |
+| 02A | demo_02a_test_32864_cb5c6fa40a6d | 0 | yes |
+| 01A | demo_01a_test_3456_20d824194de7 | 0 | yes |
+| 01B-1 | demo_01b1_test_38460_bf1d90b1dcbf | 0 | yes |
+| 01B-2 | demo_01b2_test_22644_4d23e0e9b2a0 | 0 | yes |
+
+The unchanged isolated raw launcher dropped raw_milestone_test_32556_a538676a38a9.
+Its pre-existing cleanup uses DROP DATABASE WITH (FORCE), as do some existing
+core fixtures. This task does not claim those helpers use normal DROP or that
+FORCE terminated zero clients. The eight Demo suites separately prove zero
+backends and normal DROP without FORCE. After all gates, a read-only maintenance
+audit found only postgres, template0, template1 and pre-existing testdb. The only
+client backend was the audit connection to postgres; no fixture remained.
+
+Executed migration evidence includes populated Happy/Failure up preservation,
+exact prior-validator restoration on supported down and successful forward
+again; pre-02E incompatible ledger refusal; READY-only E down refusal; populated
+E down refusal with unchanged data, validator and migration markers. Existing
+Session/Scenario/ledger/Failure rollback guards still run at their original
+migration boundaries under the additional forward migration.
+
+The special SQL fault ran after the real fake created an execution and before
+Core recorded UNKNOWN. The rejected write left one DISPATCHING Attempt 1 and
+PENDING Job/ledger. Retry used the exact same complete frozen dispatch command,
+received existing-execution confirmation and completed without a second run.
+The blocking-executor test acquired Session/Scenario/ledger/Job/Attempt locks
+with FOR UPDATE NOWAIT while dispatch was paused. Fake success and reconciled
+PostgreSQL success remained separate throughout the completed six-step test.
+
+Development results are separate from final clean-revision evidence. Preliminary
+02E, 02D and 02C suites exited 0 with 27, 25 and 27 passing entries. An additional
+strict type check initially exited 1 (TS2345: UUID template inference in a test
+helper); an explicit string parameter corrected it. Staging whitespace checks
+also rejected extra EOF blank lines; these were removed before the implementation
+commit. No PostgreSQL suite failure is relabelled as PASS. Intentionally injected
+SQL/transport/executor/Reset failures are successful asserted cases.
+
+Final build/runtime logs contain no warnings or deprecations. Git emitted local
+LF-to-CRLF notices; whitespace checks passed. The configured remote uses the old
+repository name and may emit a rename redirect on push; it is not a test warning.
+Local execution logs are in the executing machine's temporary directory:
+demo02e-final-build.log and demo02e-final-test-<suite>.log, for each suite above
+(colons replaced with hyphens). Raw logs/credentials are not committed. These
+are local executed results, not claims about GitHub CI.
+
+The complete diff was reviewed. The new validator differs from the applied 02D
+validator only in the four specified type-selection rules; no Happy/Failure
+validation branch was weakened. No accepted architecture conflict was found.
+All ten historical migrations, Core Run/Retry/preparation/reconciliation/lifecycle,
+FakeExecutor/interface, session security/coordinator/Reset, seed and raw ingestion
+implementations have no diff. No frontend, deployment or later task was added.
