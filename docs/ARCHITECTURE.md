@@ -674,6 +674,30 @@ and revokes in its existing transaction. Recovery checks BOTH remaining graph
 and Scenario after the durable session lock; maintenance includes Scenario-only
 inactive owners. Startup still invalidates old credentials without recreating
 fake state. No core lifecycle/lock/executor or applied migration changes.
-No Step Runner, progress API or Step idempotency is implemented.
+Demo-02B alone implements no steps; section 23 adds the bounded Demo-02C slice.
 See [ADR-0011](adr/0011-demo-scenario-persistence-and-mode-isolation.md) and
 [Demo-02B contracts and evidence](tasks/demo-02b-scenario-persistence.md).
+
+## 23. Demo Happy Path Step Execution
+
+Demo-02C extends section 22 with explicit Next and owned pending-step GET, not
+automatic orchestration. Domain state, Scenario progress, Step ledger state and
+external fake state remain distinct. Transaction A freezes a PENDING intent;
+commit before calling existing Domain services. Transaction B atomically saves
+the verified step result and progress. No Scenario transaction spans an executor
+call. Durable ledger lookup precedes progress validation for original-result
+replay. Unknown COMMIT discards the suspect socket and confirms on a fresh locked
+connection; unknown truth fails closed. Recovery binds exact version 1, its one
+guided job, immutable snapshot/definition and sole stable attempt, not latest data.
+PostgreSQL checks/uniques and owner/parent validation protect ledger history.
+
+Steps explicitly create, Run, set own fake success, reconcile, submit validation
+and publish. Fake success alone does not change the DB. Already successful Domain
+facts fill progress without repeating work. UNKNOWN dispatch stays PENDING/202
+with the same attempt; definite rejection never creates a second Happy Path
+attempt on retry. Existing financial state machines and lock protocols are reused.
+Reset deletes ledger before Scenario and the domain graph in the same transaction;
+unknown recovery/maintenance include retained ledgers. Startup invalidation and
+single-instance/no-external-writer limits remain. No other Scenario/UI/background
+runner is added. See [ADR-0012](adr/0012-demo-scenario-step-idempotency.md) and
+[contracts, recovery and evidence](tasks/demo-02c-happy-path-step-execution.md).

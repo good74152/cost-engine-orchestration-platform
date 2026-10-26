@@ -32,5 +32,19 @@ export function demoScenarioRoutes(runtime: DemoRuntime, options: DemoSessionRou
       if (!validResourceId(request.params.id)) throw new DemoResourceUnavailableError();
       return runtime.scenarios.get(session, request.params.id);
     }));
+    app.post<{ Params: { id: string } }>('/demo/scenarios/:id/next', async (request, reply) => operate(request, async (session) => {
+      if (!validResourceId(request.params.id)) throw new DemoResourceUnavailableError();
+      const { expectedStep, requestId } = exactDemoBody(request.body, ['expectedStep', 'requestId']);
+      if (typeof expectedStep !== 'number' || !Number.isInteger(expectedStep) || expectedStep < 1 || expectedStep > 6
+        || typeof requestId !== 'string' || !validResourceId(requestId)) {
+        throw new DemoSessionError('INVALID_REQUEST', 400, 'Invalid step request');
+      }
+      const result = await runtime.steps.next(session, request.params.id, expectedStep, requestId.toLowerCase());
+      return reply.status(result.stepStatus === 'PENDING' ? 202 : 200).send(result);
+    }));
+    app.get<{ Params: { id: string } }>('/demo/scenarios/:id/pending-step', async (request) => operate(request, (session) => {
+      if (!validResourceId(request.params.id)) throw new DemoResourceUnavailableError();
+      return runtime.steps.pending(session, request.params.id);
+    }));
   };
 }

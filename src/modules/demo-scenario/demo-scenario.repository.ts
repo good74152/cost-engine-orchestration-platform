@@ -1,4 +1,4 @@
-import type { Pool, PoolClient } from 'pg';
+import type { Client, Pool, PoolClient } from 'pg';
 import { DemoSessionError, DemoSessionUnavailableError } from '../demo-session/demo-session.errors.js';
 import type { AuthenticatedDemoSession } from '../demo-session/demo-session.service.js';
 
@@ -13,7 +13,7 @@ export interface DemoScenarioDto {
 const projection = `jsonb_build_object('scenarioId',id,'scenarioType',scenario_type,
   'status',status,'completedStep',completed_step,'createdAt',created_at,'updatedAt',updated_at) AS item`;
 
-export async function lockScenarioSession(client: PoolClient, session: AuthenticatedDemoSession): Promise<void> {
+export async function lockScenarioSession(client: PoolClient | Client, session: AuthenticatedDemoSession): Promise<void> {
   await client.query('SELECT id FROM demo_sessions WHERE id=$1 FOR UPDATE', [session.sessionId]);
   // Fresh statement AFTER lock acquisition, just like Reset outcome recovery.
   const valid = await client.query(`SELECT id FROM demo_sessions WHERE id=$1 AND company_code=$2
@@ -21,7 +21,7 @@ export async function lockScenarioSession(client: PoolClient, session: Authentic
   if (valid.rowCount !== 1) throw new DemoSessionUnavailableError();
 }
 
-export async function readScenario(db: Pool | PoolClient, sessionId: string, id?: string): Promise<DemoScenarioDto | null> {
+export async function readScenario(db: Pool | PoolClient | Client, sessionId: string, id?: string): Promise<DemoScenarioDto | null> {
   const result = await db.query<{ item: DemoScenarioDto }>(`SELECT ${projection}
     FROM demo_scenario_instances WHERE session_id=$1 AND ($2::uuid IS NULL OR id=$2)`, [sessionId, id ?? null]);
   return result.rows[0]?.item ?? null;

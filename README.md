@@ -159,5 +159,8 @@ Demo 01B-2 adds atomic owner-scoped Reset, backend cookie clearing and startup
 invalidation of old sessions. It remains single-instance and development/test only.
 See the [Demo API/recovery reference](docs/REFERENCE.md#protected-demo-runtime)
 and [B2 scope and verification](docs/tasks/demo-01b2-session-reset-recovery.md).
-No frontend or scenario runner is implemented.
+Demo-02B adds durable Scenario Create/Get; Demo-02C adds explicit Happy Path Next
+steps with a durable request ledger and recovery. See the
+[Demo-02C contract and verification](docs/tasks/demo-02c-happy-path-step-execution.md).
+No frontend, other Scenario runner or automatic background execution is implemented.
 Real Airflow integration, cancellation, queues, background workers, automatic publication and production authentication/authorization are not implemented.

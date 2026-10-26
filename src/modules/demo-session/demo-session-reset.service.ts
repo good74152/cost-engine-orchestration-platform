@@ -125,7 +125,9 @@ export class DemoSessionResetService {
       const row = result.rows[0];
       const remaining = row && (await recovery.query<{ remaining: boolean }>(`SELECT
         EXISTS (SELECT 1 FROM dataset_series WHERE company_code=$1)
-        OR EXISTS (SELECT 1 FROM demo_scenario_instances WHERE session_id=$2) AS remaining`,
+        OR EXISTS (SELECT 1 FROM demo_scenario_instances WHERE session_id=$2)
+        OR EXISTS (SELECT 1 FROM demo_scenario_step_executions l JOIN demo_scenario_instances sc ON sc.id=l.scenario_id
+          WHERE sc.session_id=$2) AS remaining`,
       [row.company_code, pending.reservation.sessionId])).rows[0]!.remaining;
       await recovery.query('COMMIT');
       if (!row || (row.revoked && remaining && !pending.inactive)) return 'unknown';
