@@ -117,6 +117,7 @@ test('Task 007B integrated regressions: real PostgreSQL cross-workflow races (AD
     const admin = new Client({ connectionString: url('postgres') });
     const previousUrl = process.env.DATABASE_URL;
     let applicationPool: Pool | undefined;
+    const applicationClientEnds: Promise<void>[] = [];
     let app: FastifyInstance | undefined;
     await admin.connect();
     await admin.query(`CREATE DATABASE "${name}" TEMPLATE template0`);
@@ -127,6 +128,11 @@ test('Task 007B integrated regressions: real PostgreSQL cross-workflow races (AD
       process.env.DATABASE_URL = url(name);
       const [{ pool }, { buildApp }] = await Promise.all([import('../src/db/pool.js'), import('../src/app.js')]);
       applicationPool = pool;
+      // pg-pool can resolve end() before every socket emits its final end event.
+      // Await those events before dropping this owned database (also on Linux CI).
+      pool.on('connect', client => {
+        applicationClientEnds.push(new Promise<void>(resolve => client.once('end', resolve)));
+      });
       const metadata = {
         gitCommit: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(),
         productionBaselineCommit: '85479c723090de8dc96cdb0a13472f3156b5e8f9',
@@ -654,11 +660,23 @@ test('Task 007B integrated regressions: real PostgreSQL cross-workflow races (AD
     } finally {
       try { if (app) await app.close(); }
       finally {
-        try { if (applicationPool) await applicationPool.end(); }
+        try {
+          if (applicationPool) {
+            await applicationPool.end();
+            await Promise.all(applicationClientEnds);
+          }
+        }
         finally {
           if (previousUrl === undefined) delete process.env.DATABASE_URL;
           else process.env.DATABASE_URL = previousUrl;
-          try { await admin.query(`DROP DATABASE IF EXISTS "${name}" WITH (FORCE)`); }
+          try {
+            assert.match(name, /^cross_workflow_test_[a-z0-9_]+$/);
+            assert.ok(name.length <= 63);
+            const sessions = await admin.query('SELECT pid FROM pg_stat_activity WHERE datname=$1', [name]);
+            assert.equal(sessions.rowCount, 0, 'All owned connections must close before DROP');
+            await admin.query(`DROP DATABASE "${name}"`);
+            console.log('CROSS_WORKFLOW_TEARDOWN', JSON.stringify({ sessions: 0, dropped: true, forced: false }));
+          }
           finally { await admin.end(); }
         }
       }

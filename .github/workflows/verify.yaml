@@ -3,7 +3,7 @@ on: [push, pull_request]
 permissions: {contents: read}
 jobs:
   verify:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     services:
       postgres:
         image: postgres:18
@@ -20,8 +20,8 @@ jobs:
       DATABASE_URL: postgres://test_owner:ci-disposable-only-password@127.0.0.1:5432/postgres
       NODE_ENV: test
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with: {node-version: '24', cache: npm, cache-dependency-path: 'package-lock.json'}
       - run: npm ci
       - run: npm ci --prefix frontend

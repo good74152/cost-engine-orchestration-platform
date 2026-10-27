@@ -146,8 +146,8 @@ Infrastructure: Dockerfile, .dockerignore, .gitattributes, .gitignore;
 deploy/{compose.yaml,Caddyfile,caddy-entrypoint.sh,operator.ts,env.example,README.md};
 deploy/scripts/{deploy,start,operate,backup}.sh; .github/workflows/verify.yaml.
 
-Tests/scripts: scripts/demo-04-{deployment.pg,containers.test}.ts (the PG file is
-demo-04-deployment.pg.test.ts), package.json. Documentation: README.md,
+Tests/scripts: scripts/demo-04-deployment.pg.test.ts,
+scripts/demo-04-containers.test.ts and package.json. Documentation: README.md,
 docs/{ARCHITECTURE,REFERENCE,ROADMAP,DEPLOYMENT}.md, ADR index/0013, bounded Task
 Demo-04 and this evidence file. Complete staged diff was inspected; no migration,
 frontend source, Core executor contract/state machine or historical data changed.
@@ -167,3 +167,25 @@ is process-local; restart revokes credentials. Retained history has a hard ceili
 and needs monitored, reviewed archival policy before exhaustion. No automatic
 history deletion or unsafe schema down. No accepted Core architecture conflict
 was found; ADR-0013 explicitly bounds the authorized deployment extension.
+
+## First remote CI run and bounded fixture correction
+
+After creating PR #32, [run 40471315409](https://github.com/good74152/cost-engine-orchestration-platform/actions/runs/40471315409)
+failed on head 7f3670eac2143ce63764260fd428e22d7f60dd80. Build/UI/typecheck and
+Demo-04 tests passed. Milestone stopped at the integrated concurrency suite:
+exit 1, 13 pass / 1 fail / 0 skip. All thirteen scenario children, including
+CON-01/CON-02 and lock-order proofs, passed; the parent received an uncaught
+"terminating connection due to administrator command" during forced DB teardown.
+Later milestone suites and container/browser-install steps were NOT RUN.
+
+The pre-existing fixture awaited pool.end(), then force-dropped the DB before all
+client end events had finished. The minimal test-only correction follows existing
+Task 007C/terminal-lifecycle fixtures: track each client end, await them after
+pool.end(), assert zero PostgreSQL backends, then normally DROP only the owned DB.
+No scenario assertion, scheduler barrier, production code or migration is changed.
+The focused local concurrency rerun passes 14/0/0, exit 0.
+
+The run also warned that checkout@v4/setup-node@v4 target deprecated Node 20, and
+noted ubuntu-latest's moving image. The workflow now uses the official Node-24
+checkout@v6/setup-node@v6 actions and explicit ubuntu-24.04. This does not mask the
+test failure or skip a gate. A new CI run must confirm the complete workflow.
