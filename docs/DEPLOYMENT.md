@@ -200,3 +200,6 @@ failures. Logs contain event names/durable IDs/counts, not request headers or SQ
 
 CI uses disposable PostgreSQL and isolated local HTTPS containers, never public
 credentials/targets. [Executed verification](verification/demo-04-deployment.md).
+Root and frontend dependency audits reject high-severity findings. Use the
+reviewed lockfiles with npm ci; do not replace them with an unreviewed upgrade
+or grant install-script approvals merely to suppress an npm warning.

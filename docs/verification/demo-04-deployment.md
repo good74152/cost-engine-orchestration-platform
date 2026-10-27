@@ -4,9 +4,10 @@ Date: 2026-10-27 (Asia/Taipei). Branch: feature/demo-04-secure-deployment.
 Fetched base: c1c2a883cc9f63fea701286ba95b0c639c5e4603, merged Demo-03 PR #31,
 including Demo-02A–02E. Implementation source committed as
 0baa42d69679cdb76509ebfc08e580730ac2fe63, tree
-7f99a933137e95e41c51eb435f71424f018e10d5. Commands ran on that implementation
-working tree before commit; the following evidence commit changes documentation
-only. Public launch and System Owner acceptance are not claimed.
+7f99a933137e95e41c51eb435f71424f018e10d5. Later sections record the bounded CI
+fixture and dependency-security follow-ups. The final command table was rerun
+after those corrections on the final implementation working tree. Public launch
+and System Owner acceptance are not claimed.
 
 ## Final commands and results
 
@@ -33,6 +34,9 @@ Node test totals include parent entries; each final suite is counted once.
 | npm.cmd run test:milestone | 0 | 246 | 0 | 0 |
 | npm.cmd run test:demo-04-containers | 0 | 11 | 0 | 0 |
 | npm.cmd run ui:smoke | 0 | 10 | 0 | 0 |
+| npm.cmd audit --omit=dev --audit-level=high | 0 | — | — | — |
+| npm.cmd audit --audit-level=high | 0 | — | — | — |
+| npm.cmd --prefix frontend audit --audit-level=high | 0 | — | — | — |
 | git diff --check | 0 | — | — | — |
 | git diff --cached --check | 0 | — | — | — |
 
@@ -147,7 +151,8 @@ deploy/{compose.yaml,Caddyfile,caddy-entrypoint.sh,operator.ts,env.example,READM
 deploy/scripts/{deploy,start,operate,backup}.sh; .github/workflows/verify.yaml.
 
 Tests/scripts: scripts/demo-04-deployment.pg.test.ts,
-scripts/demo-04-containers.test.ts and package.json. Documentation: README.md,
+scripts/demo-04-containers.test.ts, the two bounded teardown fixture fixes below,
+package.json and package-lock.json. Documentation: README.md,
 docs/{ARCHITECTURE,REFERENCE,ROADMAP,DEPLOYMENT}.md, ADR index/0013, bounded Task
 Demo-04 and this evidence file. Complete staged diff was inspected; no migration,
 frontend source, Core executor contract/state machine or historical data changed.
@@ -198,3 +203,47 @@ A–F children passed; its parent failed during teardown. Apply the same client-
 drain / zero-backend assertion / normal owned DROP to that fixture only. No Flow
 A–F assertion or application behavior changes. This failed run is not a PASS;
 container/browser-install steps were not run in that attempt.
+
+## Successful remote CI and dependency-security follow-up
+
+Both [PR run 40472226366](https://github.com/good74152/cost-engine-orchestration-platform/actions/runs/40472226366)
+and [push run 40472219514](https://github.com/good74152/cost-engine-orchestration-platform/actions/runs/40472219514)
+passed on ef616b3c4b4d4fac0023ab585f587336f624c178. Build, frontend typecheck/build,
+script typecheck, UI 40, Demo-04 17, milestone 246 and container 11 all succeeded:
+314 passing CI test entries, zero failures/skips/cancellations/TODOs. Both checks
+had zero annotations. The full logs confirm normal zero-backend CON/E2E teardown.
+The focused local E2E rerun also passed 7/0/0, exit 0, and the full local milestone
+rerun passed 246/0/0, exit 0 (demo04-ci-fix-{e2e,milestone}.log).
+
+Successful CI did not mean a clean dependency audit. Its npm ci output reported
+three high-severity affected packages. Separate read-only audits initially exited
+1: production had two affected packages; the full tree had three. The findings
+were Fastify, fast-uri (two installed major lines) and dev-only brace-expansion.
+Relevant official advisories include
+[malformed-URL authentication bypass](https://github.com/advisories/GHSA-p68q-wchp-6fh7),
+[async validation/body replacement](https://github.com/advisories/GHSA-667r-xxjv-c9mm)
+and [URI host normalization](https://github.com/advisories/GHSA-wjr9-j795-jxcr).
+
+Apply only same-major fixes: Fastify 5.11.3 → 5.12.7, fast-uri 3.1.5 → 3.1.9
+and 4.1.2 → 4.2.3, brace-expansion 5.0.9 → 5.0.12. The command was
+`npm.cmd update fastify fast-uri brace-expansion --ignore-scripts`; raise the
+declared Fastify minimum and synchronize its lock metadata with
+`npm.cmd install --package-lock-only --ignore-scripts`. Exactly four installed
+packages changed; no unrelated dependency sweep or install-script approval.
+
+All three final audits in the table exit 0 with zero vulnerabilities. The full
+524-entry local gate, builds, browser and Docker tests were rerun with the patched
+lockfile; final logs are demo04-secure-{build,ui-typecheck,ui-test,ui-build,
+test-demo-04,typecheck,test-demo-session-*,test-demo-02[a-e],test-milestone,
+ui-smoke,containers}.log (the script typecheck log is
+demo04-secure-test-demo-04-typecheck.log). CI also gates the full root and frontend
+audit at high severity. The final patch's remote results are available on
+[PR #32 checks](https://github.com/good74152/cost-engine-orchestration-platform/pull/32/checks),
+separate from the earlier successful runs above.
+
+The CI npm 11.19.0 install output also warns that esbuild@0.28.2 has a postinstall
+script not yet covered by allowScripts. It is not hidden or auto-approved; the
+builds/tests succeed with the existing platform binary dependency. This warning
+is separate from npm audit; the final audit checks exit 0 with zero findings.
+The earlier Node-20 Action deprecation and moving-runner notice were removed by
+the v6 actions / explicit Ubuntu runner configuration.
