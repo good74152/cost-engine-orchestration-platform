@@ -1,6 +1,6 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
-import type { Pool } from 'pg';
-import { DemoSessionUnavailableError } from './demo-session.errors.js';
+import type { Pool, PoolClient } from 'pg';
+import { DemoSessionError, DemoSessionUnavailableError } from './demo-session.errors.js';
 
 export const SESSION_LIFETIME_SECONDS = 4 * 60 * 60;
 export const SECURE_SESSION_COOKIE = '__Host-ce_demo_session';
@@ -20,6 +20,7 @@ export interface DemoSessionServiceOptions {
   // Dependency seams for deterministic tests; never derived from HTTP input.
   candidate?: () => Candidate;
   now?: () => Promise<Date>;
+  capacity?: { active: number; retained: number };
 }
 
 export function readSessionCookie(header: string | undefined, name: string): string | undefined {
@@ -56,6 +57,35 @@ export class DemoSessionService {
   }
 
   async create(): Promise<{ session: AuthenticatedDemoSession; token: string }> {
+    if (!this.options.capacity) return this.allocate(this.db);
+    const client = await this.db.connect();
+    let commitSent = false;
+    let discard = false;
+    try {
+      await client.query('BEGIN');
+      await client.query("SET LOCAL lock_timeout='3s'");
+      await client.query("SET LOCAL statement_timeout='5s'");
+      // Admission only: serialize capacity checks and insert in one transaction.
+      // Core version allocation/row-lock protocols are not involved.
+      await client.query('LOCK TABLE demo_sessions IN SHARE ROW EXCLUSIVE MODE');
+      const counts = (await client.query<{ active: number; retained: number }>(`SELECT count(*)::int AS retained,
+        count(*) FILTER (WHERE revoked_at IS NULL AND expires_at>clock_timestamp())::int AS active FROM demo_sessions`)).rows[0]!;
+      if (counts.active >= this.options.capacity.active || counts.retained >= this.options.capacity.retained) {
+        throw new DemoSessionError('DEMO_SESSION_CAPACITY_REACHED', 503, 'Demo session capacity reached');
+      }
+      const created = await this.allocate(client);
+      commitSent = true;
+      await client.query('COMMIT');
+      return created;
+    } catch (error) {
+      discard = true;
+      if (!commitSent) await client.query('ROLLBACK').catch(() => {});
+      if (error instanceof DemoSessionError) throw error;
+      throw new Error('Demo session persistence failed');
+    } finally { client.release(discard); }
+  }
+
+  private async allocate(db: Pool | PoolClient): Promise<{ session: AuthenticatedDemoSession; token: string }> {
     for (let attempt = 0; attempt < 5; attempt += 1) {
       const candidate = this.options.candidate?.() ?? {
         id: randomUUID(), token: randomBytes(32),
@@ -64,18 +94,19 @@ export class DemoSessionService {
       if (candidate.token.length !== 32) throw new Error('Invalid session candidate');
       const hash = createHash('sha256').update(candidate.token).digest();
       try {
-        // Single statement: no cookie/result until the complete row is committed.
-        const result = await this.db.query<SessionRow>(
+        // The caller returns a cookie only after autocommit/the admission COMMIT.
+        const result = await db.query<SessionRow>(
           // Match the millisecond precision of the public ISO timestamp exactly.
           `WITH instant AS (SELECT date_trunc('milliseconds', clock_timestamp()) AS now)
            INSERT INTO demo_sessions (id, company_code, token_hash, created_at, expires_at)
            SELECT $1, $2, $3, now, now + INTERVAL '4 hours' FROM instant
            WHERE NOT EXISTS (SELECT 1 FROM dataset_series WHERE company_code = $2::varchar)
+           ON CONFLICT DO NOTHING
            RETURNING id, company_code, expires_at`,
           [candidate.id, candidate.companyCode, hash],
         );
         // Existing datasets must never become owned by a newly allocated session.
-        // Session collisions still use the unique-constraint retry below. This
+        // Unique session collisions also consume a candidate without insertion. This
         // statement assumes the approved single Demo backend/no external writer.
         const row = result.rows[0];
         if (!row) continue;

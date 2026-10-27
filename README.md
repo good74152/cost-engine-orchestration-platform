@@ -118,7 +118,10 @@ Requires Node.js 24+, npm and Docker Compose. The Compose service uses PostgreSQ
    ```
 
 The server defaults to port 3000 on `0.0.0.0`. Use a trusted local environment: Domain APIs remain unauthenticated, and fake controls are development/test tools.
-Do not expose this application publicly. The executor factory rejects fake execution in production.
+Do not expose this local/core setup publicly. The executor factory rejects fake
+execution in production. The separate restricted Demo-04 profile is documented
+in the [deployment runbook](docs/DEPLOYMENT.md); public launch requires System
+Owner review and operation.
 
 A fresh database is not a configured calculation pipeline. Active calculation types and published dependency definitions must be configured in PostgreSQL; there is no general seed command or management API. The explicit [Demo-02A seed](docs/tasks/demo-02a-shared-seed-read-apis.md) prepares only a minimal local Demo CAPEX configuration and also documents the protected read APIs.
 Do not edit applied migrations or delete persistent data to bypass migration guards.
@@ -230,5 +233,7 @@ Demo-02E adds the six-step [Lost Response Recovery Scenario](docs/tasks/demo-02e
 an external fake execution exists before its ACK is lost; retry confirms the same identity.
 Demo-03 adds the interactive local [Frontend Dashboard](docs/tasks/demo-03-frontend-ui.md)
 with explicit actions and durable-state recovery. Automatic background execution
-and public deployment remain unimplemented.
+remains unimplemented. Demo-04 adds deployment capability and local HTTPS/container
+verification; actual public VPS launch
+remains a separate System Owner operation. See [deployment](docs/DEPLOYMENT.md).
 Real Airflow integration, cancellation, queues, background workers, automatic publication and production authentication/authorization are not implemented.

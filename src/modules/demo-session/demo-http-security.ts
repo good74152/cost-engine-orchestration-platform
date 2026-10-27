@@ -3,6 +3,7 @@ import { CalculationJobError } from '../calculation-job.errors.js';
 import { DatasetVersionError } from '../dataset-version/dataset-version.errors.js';
 import { DemoResourceUnavailableError, DemoSessionError } from './demo-session.errors.js';
 import { LOCAL_SESSION_COOKIE, SECURE_SESSION_COOKIE } from './demo-session.service.js';
+import { publicDemoConfig } from '../../deployment/public-demo-config.js';
 
 export interface DemoSessionRouteOptions {
   nodeEnvironment?: string;
@@ -17,12 +18,15 @@ export class DemoHttpSecurity {
   private readonly origin: string | undefined;
 
   constructor(options: DemoSessionRouteOptions = {}) {
+    const profile = publicDemoConfig();
+    if (profile && (options.secureCookies === false || (options.origin !== undefined && options.origin !== profile.origin)
+      || (options.nodeEnvironment !== undefined && options.nodeEnvironment !== 'production'))) throw new Error('Conflicting public Demo HTTP configuration');
     const environments = [options.nodeEnvironment, process.env.NODE_ENV].filter((e) => e !== undefined);
     const local = environments.length > 0 && environments.every((e) => ['development', 'test'].includes(e));
     if (options.secureCookies === false && !local) throw new Error('Insecure demo cookies require development/test');
     this.secure = options.secureCookies ?? !local;
     this.cookieName = this.secure ? SECURE_SESSION_COOKIE : LOCAL_SESSION_COOKIE;
-    this.origin = options.origin === undefined ? undefined : new URL(options.origin).origin;
+    this.origin = profile?.origin ?? (options.origin === undefined ? undefined : new URL(options.origin).origin);
     if (this.origin && !/^https?:\/\//.test(this.origin)) throw new Error('Invalid demo browser origin');
   }
 
@@ -57,6 +61,7 @@ export function installDemoErrorBoundary(app: FastifyInstance, domainErrors = fa
       return reply.status(error.statusCode).send({ message: error.message, code: error.code });
     }
     if (error instanceof DemoSessionError) {
+      if (error.statusCode === 503) request.log.warn({ event: 'demo_capacity_or_recovery_unavailable', code: error.code, requestId: request.id });
       if (error.code === 'DEMO_SESSION_UNAVAILABLE' && error.statusCode === 401) policy?.clearCookie(reply);
       return reply.status(error.statusCode).send({ message: error.message, code: error.code });
     }

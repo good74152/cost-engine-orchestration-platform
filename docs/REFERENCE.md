@@ -126,7 +126,9 @@ own disposable migrated PostgreSQL database, alongside the unchanged milestone.
 ### Protected Demo runtime
 
 Demo-01B-1 (PR #20) is merged. Explicitly set APP_MODE=demo, NODE_ENV=development
-or test and EXECUTOR_TYPE=fake. Unknown/conflicting mode and production fail closed.
+or test and EXECUTOR_TYPE=fake for local use. Unknown/conflicting mode fails closed.
+Production requires the separately restricted [Demo-04 profile](DEPLOYMENT.md);
+the flag alone cannot bypass mode, origin, secret or executor checks.
 Demo registers only health, sessions and protected /demo dataset/job/fake commands;
 anonymous Domain/raw/callback/internal controls are absent. All mutations require
 the cookie and shared CSRF policy. Ownership and unchanged Domain commands run in
@@ -363,7 +365,11 @@ Requirements: Node.js 24+, npm, Docker/Compose and PostgreSQL (repository Compos
    npm run dev
    ```
 
-The server binds port 3000 by default on 0.0.0.0; use it only in a trusted local development environment. Fake controls are not authenticated production controls. The factory rejects fake in production and fails closed without an explicit development/test environment or executor selection. There is no implemented real Airflow adapter to select.
+The local server binds port 3000 on 0.0.0.0; use this setup only in trusted local
+development. Core's factory rejects production fake and requires explicit dev/test
+selection. The separate [Demo-04 profile](DEPLOYMENT.md) requires production Demo,
+exact HTTPS origin, secrets and bounded limits, with only protected Demo APIs.
+There is no real Airflow adapter. Public launch requires System Owner operation.
 
 Calculation types and published dependency definitions must be configured in PostgreSQL before their corresponding workflows can succeed. There is no management API or general-purpose financial seed. The explicit Demo-02A command above prepares only its minimal CAPEX configuration; integration suites install their own fixtures. A fresh migrated database alone is not a preconfigured financial pipeline.
 

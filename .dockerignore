@@ -1,0 +1,16 @@
+.git
+node_modules
+frontend/node_modules
+dist
+frontend/dist
+.env
+.env.*
+**/.env
+**/.env.*
+**/*.log
+deploy/secrets
+deploy/backups
+docs/images
+*.dump
+**/*.dump
+*.sql

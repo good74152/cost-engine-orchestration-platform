@@ -1,0 +1,103 @@
+name: cost-engine-demo
+services:
+  database:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: demo_owner
+      POSTGRES_DB: cost_engine_demo
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    secrets: [postgres_password]
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    networks: [database]
+    restart: unless-stopped
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U demo_owner -d cost_engine_demo']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    mem_limit: 1g
+  backend:
+    image: cost-engine-demo-backend:${DEPLOYMENT_VERSION:?Set immutable deployment version}
+    build:
+      context: ..
+      target: backend
+    # A fixed host-wide identity rejects Compose --scale and overlapping projects.
+    container_name: cost-engine-demo-backend
+    init: true
+    environment: &backend-environment
+      NODE_ENV: production
+      APP_MODE: demo
+      EXECUTOR_TYPE: fake
+      DEMO_PUBLIC_ENABLED: 'true'
+      DEMO_PUBLIC_ORIGIN: ${DEMO_PUBLIC_ORIGIN:?Set exact HTTPS origin}
+      DEPLOYMENT_VERSION: ${DEPLOYMENT_VERSION:?Set immutable deployment version}
+      DATABASE_URL_FILE: /run/secrets/database_url
+      DEMO_PROXY_SECRET_FILE: /run/secrets/proxy_secret
+      DEMO_MAX_ACTIVE_SESSIONS: ${DEMO_MAX_ACTIVE_SESSIONS:-100}
+      DEMO_MAX_RETAINED_SESSIONS: ${DEMO_MAX_RETAINED_SESSIONS:-10000}
+      DEMO_MAX_EXECUTORS: ${DEMO_MAX_EXECUTORS:-100}
+      DEMO_CREATES_PER_MINUTE: ${DEMO_CREATES_PER_MINUTE:-10}
+      DEMO_MUTATIONS_PER_MINUTE: ${DEMO_MUTATIONS_PER_MINUTE:-120}
+      DEMO_GLOBAL_MUTATIONS_PER_MINUTE: ${DEMO_GLOBAL_MUTATIONS_PER_MINUTE:-600}
+      DEMO_BODY_BYTES: ${DEMO_BODY_BYTES:-16384}
+      DEMO_MAINTENANCE_INTERVAL_MS: ${DEMO_MAINTENANCE_INTERVAL_MS:-60000}
+      DEMO_MAINTENANCE_BATCH: ${DEMO_MAINTENANCE_BATCH:-25}
+    secrets: [database_url, proxy_secret]
+    networks: [database, proxy]
+    depends_on:
+      database: {condition: service_healthy}
+    restart: unless-stopped
+    stop_grace_period: 60s
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 512m
+    pids_limit: 100
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:3000/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  web:
+    image: cost-engine-demo-web:${DEPLOYMENT_VERSION:?Set immutable deployment version}
+    build:
+      context: ..
+      target: web
+    environment:
+      DEMO_PUBLIC_ORIGIN: ${DEMO_PUBLIC_ORIGIN:?Set exact HTTPS origin}
+      ACME_EMAIL: ${ACME_EMAIL:?Set ACME account email}
+    secrets: [proxy_secret]
+    ports: ['80:80', '443:443', '443:443/udp']
+    volumes: [caddy_data:/data, caddy_config:/config]
+    networks: [edge, proxy]
+    depends_on:
+      backend: {condition: service_healthy}
+    restart: unless-stopped
+    mem_limit: 256m
+  operator:
+    profiles: [operations]
+    image: cost-engine-demo-operator:${DEPLOYMENT_VERSION:?Set immutable deployment version}
+    build: {context: .., target: operator}
+    environment:
+      <<: *backend-environment
+      DEMO_SEED_DATABASE_URL_FILE: /run/secrets/database_url
+    secrets: [database_url, proxy_secret]
+    networks: [database]
+    depends_on:
+      database: {condition: service_healthy}
+    read_only: true
+    tmpfs: [/tmp]
+networks:
+  edge: {}
+  proxy: {internal: true}
+  database: {internal: true}
+volumes:
+  postgres_data: {}
+  caddy_data: {}
+  caddy_config: {}
+secrets:
+  postgres_password: {file: '${DEMO_SECRETS_DIR:?Set private secrets directory}/postgres_password'}
+  database_url: {file: '${DEMO_SECRETS_DIR:?Set private secrets directory}/database_url'}
+  proxy_secret: {file: '${DEMO_SECRETS_DIR:?Set private secrets directory}/proxy_secret'}
