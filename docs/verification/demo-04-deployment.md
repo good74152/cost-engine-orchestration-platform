@@ -189,3 +189,12 @@ The run also warned that checkout@v4/setup-node@v4 target deprecated Node 20, an
 noted ubuntu-latest's moving image. The workflow now uses the official Node-24
 checkout@v6/setup-node@v6 actions and explicit ubuntu-24.04. This does not mask the
 test failure or skip a gate. A new CI run must confirm the complete workflow.
+
+The PR-triggered [run 40471904018](https://github.com/good74152/cost-engine-orchestration-platform/actions/runs/40471904018)
+on ff7e976c7561de3386ce9fb5f5652c2ed4848f9f then passed integrated concurrency
+14/0/0 and all preceding milestone suites, but exposed the same forced-drop race
+in the final Task 007D E2E fixture: exit 1, 6 pass / 1 fail / 0 skip. All six Flow
+A–F children passed; its parent failed during teardown. Apply the same client-end
+drain / zero-backend assertion / normal owned DROP to that fixture only. No Flow
+A–F assertion or application behavior changes. This failed run is not a PASS;
+container/browser-install steps were not run in that attempt.
