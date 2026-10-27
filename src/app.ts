@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import Fastify, { errorCodes } from 'fastify';
+import Fastify, { errorCodes, LogController } from 'fastify';
 import { pool } from './db/pool.js';
 import type { CalculationExecutor } from './executors/calculation-executor.js';
 import { FakeExecutor } from './executors/fake-executor.js';
@@ -20,6 +20,9 @@ import { demoDomainRoutes } from './modules/demo-session/demo-domain.route.js';
 import { demoSessionResetRoutes } from './modules/demo-session/demo-session-reset.route.js';
 import { demoReadRoutes } from './modules/demo-session/demo-read.route.js';
 import { demoScenarioRoutes } from './modules/demo-scenario/demo-scenario.route.js';
+import { publicDemoConfig } from './deployment/public-demo-config.js';
+import { installPublicDemoHttp } from './deployment/public-demo-http.js';
+import { DemoSessionError } from './modules/demo-session/demo-session.errors.js';
 
 export interface BuildAppOptions {
   logger?: boolean;
@@ -28,10 +31,13 @@ export interface BuildAppOptions {
   demoSession?: DemoSessionRouteOptions;
   appMode?: string;
   demoRuntime?: DemoRuntime;
+  readiness?: () => boolean;
 }
 
 export async function buildApp(options: BuildAppOptions = {}) {
   const mode = resolveAppMode(options.appMode);
+  const profile = publicDemoConfig();
+  if (profile && mode !== 'demo') throw new Error('Public profile requires Demo runtime');
   if (mode === 'demo') {
     assertDemoEnvironment(options.nodeEnvironment);
     if (options.calculationExecutor) throw new Error('Demo mode cannot use a global calculation executor');
@@ -44,9 +50,14 @@ export async function buildApp(options: BuildAppOptions = {}) {
     // Fastify v5 passes param limits via routerOptions. Otherwise its default
     // 100-character cap returns 404 before UUID validation can reject the input.
     routerOptions: { maxParamLength: 1024 },
+    bodyLimit: profile?.bodyBytes,
+    logController: profile ? new LogController({ disableRequestLogging: true }) : undefined,
+    trustProxy: false,
   });
+  if (profile) installPublicDemoHttp(app, profile);
 
   app.setErrorHandler((error, request, reply) => {
+    if (error instanceof DemoSessionError) return reply.code(error.statusCode).send({ code: error.code, message: error.message });
     if (error instanceof CalculationJobError) {
       return reply.status(error.statusCode).send({
         message: error.message,
@@ -96,7 +107,8 @@ export async function buildApp(options: BuildAppOptions = {}) {
       });
     }
 
-    request.log.error(error);
+    if (profile) request.log.error({ event: 'demo_request_internal_failure', requestId: request.id });
+    else request.log.error(error);
 
     return reply.status(500).send({
       message: 'Internal Server Error',
@@ -109,10 +121,17 @@ export async function buildApp(options: BuildAppOptions = {}) {
       'SELECT NOW() AS now',
     );
 
+    if (profile) return { status: 'ok', version: profile.version };
     return {
       status: 'ok',
       databaseTime: result.rows[0]?.now,
     };
+  });
+  if (profile) app.get('/health/ready', async (_request, reply) => {
+    if (!options.readiness?.()) return reply.code(503).send({ status: 'unavailable' });
+    try { await runtime!.db.query('SELECT 1'); }
+    catch { return reply.code(503).send({ status: 'unavailable' }); }
+    return { status: 'ready', version: profile.version };
   });
 
   const sessionOptions = {

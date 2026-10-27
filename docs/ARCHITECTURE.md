@@ -779,3 +779,24 @@ Mock UI tests and a real Chromium/Vite/Backend smoke against an independently
 owned PostgreSQL database verify the interface. Genuine screenshots are retained.
 Single-instance/development-only limits remain. No public deployment, background
 polling, new calculation logic or Demo-04 work. See [Demo-03](tasks/demo-03-frontend-ui.md).
+
+## 27. Restricted Public Demo Deployment
+
+Demo-04 extends only the deployment boundary under [ADR-0013](adr/0013-restricted-public-demo-deployment.md).
+Earlier development-only statements describe their original slices; Core's fake
+factory remains development/test only. An explicit production Demo profile checks
+mode, executor, exact HTTPS origin, secrets and bounded limits before DB/runtime.
+Caddy alone exposes HTTPS/static React; private networks isolate Node/PostgreSQL 18.
+Trusted proxy headers, host cookie, Origin/CSRF, no-store and bounded rate/body/
+session/executor/queue controls protect the existing Demo-only surface.
+
+Session admission serializes capacity check/insertion in a PostgreSQL transaction.
+Core lifecycle/locks, immutable snapshot, executor contract and migrations do not
+change. Periodic bounded non-overlapping cleanup reuses existing Reset/recovery,
+preserves session history and never reconciles financial state. Retained-session
+capacity fails closed before unlimited audit-row growth. Stop/start deployment
+uses one fixed container identity and invalidates previous credentials before
+readiness; no external writer or arbitrary multi-instance guarantee. Startup only
+verifies migrations/seed; explicit offline tools perform authorized changes.
+See [operations, backup/restore, rollback and limits](DEPLOYMENT.md). Capability
+and local test evidence do not claim actual public VPS/DNS/TLS launch.

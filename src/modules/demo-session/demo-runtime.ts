@@ -8,8 +8,14 @@ import { DemoSessionService, type AuthenticatedDemoSession } from './demo-sessio
 import { DemoSessionResetService, type ResetOptions } from './demo-session-reset.service.js';
 import { DemoScenarioService, type ScenarioCreateOptions } from '../demo-scenario/demo-scenario.service.js';
 import { DemoStepService, type StepOptions } from '../demo-scenario/demo-step.service.js';
+import { publicDemoConfig } from '../../deployment/public-demo-config.js';
 
 export function assertDemoEnvironment(nodeEnvironment?: string): void {
+  const profile = publicDemoConfig();
+  if (profile) {
+    if (nodeEnvironment !== undefined && nodeEnvironment !== 'production') throw new Error('Conflicting Demo environment');
+    return;
+  }
   if (!isApprovedFakeExecutorEnvironment(nodeEnvironment)) {
     throw new Error('Demo FakeExecutor requires development/test and cannot run in production');
   }
@@ -71,10 +77,14 @@ export class DemoRuntime {
 
   constructor(readonly db: Pool, nodeEnvironment?: string, options: RegistryOptions = {}, resetOptions: ResetOptions = {}, scenarioOptions: ScenarioCreateOptions = {}, stepOptions: StepOptions = {}) {
     assertDemoEnvironment(nodeEnvironment);
-    this.sessions = new DemoSessionService(db);
+    const profile = publicDemoConfig();
+    this.sessions = new DemoSessionService(db, profile ? {
+      capacity: { active: profile.activeSessions, retained: profile.retainedSessions },
+    } : {});
     this.coordinator = new DemoSessionCoordinator(this.sessions);
     this.ownership = new DemoOwnershipValidator(db, this.sessions);
-    this.executors = new DemoExecutorRegistry(this.sessions, options);
+    if (profile && options.maxExecutors !== undefined && options.maxExecutors > profile.executors) throw new Error('Executor capacity exceeds public profile');
+    this.executors = new DemoExecutorRegistry(this.sessions, { ...options, maxExecutors: options.maxExecutors ?? profile?.executors });
     this.reset = new DemoSessionResetService(this, resetOptions);
     this.scenarios = new DemoScenarioService(db, this.sessions, this.executors, scenarioOptions);
     this.steps = new DemoStepService(this, stepOptions);

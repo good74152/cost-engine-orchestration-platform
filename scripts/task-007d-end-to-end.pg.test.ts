@@ -78,6 +78,7 @@ test('Task 007D integrated PostgreSQL E2E: public orchestration flows A–F', { 
   const admin = new Client({ connectionString: forDatabase('postgres') });
   let created = false;
   let applicationPool: Pool | undefined;
+  const applicationClientEnds: Promise<void>[] = [];
   let app: FastifyInstance | undefined;
   let fake: FakeExecutor = new FakeExecutor();
   await admin.connect();
@@ -97,6 +98,9 @@ test('Task 007D integrated PostgreSQL E2E: public orchestration flows A–F', { 
       import('../src/db/pool.js'), import('../src/app.js'),
     ]);
     applicationPool = pool;
+    pool.on('connect', client => {
+      applicationClientEnds.push(new Promise<void>(resolve => client.once('end', resolve)));
+    });
     const version = await pool.query<{ server_version: string }>('SHOW server_version');
     console.log(`E2E_RUNTIME ${JSON.stringify({ node: process.version,
       postgres: version.rows[0]!.server_version,
@@ -485,7 +489,12 @@ test('Task 007D integrated PostgreSQL E2E: public orchestration flows A–F', { 
   } finally {
     try { if (app) await app.close(); }
     finally {
-      try { if (applicationPool) await applicationPool.end(); }
+      try {
+        if (applicationPool) {
+          await applicationPool.end();
+          await Promise.all(applicationClientEnds);
+        }
+      }
       finally {
         if (oldDatabaseUrl === undefined) delete process.env.DATABASE_URL;
         else process.env.DATABASE_URL = oldDatabaseUrl;
@@ -494,8 +503,11 @@ test('Task 007D integrated PostgreSQL E2E: public orchestration flows A–F', { 
         try {
           if (created) {
             assert.match(dbName, /^task_007d_e2e_[a-z0-9_]+$/);
-            await admin.query(`DROP DATABASE IF EXISTS "${dbName}" WITH (FORCE)`);
-            console.log('E2E_DB_TEARDOWN', JSON.stringify({ database: dbName, result: 'dropped' }));
+            assert.ok(dbName.length <= 63);
+            const sessions = await admin.query('SELECT pid FROM pg_stat_activity WHERE datname=$1', [dbName]);
+            assert.equal(sessions.rowCount, 0, 'All owned connections must close before DROP');
+            await admin.query(`DROP DATABASE "${dbName}"`);
+            console.log('E2E_DB_TEARDOWN', JSON.stringify({ database: dbName, result: 'dropped', sessions: 0, forced: false }));
           }
         } finally { await admin.end(); }
       }

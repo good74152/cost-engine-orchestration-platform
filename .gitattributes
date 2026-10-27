@@ -1,0 +1,5 @@
+# Deployment scripts/configuration must work after a Windows checkout.
+Dockerfile text eol=lf
+.dockerignore text eol=lf
+deploy/** text eol=lf
+.github/workflows/** text eol=lf

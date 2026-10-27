@@ -1,0 +1,43 @@
+{
+    admin off
+    email {$ACME_EMAIL}
+}
+
+{$DEMO_PUBLIC_ORIGIN} {
+    # Empty in public deployment. Local isolated tests use `tls internal`.
+    {$DEMO_TLS_DIRECTIVE}
+    header {
+        Strict-Transport-Security "max-age=31536000"
+        X-Content-Type-Options nosniff
+        Referrer-Policy no-referrer
+        Permissions-Policy "camera=(), microphone=(), geolocation=()"
+        Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+        -Server
+    }
+    @health path /health /health/*
+    handle @health {
+        header Cache-Control no-store
+        respond 404
+    }
+    @api path /demo/*
+    handle @api {
+        reverse_proxy backend:3000 {
+            header_up -Forwarded
+            header_up X-Demo-Client-IP {remote_host}
+            header_up X-Demo-Proxy-Key {$DEMO_PROXY_SECRET}
+        }
+    }
+    @private path /internal/* /raw-ingestion-batches* /dataset-versions* /calculation-jobs* /executor-callbacks* /migrations* /seed* /debug* /admin* /api/*
+    handle @private {
+        respond 404
+    }
+    handle {
+        root * /srv
+        @asset path /assets/*
+        header @asset Cache-Control "public, max-age=31536000, immutable"
+        @html not path /assets/*
+        header @html Cache-Control "no-cache"
+        try_files {path} /index.html
+        file_server
+    }
+}

@@ -116,8 +116,13 @@ IDs persist by session/scenario/step; PostgreSQL progress stays authoritative.
 The UI does not implement backend state transitions or fake execution results.
 Vitest/RTL and actual Chromium/Backend/PostgreSQL smoke evidence accompany real
 screenshots. See [bounded contracts and verification](tasks/demo-03-frontend-ui.md).
-System Owner review is required; no automatic merge. Demo-04 deployment,
-background execution and distributed Demo remain deferred.
+Demo-03 is merged via PR #31 at c1c2a88. Demo-04 starts from that fetched main on
+feature/demo-04-secure-deployment and adds only restricted single-instance public
+Demo capability, Compose/Caddy, bounded abuse/maintenance controls and operator
+runbooks. See [deployment](DEPLOYMENT.md), [bounded specification](tasks/demo-04-secure-deployment.md)
+and [verification](verification/demo-04-deployment.md). System Owner review and
+actual VPS/DNS/TLS/launch operations remain separate; no automatic merge/deploy.
+Distributed Demo, real Airflow and background financial execution remain deferred.
 
 ### Naming-01 — Rename COWOS_S to E2E_COST
 
