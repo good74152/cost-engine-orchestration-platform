@@ -14,7 +14,12 @@
         Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
         -Server
     }
-    @api path /demo/* /health /health/ready
+    @health path /health /health/*
+    handle @health {
+        header Cache-Control no-store
+        respond 404
+    }
+    @api path /demo/*
     handle @api {
         reverse_proxy backend:3000 {
             header_up -Forwarded

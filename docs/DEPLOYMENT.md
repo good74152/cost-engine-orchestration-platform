@@ -14,7 +14,7 @@ Only Caddy publishes ports. No Vite server, CDN, wildcard CORS or real Airflow.
 Caddy overwrites client-IP and proxy-secret headers with its socket peer and a
 mounted secret. Backend verifies the private hop, trusts no arbitrary Forwarded
 headers, and validates the explicit exact HTTPS Origin. Do not add an unconfigured
-CDN/proxy. Public APIs are existing `/demo/*`, `/health`, `/health/ready`. Core,
+CDN/proxy. Public APIs are existing `/demo/*`. Core,
 raw-ingestion, callbacks, internal controls, debug/admin/migration/seed routes are
 not registered in Demo mode; Caddy additionally blocks those URL families.
 
@@ -60,6 +60,10 @@ public env files, shell tracing or request logs. Node reads secrets before the p
 | DEMO_MAINTENANCE_BATCH | 25 / 1–100 |
 
 One-minute windows retain at most 4096 address keys and fail closed on exhaustion.
+Check the session-creation and per-address mutation limits before the global
+limit. Charge all applicable budgets only when every check passes, synchronously
+without an await. Locally rejected requests spend no global quota; global capacity
+remains strict. Admitted requests count even if a later route/business check fails.
 NAT users share budgets. 429 DEMO_RATE_LIMITED includes Retry-After. Session/fake
 capacity uses 503 DEMO_SESSION_CAPACITY_REACHED / DEMO_EXECUTOR_CAPACITY_REACHED.
 Existing queue limits remain. These are basic abuse controls, not DDoS protection.
@@ -116,7 +120,11 @@ Startup validates profile → DB → exact migration inventory → read-only see
 compatibility → runtime → previous-session invalidation → listen → ready.
 Incomplete startup fails closed. `/health/ready` checks initialization and live
 DB access, returns 503 when unavailable, and exposes status/version only. Process
-alive alone is not ready. Docker probes loopback; public checks traverse Caddy.
+alive alone is not ready. Only the backend loopback GET probe can reach readiness.
+Caddy returns 404 for /health and /health/* without proxying them, even if the
+backend is stopped. The public profile independently rejects non-loopback health
+requests before PostgreSQL access; forwarded headers cannot grant probe access.
+Use Docker's health status or an authorized loopback probe for DB monitoring.
 
 ## Stop → Deploy → Start
 
@@ -187,7 +195,7 @@ explicit data-loss implications. Restore-test backups before deciding.
 
 ## Monitoring and release checklist
 
-Monitor readiness/DB/container health/version, RAM/disk, backup age/off-host copies,
+Monitor internal readiness/DB/container health/version, RAM/disk, backup age/off-host copies,
 active/retained sessions, cleanup backlog, rate/executor limits and reset/startup
 failures. Logs contain event names/durable IDs/counts, not request headers or SQL.
 

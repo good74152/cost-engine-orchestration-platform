@@ -1,6 +1,8 @@
 # Demo-04 executed local verification
 
 Date: 2026-10-27 (Asia/Taipei). Branch: feature/demo-04-secure-deployment.
+The latest bounded review result is in "Final review fix" below. Earlier delivery
+counts and public-health descriptions are retained as historical evidence.
 Fetched base: c1c2a883cc9f63fea701286ba95b0c639c5e4603, merged Demo-03 PR #31,
 including Demo-02A–02E. Implementation source committed as
 0baa42d69679cdb76509ebfc08e580730ac2fe63, tree
@@ -247,3 +249,62 @@ builds/tests succeed with the existing platform binary dependency. This warning
 is separate from npm audit; the final audit checks exit 0 with zero findings.
 The earlier Node-20 Action deprecation and moving-runner notice were removed by
 the v6 actions / explicit Ubuntu runner configuration.
+
+## Final review fix — budget accounting and internal health
+
+Baseline: PR #32 at aebd56336610196dd2acc9449692336b2425ed45.
+The old hook charged global quota before checking local limits. Repeated requests
+from an already limited address could therefore exhaust other users' quota.
+
+Check the creation limit and per-address mutation limit before the global limit.
+Consume all applicable counters only after every check passes, without an await
+between checking and charging. Capture one window timestamp for the whole
+admission. Rejected local requests spend no global quota; concurrent requests
+still obey the exact global cap. Admitted requests count even if a later route
+returns an error. A private clock seam makes the HTTP window tests deterministic.
+
+The existing Docker healthcheck directly probes loopback GET /health/ready, so
+public DB health endpoints are unnecessary. Caddy now answers /health and /health/*
+with 404/no-store without proxying. The public backend independently rejects
+non-loopback health requests before PostgreSQL access; proxy/IP headers do not
+grant loopback access. Core health routes and behavior are unchanged.
+
+New HTTP tests cover local rejection fairness, creation/mutation budget isolation,
+strict aggregate limits, concurrent per-IP/creation/global limits and window reset.
+The PostgreSQL suite asserts zero DB calls for external health requests including
+query strings/spoofed IP headers, internal not-ready 503, ready 200 and DB-down 503.
+The container suite verifies public health 404 with the backend stopped and a
+working internal probe after restart, alongside all existing HTTPS/Scenario tests.
+
+Before the fix, the expanded Demo-04 suite exited 1: 17 pass, 6 fail, 0 skip
+(five new children and their parent; this includes the new deterministic clock
+seam). After the fix all required commands below exited 0:
+
+| Command executed in PowerShell | Exit | Pass | Fail | Skip |
+|---|---:|---:|---:|---:|
+| npm.cmd run build | 0 | — | — | — |
+| npm.cmd run test:demo-04 | 0 | 23 | 0 | 0 |
+| npm.cmd run test:demo-04-containers | 0 | 12 | 0 | 0 |
+| npm.cmd run test:demo-02e | 0 | 37 | 0 | 0 |
+| npm.cmd run test:milestone | 0 | 246 | 0 | 0 |
+| npm.cmd run ui:test | 0 | 40 | 0 | 0 |
+| git diff --check | 0 | — | — | — |
+| npm.cmd run test:demo-04:typecheck (supplemental) | 0 | — | — | — |
+
+Total: 358 passing entries in the requested test suites, zero failures/skips/
+cancellations/TODOs. Milestone includes green CON-01/CON-02, raw ingestion in its
+owned disposable DB and Flow A–F. The existing milestone breakdown above still
+applies. Captured local test logs contain no runtime/deprecation/npm warnings;
+Git emits the existing LF-to-CRLF notices. No tests were skipped to obtain a pass.
+
+Logs are demo04-review-before.log (deliberately red), demo04-review-after.log,
+demo04-review-containers.log, demo04-review-test-demo-02e.log,
+demo04-review-test-milestone.log and demo04-review-ui-test.log in the executing
+machine's temporary directory. Container project demo04_test_5bbcad397e30 and its
+secondary collision project were removed with zero owned volumes remaining.
+
+Changed files for this review: public-demo-http.ts, deploy/Caddyfile, both Demo-04
+test files, docs/DEPLOYMENT.md, ADR-0013, the Demo-04 task and this evidence file.
+No Core orchestration, Session identity, Scenario semantics, migration or dependency
+changes. No Redis, distributed limiter or new service. Local disposable container
+verification is not a public deployment; no merge or production deployment.

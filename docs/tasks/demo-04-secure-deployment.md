@@ -757,3 +757,12 @@ owner data and releases confirmed inactive fakes; a retained-session admission
 ceiling bounds audit-row growth without deleting history. Single VPS/backend and
 no concurrent Core/external/config writer remain mandatory. No historical
 migration or financial state machine is changed.
+
+## Final review fix — rate accounting and internal health
+
+Check session-creation/per-IP limits before the global limit. A rejected local
+request must not spend another user's global quota. Check and charge synchronously
+with one fixed-window timestamp; concurrent requests must still obey every cap.
+The existing Docker loopback readiness probe is sufficient. Close public health
+paths at Caddy and in the public backend profile before DB access; preserve Core
+health behavior, Session identity and Scenario semantics. No new service or limiter.

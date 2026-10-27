@@ -5,7 +5,8 @@ import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import { Client, type Pool } from 'pg';
 import { runner } from 'node-pg-migrate';
-import type { FastifyInstance } from 'fastify';
+import Fastify, { type FastifyInstance } from 'fastify';
+import { installPublicDemoHttp } from '../src/deployment/public-demo-http.js';
 import { publicDemoConfig } from '../src/deployment/public-demo-config.js';
 import { verifyDemoDatabase } from '../src/deployment/verify-database.js';
 import { DemoMaintenance } from '../src/deployment/demo-maintenance.js';
@@ -28,6 +29,59 @@ function rejected(r: Response, status: number, code: string) {
   assert.equal(r.headers['cache-control'], 'no-store');
   assert.doesNotMatch(r.body, /token_hash|postgres:|SELECT |constraint|password|secret/i);
 }
+
+test('Demo-04 rate budget accounting through HTTP admission', async t => {
+  const fixture = (limits: { creates: number; mutations: number; global: number }) => {
+    const app = Fastify({ logger: false }); let now = 60000; let admitted = 0;
+    installPublicDemoHttp(app, { ...publicDemoConfig(sample)!, createsPerMinute: limits.creates,
+      mutationsPerMinute: limits.mutations, globalMutationsPerMinute: limits.global }, () => now);
+    for (const url of ['/demo/sessions', '/demo/operation']) app.post(url, async () => { admitted++; return { admitted: true }; });
+    const post = (ip: string, url = '/demo/operation') => app.inject({ method: 'POST', url, payload: {}, headers: {
+      origin, 'x-demo-session': '1', 'x-demo-proxy-key': proxySecret, 'x-demo-client-ip': ip,
+    } });
+    return { app, post, admitted: () => admitted, advanceWindow: () => { now += 60000; } };
+  };
+  await t.test('per-IP rejections do not spend other IPs global quota; global cap still rejects', async t => {
+    const f = fixture({ creates: 100, mutations: 1, global: 3 }); t.after(() => f.app.close());
+    assert.equal((await f.post('192.0.2.1')).statusCode, 200);
+    for (let n = 0; n < 20; n++) rejected(await f.post('192.0.2.1'), 429, 'DEMO_RATE_LIMITED');
+    for (const ip of ['192.0.2.2', '192.0.2.3']) assert.equal((await f.post(ip)).statusCode, 200);
+    rejected(await f.post('192.0.2.4'), 429, 'DEMO_RATE_LIMITED'); assert.equal(f.admitted(), 3);
+  });
+  await t.test('creation-limit rejections spend neither mutation nor global quota', async t => {
+    const f = fixture({ creates: 1, mutations: 5, global: 3 }); t.after(() => f.app.close());
+    assert.equal((await f.post('192.0.2.1', '/demo/sessions')).statusCode, 200);
+    for (let n = 0; n < 20; n++) rejected(await f.post('192.0.2.1', '/demo/sessions'), 429, 'DEMO_RATE_LIMITED');
+    assert.equal((await f.post('192.0.2.1')).statusCode, 200);
+    assert.equal((await f.post('192.0.2.2', '/demo/sessions')).statusCode, 200);
+    rejected(await f.post('192.0.2.3', '/demo/sessions'), 429, 'DEMO_RATE_LIMITED'); assert.equal(f.admitted(), 3);
+  });
+  await t.test('concurrent same-IP excess cannot bypass local limits or drain remaining global quota', async t => {
+    const f = fixture({ creates: 100, mutations: 2, global: 5 }); t.after(() => f.app.close());
+    const same = await Promise.all(Array.from({ length: 40 }, () => f.post('192.0.2.1')));
+    assert.equal(same.filter(r => r.statusCode === 200).length, 2);
+    assert.equal(same.filter(r => r.statusCode === 429).length, 38);
+    const other = await Promise.all(Array.from({ length: 10 }, (_, i) => f.post(`198.51.100.${i + 1}`)));
+    assert.equal(other.filter(r => r.statusCode === 200).length, 3);
+    assert.equal(other.filter(r => r.statusCode === 429).length, 7); assert.equal(f.admitted(), 5);
+  });
+  await t.test('concurrent session creates obey creation and aggregate limits', async t => {
+    const f = fixture({ creates: 2, mutations: 50, global: 5 }); t.after(() => f.app.close());
+    const same = await Promise.all(Array.from({ length: 20 }, () => f.post('192.0.2.1', '/demo/sessions')));
+    assert.equal(same.filter(r => r.statusCode === 200).length, 2);
+    assert.equal(same.filter(r => r.statusCode === 429).length, 18);
+    const other = await Promise.all(Array.from({ length: 10 }, (_, i) => f.post(`198.51.100.${i + 1}`, '/demo/sessions')));
+    assert.equal(other.filter(r => r.statusCode === 200).length, 3);
+    assert.equal(other.filter(r => r.statusCode === 429).length, 7); assert.equal(f.admitted(), 5);
+  });
+  await t.test('all admission counters reset together on a new fixed window', async t => {
+    const f = fixture({ creates: 1, mutations: 1, global: 1 }); t.after(() => f.app.close());
+    assert.equal((await f.post('192.0.2.1', '/demo/sessions')).statusCode, 200);
+    rejected(await f.post('192.0.2.2', '/demo/sessions'), 429, 'DEMO_RATE_LIMITED'); f.advanceWindow();
+    assert.equal((await f.post('192.0.2.1', '/demo/sessions')).statusCode, 200);
+    rejected(await f.post('192.0.2.2', '/demo/sessions'), 429, 'DEMO_RATE_LIMITED'); assert.equal(f.admitted(), 2);
+  });
+});
 
 test('Demo-04 environment matrix fails closed without broadening Core fake policy', () => {
   assert.equal(publicDemoConfig({ NODE_ENV: 'test' }), undefined);
@@ -131,11 +185,21 @@ test('Demo-04 real PostgreSQL production profile and lifecycle', { timeout: 1800
       const notReady = await make(false);
       assert.equal((await notReady.app.inject('/health/ready')).statusCode, 503);
       const r = await app.inject('/health/ready'); assert.equal(r.statusCode, 200); assert.equal(r.json().status, 'ready');
-      const health = await app.inject({ url: '/health', headers: headers() }); assert.equal(health.statusCode, 200);
-      assert.deepEqual(Object.keys(health.json()).sort(), ['status', 'version']);
+      assert.equal((await app.inject({ url: '/health', headers: headers() })).statusCode, 404);
       const old = pool.query.bind(pool);
-      pool.query = (() => Promise.reject(new Error('private database diagnostic'))) as typeof pool.query;
-      try { assert.equal((await app.inject('/health/ready')).statusCode, 503); }
+      let queries = 0;
+      pool.query = (() => { queries++; return Promise.reject(new Error('private database diagnostic')); }) as typeof pool.query;
+      try {
+        for (const url of ['/health', '/health/ready', '/health?probe=1', '/health/ready?probe=1']) {
+          const external = await app.inject({ url, remoteAddress: '198.51.100.1', headers: {
+            ...headers(), 'x-forwarded-for': '127.0.0.1', 'x-demo-client-ip': '127.0.0.1',
+          } });
+          assert.equal(external.statusCode, 404); assert.equal(external.headers['cache-control'], 'no-store');
+        }
+        assert.equal(queries, 0, 'Public health requests must not reach PostgreSQL');
+        assert.equal((await notReady.app.inject('/health/ready')).statusCode, 503); assert.equal(queries, 0);
+        assert.equal((await app.inject('/health/ready')).statusCode, 503); assert.equal(queries, 1);
+      }
       finally { pool.query = old as typeof pool.query; }
     });
     await t.test('per-address session creation limit cannot be bypassed by X-Forwarded-For', async () => {

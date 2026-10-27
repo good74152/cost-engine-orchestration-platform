@@ -45,6 +45,8 @@ test('Demo-04 isolated Compose, HTTPS, production UI and PostgreSQL operations',
   const base = ['compose', '--project-name', id, '--env-file', envFile, '-f', resolve('deploy/compose.yaml'), '-f', override];
   const compose = (...args: string[]) => command([...base, ...args]);
   const sql = async (query: string, database = 'cost_engine_demo') => (await compose('exec', '-T', 'database', 'psql', '-U', 'demo_owner', '-d', database, '-At', '-v', 'ON_ERROR_STOP=1', '-c', query)).out.toString().trim();
+  const readiness = async () => JSON.parse((await compose('exec', '-T', 'backend', 'node', '-e',
+    "const r=await fetch('http://127.0.0.1:3000/health/ready');console.log(JSON.stringify({status:r.status,body:await r.json()}))")).out.toString());
   let initialized = false; let ca: Buffer;
   const https = (path: string, method = 'GET', cookie?: string, body?: unknown, extra: Record<string, string> = {}) =>
     new Promise<{ status: number; headers: import('node:http').IncomingHttpHeaders; body: string }>((done, reject) => {
@@ -100,7 +102,7 @@ test('Demo-04 isolated Compose, HTTPS, production UI and PostgreSQL operations',
     const webId = (await compose('ps', '-q', 'web')).out.toString().trim();
     const caFile = join(directory, 'root.crt'); await command(['cp', `${webId}:/data/caddy/pki/authorities/local/root.crt`, caFile]); ca = await readFile(caFile);
     await t.test('real locally trusted TLS, readiness, static CSP/assets and SPA history refresh', async () => {
-      const health = await https('/health/ready'); assert.equal(health.status, 200, health.body); assert.equal(JSON.parse(health.body).status, 'ready');
+      const health = await readiness(); assert.equal(health.status, 200); assert.equal(health.body.status, 'ready');
       for (const path of ['/', '/guided', '/datasets', '/exploration', '/about']) {
         const r = await https(path); assert.equal(r.status, 200); assert.match(r.body, /<div id="root">/);
         assert.match(String(r.headers['content-security-policy']), /frame-ancestors 'none'/); assert.equal(r.headers['cache-control'], 'no-cache');
@@ -112,6 +114,16 @@ test('Demo-04 isolated Compose, HTTPS, production UI and PostgreSQL operations',
         assert.equal((await https(path, 'POST', undefined, {})).status, 404, path);
       }
       const blocked = await https('/demo/sessions', 'POST', undefined, {}, { origin: 'https://evil.invalid', 'x-forwarded-for': '192.0.2.9' }); assert.equal(blocked.status, 403);
+    });
+    await t.test('public health stays closed without a backend; internal Docker readiness still works', async () => {
+      for (const path of ['/health', '/health/ready', '/health?probe=1', '/health/ready?probe=1']) {
+        const response = await https(path); assert.equal(response.status, 404); assert.equal(response.headers['cache-control'], 'no-store');
+      }
+      await compose('stop', 'backend');
+      try {
+        for (const path of ['/health', '/health/ready']) assert.equal((await https(path)).status, 404);
+      } finally { await compose('up', '-d', '--wait', 'backend'); }
+      assert.equal((await readiness()).status, 200);
     });
     let persistentId = ''; let oldCookie = '';
     await t.test('HTTPS session, all guided steps, publish and Reset; UNKNOWN recovers 202 to 200', async () => {
@@ -185,7 +197,8 @@ test('Demo-04 isolated Compose, HTTPS, production UI and PostgreSQL operations',
       } finally { await command([...otherProject, 'down', '--volumes']); }
       await compose('restart', 'backend'); await compose('up', '-d', '--wait', 'backend');
       assert.equal((await https('/demo/sessions/current', 'GET', oldCookie)).status, 401);
-      assert.equal((await https('/health/ready')).status, 200);
+      assert.equal((await readiness()).status, 200);
+      assert.equal((await https('/health/ready')).status, 404);
       const logs = (await compose('logs', '--no-color', 'backend')).out.toString();
       for (const secret of [password, proxy, oldCookie, databaseUrl]) assert.ok(!logs.includes(secret), 'No credentials in process logs');
       assert.match(logs, /application_draining/); assert.match(logs, /application_ready/);

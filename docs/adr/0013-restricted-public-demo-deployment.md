@@ -21,6 +21,10 @@ the frontend. No CDN or additional proxy is supported by this configuration.
 Use Secure/HttpOnly/SameSite=Strict host cookies, exact mutation Origin and the
 existing CSRF header. Apply bounded per-address creation/mutation rate limits,
 a global mutation rate, request-body limits and concurrent-safe session admission.
+Review hardening checks local budgets before global and charges all applicable
+budgets only after every check passes, without yielding between check and charge.
+Public /health and /health/* are closed at Caddy and in the public backend profile;
+only loopback GET /health/ready performs the internal readiness/DB probe.
 Session admission takes a PostgreSQL table lock before checking active and total
 retained session capacity and inserting. This is Demo admission only; core row
 locks and transaction protocols are unchanged. No distributed lock service.
