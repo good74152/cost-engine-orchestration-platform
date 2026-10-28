@@ -350,6 +350,55 @@ Handled API errors use the flat envelope:
 
 Representative contracts: 400 INVALID_REQUEST/INVALID_DOMAIN/INVALID_PERIOD; 404 CALCULATION_JOB_NOT_FOUND/DATASET_VERSION_NOT_FOUND/EXECUTION_ATTEMPT_NOT_FOUND; 409 lifecycle/readiness/active-version conflicts; 502 EXECUTOR_DISPATCH_FAILED; 503 EXECUTOR_STATUS_UNAVAILABLE. Parser body-size/media errors use 413/415 with INVALID_REQUEST. Unexpected failures are logged and return 500 INTERNAL_SERVER_ERROR without PostgreSQL details. Unregistered routes retain Fastify's normal 404 response. See [API coverage inventory](tasks/007c-api-error-contract-coverage.md) and the executed verification reports for the full contracts.
 
+### Demo-05C-1 Workflow Template Catalog
+
+Registered only with `APP_MODE=demo`:
+
+| Method | Route | Successful JSON (200) |
+|---|---|---|
+| GET | /demo/workflow-templates | `{ "templates": [WorkflowTemplateSummary, ...] }` |
+| GET | /demo/workflow-templates/:id | `WorkflowTemplate`, including `steps` |
+
+Summaries contain exactly `id`, `version`, `title`, `description`, `availability`.
+Details add only `steps`. Each Step contains exactly `id`, `title`, `description`,
+`operation`, `prerequisites`, `expectedResult`, plus `domain` where applicable
+(all current steps include it). Prerequisites are Step IDs within that Template.
+IDs are case-sensitive; initial version is 1. List order is HAPPY_PATH,
+FAILURE_RETRY, LOST_RESPONSE_RECOVERY, SIX_DOMAIN_WORKFLOW. All availability is
+`PREVIEW`: the catalog describes operations, but the new Workflow UI is not enabled.
+The existing Guided and Free Exploration UI behavior is unchanged.
+
+Operations describe these existing protected APIs. Job/Attempt operations must
+be explicitly repeated for every relevant Job/Attempt, using actual returned
+identities and paginated reads; a Template step is not one automatically scheduled
+Job. No template contains concrete Dataset versions or user/session data.
+
+| Operation | Existing API capability |
+|---|---|
+| CREATE_DATASET | POST /demo/dataset-versions |
+| RUN_JOB | POST /demo/calculation-jobs/:id/run (also retry/recovery) |
+| SET_FAKE_STATE | POST /demo/execution-attempts/:id/fake-state |
+| RECONCILE_JOB | POST /demo/calculation-jobs/:id/reconcile |
+| SUBMIT_VALIDATION | POST /demo/dataset-versions/:id/submit-validation |
+| PUBLISH_DATASET | POST /demo/dataset-versions/:id/publish |
+
+Both GETs require the existing Session Cookie and Same-Origin policy, with no
+`X-Demo-Session` mutation header. Both use Parallel coordinator admission and
+`Cache-Control: no-store`. Any extra query parameter yields 400 `INVALID_REQUEST`.
+Unknown Template ID yields 404 `DEMO_RESOURCE_UNAVAILABLE`. Missing/invalid/expired/
+revoked Session yields 401 `DEMO_SESSION_UNAVAILABLE` and cookie clearing.
+Cross-site/foreign Origin yields 403 `DEMO_SESSION_CSRF_REJECTED`. Existing 429
+`DEMO_SESSION_QUEUE_FULL`, 409 `RESET_CONFLICT` and 503
+`DEMO_RESET_OUTCOME_UNKNOWN` remain applicable. Errors use `{ "message", "code" }`.
+
+The catalog is independent of PostgreSQL configuration and Domain state;
+authentication and admission still perform their existing Session reads.
+It creates no fake, execution, progress, Scenario or ledger. Six-domain edges
+are guidance only, including FAB_COST-before-CAPEX despite CAPEX retaining its
+zero-dependency seed. See [full contract and verification](tasks/demo-05c1-workflow-template-catalog.md).
+Focused checks: `npm run test:demo-05c1:unit` (no PostgreSQL),
+`npm run test:demo-05c1:typecheck`, `npm run test:demo-05c1` (owned disposable DB).
+
 ## Local development
 
 ### Interactive frontend (Demo-03)
