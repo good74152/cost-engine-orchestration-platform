@@ -21,6 +21,23 @@ export interface FakeExternalExecution {
 
 export type FakeExecutionState = 'RUNNING' | 'SUCCEEDED' | 'FAILED';
 
+export type FakeRunSimulation =
+  | { readonly dispatch: 'ACCEPT' | 'ACCEPT_THEN_UNKNOWN'; readonly completion: FakeExecutionState }
+  | { readonly dispatch: 'REJECT' | 'UNKNOWN_WITHOUT_CREATION' };
+
+/** In-memory creation/rejection fact, not operation history or current live state. */
+export interface FakeSimulationDecision { readonly simulation: FakeRunSimulation }
+export type FakeSimulationInfo =
+  | { kind: 'UNBOUND' }
+  | { kind: 'BOUND'; decision: FakeSimulationDecision | null };
+export interface FakeSimulatedDispatch {
+  result: DispatchResult;
+  decision: FakeSimulationDecision | null;
+  applied: boolean;
+  /** Release after the calling Core Run has recorded its outcome (or failed). */
+  finish: () => void;
+}
+
 export interface FakeExecutorOptions {
   defaultBehavior?: FakeDispatchBehavior;
   scriptedBehaviors?: FakeDispatchBehavior[];
@@ -35,6 +52,8 @@ export class FakeExecutor implements CalculationExecutor {
   // ADR-0008: instance-lifetime test/demo state only, not persisted or shared
   // across processes/instances. A real adapter must independently prove no-run.
   private readonly rejectedIdentities = new Set<string>();
+  private readonly simulationDecisions = new Map<string, FakeSimulationDecision>();
+  private readonly pendingUnboundOutcomes = new Map<string, number>();
   private readonly dispatchHistory: DispatchCalculationCommand[] = [];
   private readonly statusLookupHistory: ExecutionIdentity[] = [];
   private readonly scriptedBehaviors: FakeDispatchBehavior[];
@@ -101,49 +120,92 @@ export class FakeExecutor implements CalculationExecutor {
   }
 
   async dispatch(command: DispatchCalculationCommand): Promise<DispatchResult> {
+    return this.decideDispatch(command).result;
+  }
+
+  /** Explicit behavior bypasses the shared queue/default; identity checks are shared. */
+  async dispatchWithSimulation(command: DispatchCalculationCommand, simulation: FakeRunSimulation): Promise<FakeSimulatedDispatch> {
+    return this.decideDispatch(command, simulation);
+  }
+
+  simulationInfo(identity: ExecutionIdentity): FakeSimulationInfo {
+    const key = executionKey(identity);
+    return this.externalExecutions.has(key) || this.rejectedIdentities.has(key)
+      ? { kind: 'BOUND', decision: this.simulationDecisions.get(key) ?? null }
+      : { kind: 'UNBOUND' };
+  }
+
+  private decideDispatch(command: DispatchCalculationCommand, simulation?: FakeRunSimulation): FakeSimulatedDispatch {
     this.dispatchHistory.push(command);
     const key = executionKey(command);
+    const observed = (result: DispatchResult, applied = false): FakeSimulatedDispatch => ({
+      result, decision: this.simulationDecisions.get(key) ?? null, applied, finish() {},
+    });
+    const bind = () => {
+      if (!simulation) return;
+      const copy: FakeRunSimulation = 'completion' in simulation
+        ? Object.freeze({ dispatch: simulation.dispatch, completion: simulation.completion })
+        : Object.freeze({ dispatch: simulation.dispatch });
+      this.simulationDecisions.set(key, Object.freeze({ simulation: copy }));
+    };
+    const unbound = (message: string): FakeSimulatedDispatch => {
+      const outcome = observed({ kind: 'UNKNOWN', message });
+      if (!simulation) return outcome; // Legacy calls are exclusively admitted.
+      this.pendingUnboundOutcomes.set(key, (this.pendingUnboundOutcomes.get(key) ?? 0) + 1);
+      let finished = false;
+      outcome.finish = () => {
+        if (finished) return;
+        finished = true;
+        const remaining = this.pendingUnboundOutcomes.get(key)! - 1;
+        if (remaining) this.pendingUnboundOutcomes.set(key, remaining);
+        else this.pendingUnboundOutcomes.delete(key);
+      };
+      return outcome;
+    };
     // Keep checks and identity decision synchronous (no await): concurrent
     // dispatches on this instance cannot both decide an unseen identity.
     if (this.externalExecutions.has(key)) {
-      return { kind: 'ALREADY_EXISTS' };
+      return observed({ kind: 'ALREADY_EXISTS' });
     }
     if (this.rejectedIdentities.has(key)) {
-      return {
+      return observed({
         kind: 'REJECTED',
         message: 'Fake executor rejected dispatch',
-      };
+      });
     }
 
-    const behavior = this.scriptedBehaviors.shift() ?? this.defaultBehavior;
+    const behavior = simulation?.dispatch ?? this.scriptedBehaviors.shift() ?? this.defaultBehavior;
     if (behavior === 'REJECT') {
+      // A late no-run UNKNOWN must not be recorded after DISPATCH_FAILED. Do
+      // not make an irrevocable identity decision while such a Core call is
+      // still recording. Creation/recovery remains allowed for this identity.
+      if (this.pendingUnboundOutcomes.has(key)) return unbound('Fake rejection deferred while an earlier ambiguous dispatch is recording');
       this.rejectedIdentities.add(key);
-      return {
+      bind();
+      return observed({
         kind: 'REJECTED',
         message: 'Fake executor rejected dispatch',
-      };
+      }, simulation !== undefined);
     }
     if (behavior === 'UNKNOWN_WITHOUT_CREATION') {
-      return {
-        kind: 'UNKNOWN',
-        message: 'Fake executor returned an ambiguous result without creating a run',
-      };
+      return unbound('Fake executor returned an ambiguous result without creating a run');
     }
 
     this.externalExecutions.set(key, {
       airflowDagId: command.airflowDagId,
       airflowDagRunId: command.airflowDagRunId,
       command,
-      state: 'RUNNING',
+      state: simulation && 'completion' in simulation ? simulation.completion : 'RUNNING',
     });
+    bind();
 
     if (behavior === 'ACCEPT_THEN_UNKNOWN') {
-      return {
+      return observed({
         kind: 'UNKNOWN',
         message: 'Fake executor created the run but the response was lost',
-      };
+      }, simulation !== undefined);
     }
-    return { kind: 'ACCEPTED' };
+    return observed({ kind: 'ACCEPTED' }, simulation !== undefined);
   }
 
   async getExecutionStatus(

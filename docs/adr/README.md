@@ -31,6 +31,7 @@ If a decision changes materially, prefer a new ADR that supersedes the old one i
 - [ADR-0013 — Restricted Single-Instance Public Demo](0013-restricted-public-demo-deployment.md)
 - [ADR-0014 — Canonical Domain Naming: E2E_COST](0014-canonical-domain-e2e-cost.md)
 - [ADR-0015 — Demo Session Parallel and Exclusive Admission](0015-demo-session-concurrency-gate.md)
+- [ADR-0016 — Request-Scoped Demo Simulation on Shared Execution Identities](0016-request-scoped-demo-simulation.md)
 
 ## Truth Boundary
 

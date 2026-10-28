@@ -817,7 +817,7 @@ Demo-05B-1 supplements the earlier single-queue descriptions under
 four Parallel operations: manual Dataset creation/lifecycle and protected reads.
 Slots include waiting/revalidation and are reserved before any await; the fifth
 is immediately rejected with 429 DEMO_SESSION_QUEUE_FULL. Scenario Create,
-Guided Next, Run/Reconcile and Fake controls use the existing bounded Exclusive
+Guided Next, legacy Run and Fake controls use the existing bounded Exclusive
 FIFO. An Exclusive waits for all earlier operations and prevents later Parallel
 work from overtaking it. Guided request/ledger/retry semantics remain unchanged.
 
@@ -828,3 +828,25 @@ retain ownership/security checks. No extra SQL lock spans a gate wait or executo
 call. Same-series creates now contend directly through the unchanged Core
 PostgreSQL series protocol. This remains single-instance local admission, not
 distributed coordination. See [scope and executed tests](tasks/demo-05b1-session-concurrency-gate.md).
+
+## 29. Per-Request Demo Fake Simulation
+
+Demo-05B-2 adds an optional simulation to the protected manual Run route under
+[ADR-0016](adr/0016-request-scoped-demo-simulation.md). Explicit simulated Runs
+and Reconcile use Parallel admission; empty-body legacy Runs and Fake controls
+remain Exclusive. Guided Scenario execution and Reset barriers are unchanged.
+
+Each request adapter delegates to the single session fake without consuming its
+shared behavior queue or changing its default. The first actual creation or
+identity-wide rejection selects immutable simulation metadata. Existing runs
+recover through ALREADY_EXISTS, retaining their live state and original settings.
+Responses distinguish requested from applied settings; unknown prior settings
+are reported as unknown, never guessed. UNKNOWN_WITHOUT_CREATION leaves the
+identity unbound and recoverable. Rejection is deferred as UNKNOWN while earlier
+no-run UNKNOWN outcomes are still recording, avoiding a late ambiguous write
+after terminal DISPATCH_FAILED without changing Core invariants.
+
+Completion controls only external Fake state. The unchanged Core Reconcile
+service remains the sole authority for terminal PostgreSQL job/attempt changes.
+No Core transaction/lock order, snapshots, identity contract, migration, Session
+ownership/security, or Guided ledger changes. See [API and verification](tasks/demo-05b2-per-request-fake-executor.md).
