@@ -29,6 +29,7 @@ If a decision changes materially, prefer a new ADR that supersedes the old one i
 - [ADR-0011 — Demo Scenario Persistence and Mode Isolation](0011-demo-scenario-persistence-and-mode-isolation.md)
 - [ADR-0012 — Guided Scenario Step Idempotency and Recovery](0012-demo-scenario-step-idempotency.md)
 - [ADR-0013 — Restricted Single-Instance Public Demo](0013-restricted-public-demo-deployment.md)
+- [ADR-0014 — Canonical Domain Naming: E2E_COST](0014-canonical-domain-e2e-cost.md)
 
 ## Truth Boundary
 

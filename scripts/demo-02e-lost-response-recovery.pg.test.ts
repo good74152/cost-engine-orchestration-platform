@@ -79,7 +79,7 @@ test('Demo-02E: Lost Response recovery, durable identity and isolation',{timeout
       const old=(await pool.query("SELECT pg_get_functiondef('validate_demo_step_binding()'::regprocedure) AS body")).rows[0].body;
       for(const type of ['HAPPY_PATH','FAILURE_RETRY']){const s=await newSession(type);await through(s,type==='HAPPY_PATH'?6:9);}
       const before=await dump();await migrate('up');const after=await dump();assert.deepEqual({...after,pgmigrations:before.pgmigrations},before);
-      await migrate('down',1);assert.deepEqual(await dump(),before);
+      await migrate('down',2);assert.deepEqual(await dump(),before);
       assert.equal((await pool.query("SELECT pg_get_functiondef('validate_demo_step_binding()'::regprocedure) AS body")).rows[0].body,old);
       const legacy=await newSession(null);
       await pool.query("INSERT INTO demo_scenario_instances(id,session_id,scenario_type) VALUES($1,$2,'LOST_RESPONSE_RECOVERY')",[legacy.id=randomUUID(),legacy.context.sessionId]);
@@ -90,12 +90,12 @@ test('Demo-02E: Lost Response recovery, durable identity and isolation',{timeout
       finally{await pool.query('ALTER TABLE demo_scenario_step_executions ENABLE TRIGGER demo_step_binding');}
       const guard=await dump();await assert.rejects(migrate('up'),/Cannot reinterpret pre-02E/);assert.deepEqual(await dump(),guard);
       await pool.query('DELETE FROM demo_scenario_step_executions WHERE scenario_id=$1',[legacy.id]);await pool.query('DELETE FROM demo_scenario_instances WHERE id=$1',[legacy.id]);
-      await migrate('up');assert.equal((await pool.query('SELECT count(*)::int AS n FROM pgmigrations')).rows[0].n,11);
+      await migrate('up');assert.equal((await pool.query('SELECT count(*)::int AS n FROM pgmigrations')).rows[0].n,12);
       const ready=await newSession();const retained=await dump();
-      await assert.rejects(migrate('down',1),/retained Lost Response Recovery scenarios/);assert.deepEqual(await dump(),retained);
+      await assert.rejects(migrate('down',2),/retained Lost Response Recovery scenarios/);assert.deepEqual(await dump(),retained);
       assert.equal((await post('/demo/sessions/reset',ready)).statusCode,204);
     });
-    console.log('DEMO_02E_RUNTIME',JSON.stringify({node:process.version,postgres:(await pool.query('SHOW server_version')).rows[0].server_version,database:name,migrations:11}));
+    console.log('DEMO_02E_RUNTIME',JSON.stringify({node:process.version,postgres:(await pool.query('SHOW server_version')).rows[0].server_version,database:name,migrations:12}));
     await t.test('Create supports all three types, same-type replay, cross-type conflict, and concurrent Create uniqueness',async()=>{
       const s=await newSession();const original=(await get('/demo/scenarios/current',s)).json();const before=await dump();
       const again=await create(s);assert.equal(again.statusCode,200);assert.deepEqual(again.json(),original);
@@ -324,7 +324,7 @@ test('Demo-02E: Lost Response recovery, durable identity and isolation',{timeout
     });
     await t.test('retained E READY and ledger histories refuse down atomically with validator, migration markers and all data unchanged',async()=>{
       const before=await dump();const fn=(await pool.query("SELECT pg_get_functiondef('validate_demo_step_binding()'::regprocedure) AS body")).rows[0].body;
-      await assert.rejects(migrate('down',1),/retained Lost Response Recovery scenarios/);assert.deepEqual(await dump(),before);
+      await assert.rejects(migrate('down',2),/retained Lost Response Recovery scenarios/);assert.deepEqual(await dump(),before);
       assert.equal((await pool.query("SELECT pg_get_functiondef('validate_demo_step_binding()'::regprocedure) AS body")).rows[0].body,fn);
     });
     await t.test('Reset rollback preserves pending lost-ACK execution and all ledger/domain rows; commit deletes only owner and releases fake',async()=>{

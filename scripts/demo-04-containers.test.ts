@@ -96,7 +96,7 @@ test('Demo-04 isolated Compose, HTTPS, production UI and PostgreSQL operations',
       await compose('--profile', 'operations', 'run', '--rm', 'operator', 'migrate-up');
       const unseeded = await command([...base, 'run', '--rm', '--no-deps', 'backend'], undefined, true); assert.equal(unseeded.code, 1);
       for (let n = 0; n < 2; n++) await compose('--profile', 'operations', 'run', '--rm', 'operator', 'seed');
-      assert.equal(await sql('SELECT count(*) FROM pgmigrations'), '11');
+      assert.equal(await sql('SELECT count(*) FROM pgmigrations'), '12');
     });
     await compose('up', '-d', '--wait', 'backend', 'web');
     const webId = (await compose('ps', '-q', 'web')).out.toString().trim();
@@ -203,7 +203,7 @@ test('Demo-04 isolated Compose, HTTPS, production UI and PostgreSQL operations',
       for (const secret of [password, proxy, oldCookie, databaseUrl]) assert.ok(!logs.includes(secret), 'No credentials in process logs');
       assert.match(logs, /application_draining/); assert.match(logs, /application_ready/);
     });
-    console.info('DEMO04_CONTAINER_VERIFIED', JSON.stringify({ localHttps: true, publicVps: false, migrations: 11, volumePersistence: true, restore: true }));
+    console.info('DEMO04_CONTAINER_VERIFIED', JSON.stringify({ localHttps: true, publicVps: false, migrations: Number(await sql('SELECT count(*) FROM pgmigrations')), volumePersistence: true, restore: true }));
   } finally {
     // Only the randomly named, explicitly owned disposable project/volumes.
     assert.match(id, /^demo04_test_[a-f0-9]+$/);

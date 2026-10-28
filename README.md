@@ -216,7 +216,7 @@ results or mock financial metrics are shown.
 | [Engineering Policy](AGENTS.md) | Repository change and review rules |
 
 Task 007 / Orchestration Core v2 is complete and accepted. This is an evolving portfolio project with no production-readiness claim.
-Canonical domains remain `FAB_COST`, `CAPEX`, `DPR`, `INSURANCE`, `ONE_STD_COST` and `COWOS_S`.
+Canonical domains remain `FAB_COST`, `CAPEX`, `DPR`, `INSURANCE`, `ONE_STD_COST` and `E2E_COST`.
 
 Demo 01A and Demo 01B-1 are merged. Explicit APP_MODE=demo protects Demo commands
 and uses one FakeExecutor per session; default core APIs remain unauthenticated.

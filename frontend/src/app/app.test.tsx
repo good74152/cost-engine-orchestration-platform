@@ -169,6 +169,13 @@ it('resource loading follows Job and Attempt cursor pages as well as Dataset pag
  const {model}=await mount(api,'/datasets/'+id(10));await screen.findByRole('heading',{name:'SECOND_TYPE'});
  expect(model.getSnapshot().jobs[id(10)]).toHaveLength(2);expect(model.getSnapshot().attempts[id(20)]).toHaveLength(6);expect(screen.getAllByTestId('attempt-card')).toHaveLength(6);
 });
+it('Free Exploration offers E2E_COST without the retired domain and sends the selected identifier',async()=>{
+ const api=new MockApi();const {user}=await mount(api,'/exploration');
+ expect(screen.queryByRole('option',{name:'COWOS_S'})).not.toBeInTheDocument();
+ await user.selectOptions(screen.getByLabelText('Domain'),'E2E_COST');
+ await user.click(screen.getByRole('button',{name:'Create dataset'}));
+ await waitFor(()=>expect(api.posts[0]!.body).toEqual({domain:'E2E_COST',fiscalYear:2026,period:'Q4'}));
+});
 it('Free Exploration sends only canonical form fields and performs fake / reconcile / publish separately',async()=>{
  const api=new MockApi();const {model,user}=await mount(api,'/exploration');
  expect(screen.queryByLabelText('Company code')).not.toBeInTheDocument();await user.click(screen.getByRole('button',{name:'Create dataset'}));

@@ -18,7 +18,7 @@ const ACCEPTED_DOMAINS = [
   'DPR',
   'INSURANCE',
   'ONE_STD_COST',
-  'COWOS_S',
+  'E2E_COST',
 ] as const;
 
 const sourceDatabaseUrl = (() => {
@@ -450,7 +450,7 @@ test(
 
       await t.test('returns INVALID_DOMAIN without database mutation', async () => {
         await resetOrchestrationData(applicationPool!);
-        for (const domain of ['UNKNOWN', 'FAB COST', 'ONE STD COST', 'COWOS-S']) {
+        for (const domain of ['UNKNOWN', 'FAB COST', 'ONE STD COST', 'COWOS-S', 'COWOS_S', 'e2e_cost', 'E2E-COST']) {
           const response = await postDatasetVersion(
             app!,
             validPayload({ domain }),

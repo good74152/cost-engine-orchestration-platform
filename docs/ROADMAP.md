@@ -126,29 +126,19 @@ Distributed Demo, real Airflow and background financial execution remain deferre
 
 ### Naming-01 — Rename COWOS_S to E2E_COST
 
-**Status: BACKLOG — Architecture Review Required**
+**Status: IMPLEMENTED — Pending System Owner Review**
 
-Goal: rename the canonical dataset domain identifier from `COWOS_S` to `E2E_COST`.
+The System Owner authorized the bounded same-Domain rename with no API alias.
+Canonical APIs and the frontend now use `E2E_COST`. A guarded forward migration
+renames existing series, calculation types and dependency references while
+preserving UUIDs, versions, snapshots, execution identities and historical data.
+Conflicts fail atomically; existing migrations and verification history remain.
+No six-domain Demo seed or Playground restructuring is included.
 
-Before implementation, investigate:
-
-1. TypeScript domain definitions and validation.
-2. REST API compatibility.
-3. PostgreSQL persisted domain values.
-4. Calculation types and dependency definitions.
-5. Existing migrations and historical data.
-6. Tests and documentation.
-7. Rollout and backward compatibility.
-
-Constraints:
-
-- Do not modify applied migrations.
-- Do not delete historical data.
-- Do not change dataset identity semantics beyond the approved rename.
-- Do not implement aliases without an approved decision.
-- Do not perform the rename in Docs-03B; `COWOS_S` remains the current canonical identifier.
-
-Naming-01 requires a separate architecture review and bounded implementation task.
+See [ADR-0014](adr/0014-canonical-domain-e2e-cost.md),
+[bounded task and inventory](tasks/naming-01-e2e-cost.md), and
+[verification](verification/naming-01-e2e-cost.md).
+No merge or deployment has been performed.
 
 ## Deferred until a concrete requirement
 

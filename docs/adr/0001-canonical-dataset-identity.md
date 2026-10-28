@@ -1,5 +1,7 @@
 # ADR-0001 — Canonical Dataset Identity and Monotonic Version Allocation
 
+> Naming-01: the original COWOS_S identifier below is now E2E_COST; see [ADR-0014](0014-canonical-domain-e2e-cost.md). Original identity rules and historical task text are preserved.
+
 - Status: Accepted
 - Date: 2026-09-06
 

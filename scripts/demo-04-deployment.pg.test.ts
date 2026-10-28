@@ -297,7 +297,7 @@ test('Demo-04 real PostgreSQL production profile and lifecycle', { timeout: 1800
       assert.equal(restarted.runtime.executors.size, 0);
       await session(restarted.app);
     });
-    console.info('DEMO04_PG_VERIFIED', JSON.stringify({ migrations: 11, postgres: (await pool.query('SHOW server_version')).rows[0].server_version }));
+    console.info('DEMO04_PG_VERIFIED', JSON.stringify({ migrations: (await pool.query('SELECT count(*)::int AS n FROM pgmigrations')).rows[0].n, postgres: (await pool.query('SHOW server_version')).rows[0].server_version }));
   } finally {
     for (const app of apps) await app.close();
     await db?.end(); await Promise.all(ends);

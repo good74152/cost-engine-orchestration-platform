@@ -14,8 +14,10 @@ CAPEX
 DPR
 INSURANCE
 ONE_STD_COST
-COWOS_S
+E2E_COST
 ```
+
+Naming-01 renames the same Domain from `COWOS_S` to `E2E_COST` without an API alias. The guarded forward migration preserves UUID relations, frozen inputs and execution history; see [ADR-0014](adr/0014-canonical-domain-e2e-cost.md).
 
 All domains use the same quarterly reporting identity model, but each domain may define different calculation types, dependency definitions, and Airflow DAG mappings.
 
@@ -527,7 +529,7 @@ CalculationExecutor
 
 The factory requires explicit EXECUTOR_TYPE=fake and an approved development/test environment; production configuration fails fast. Fake executions and identity-rejection tombstones are in-process, instance-lifetime state, not cross-process/restart durability or proof of real Airflow behavior. Callback/manual reconciliation is implemented; a periodic worker is not.
 
-`npm run test:milestone` runs build and twelve test suites sequentially, including runner-policy regressions, all PostgreSQL lifecycle/constraint/concurrency suites, API contracts, isolated raw ingestion and Task 007D E2E Flow A–F. It stops on the first failure and rejects invalid/missing TAP evidence, skips, cancellations or TODOs. Tests create/migrate/drop independently owned disposable databases; the source TEST_DATABASE_URL/DATABASE_URL must point at a safe test service with CREATE DATABASE and owned DDL/drop privileges. Raw ingestion must use the milestone's isolated launcher, not a persistent developer database. See README for setup and the verification reports for actual results.
+`npm run test:milestone` runs build and thirteen test suites sequentially, including runner-policy regressions, all PostgreSQL lifecycle/constraint/concurrency suites, API contracts, isolated raw ingestion and Task 007D E2E Flow A–F. It stops on the first failure and rejects invalid/missing TAP evidence, skips, cancellations or TODOs. Tests create/migrate/drop independently owned disposable databases; the source TEST_DATABASE_URL/DATABASE_URL must point at a safe test service with CREATE DATABASE and owned DDL/drop privileges. Raw ingestion must use the milestone's isolated launcher, not a persistent developer database. See README for setup and the verification reports for actual results.
 
 ## 16. Current Implementation Sequence
 
