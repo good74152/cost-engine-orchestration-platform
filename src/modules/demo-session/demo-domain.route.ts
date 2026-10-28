@@ -5,11 +5,13 @@ import { abandonDatasetVersionService, publishDatasetVersionService,
   rejectDatasetVersionService, submitDatasetValidationService } from '../dataset-version/dataset-version-lifecycle.service.js';
 import { runCalculationJobService } from '../calculation-job-run.service.js';
 import { reconcileCalculationJobService } from '../calculation-job-reconciliation.service.js';
+import { ExecutorDispatchFailedError } from '../calculation-job.errors.js';
 import type { FakeDispatchBehavior } from '../../executors/fake-executor.js';
 import { DemoResourceUnavailableError, DemoSessionError } from './demo-session.errors.js';
 import type { AuthenticatedDemoSession } from './demo-session.service.js';
 import type { DemoRuntime } from './demo-runtime.js';
 import { DemoHttpSecurity, exactDemoBody, installDemoErrorBoundary, type DemoSessionRouteOptions } from './demo-http-security.js';
+import { parseRunSimulation, RequestScopedFakeExecutor } from './request-scoped-fake-executor.js';
 
 export function demoDomainRoutes(runtime: DemoRuntime, options: DemoSessionRouteOptions = {}) {
   const policy = new DemoHttpSecurity(options);
@@ -45,18 +47,34 @@ export function demoDomainRoutes(runtime: DemoRuntime, options: DemoSessionRoute
           return service(request.params.id);
         }, true));
     }
-    for (const command of ['run', 'reconcile'] as const) {
-      app.post<{ Params: { id: string } }>(`/demo/calculation-jobs/:id/${command}`, async (request, reply) =>
+    app.post<{ Params: { id: string } }>('/demo/calculation-jobs/:id/run', async (request, reply) => {
+      // Pure validation after authentication/CSRF, before gate classification.
+      const simulation = parseRunSimulation(request.body);
+      return operate(request, async session => {
+        await runtime.ownership.assertOwned(session, 'job', request.params.id);
+        const fake = await runtime.executors.forSession(session);
+        const scoped = simulation ? new RequestScopedFakeExecutor(fake, simulation) : undefined;
+        try {
+          const result = await runCalculationJobService(request.params.id, scoped ?? fake);
+          return reply.status(result.attemptStatus === 'DISPATCHING' ? 202 : 200).send(scoped
+            ? { ...result, simulation: scoped.report(result) } : result);
+        } catch (error) {
+          if (scoped && error instanceof ExecutorDispatchFailedError) {
+            const report = scoped.rejectionReport();
+            if (report) return reply.status(502).send({ message: error.message, code: error.code, simulation: report });
+          }
+          throw error;
+        } finally { scoped?.finish(); }
+      }, simulation !== undefined);
+    });
+    app.post<{ Params: { id: string } }>('/demo/calculation-jobs/:id/reconcile', async (request, reply) =>
         operate(request, async (session) => {
           await runtime.ownership.assertOwned(session, 'job', request.params.id);
           exactDemoBody(request.body, []);
           const executor = await runtime.executors.forSession(session);
-          const result = command === 'run'
-            ? await runCalculationJobService(request.params.id, executor)
-            : await reconcileCalculationJobService(request.params.id, executor);
-          return reply.status(result.attemptStatus === 'DISPATCHING' ? 202 : 200).send(result);
-        }));
-    }
+          const result = await reconcileCalculationJobService(request.params.id, executor);
+          return reply.status(200).send(result);
+        }, true));
     app.post('/demo/fake-executor/dispatch-behavior', async (request) => operate(request, async (session) => {
       const { behavior } = exactDemoBody(request.body, ['behavior']);
       const behaviors = ['ACCEPT', 'REJECT', 'ACCEPT_THEN_UNKNOWN', 'UNKNOWN_WITHOUT_CREATION'];

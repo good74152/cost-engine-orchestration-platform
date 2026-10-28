@@ -133,13 +133,21 @@ Demo registers only health, sessions and protected /demo dataset/job/fake comman
 anonymous Domain/raw/callback/internal controls are absent. All mutations require
 the cookie and shared CSRF policy. Ownership and unchanged Domain commands run in
 one per-session coordinator operation; different sessions have independent fakes/gates.
-Demo-05B-1 admits up to four Parallel Dataset mutations/reads. Scenario Create,
-Guided Next, Job Run/Reconcile and Fake controls remain Exclusive FIFO. Parallel
+Demo-05B-1/2 admit up to four Parallel Dataset mutations/reads, explicit simulated
+Runs and Reconcile. Scenario Create, Guided Next, legacy {} Run and Fake controls
+remain Exclusive FIFO. Parallel
 slots include waiting/revalidation; the fifth returns 429 DEMO_SESSION_QUEUE_FULL.
 Exclusive admission waits for earlier operations and blocks later ones. Reset
 requires idle state and retains its 409/unknown-503 reservation and recovery.
 See [ADR-0015](adr/0015-demo-session-concurrency-gate.md) and
 [the bounded concurrency tests](tasks/demo-05b1-session-concurrency-gate.md).
+Manual `POST /demo/calculation-jobs/:id/run` also accepts
+`{"simulation":{"dispatch":"ACCEPT","completion":"FAILED"}}`.
+Creation dispatches require RUNNING/SUCCEEDED/FAILED completion; REJECT and
+UNKNOWN_WITHOUT_CREATION forbid completion. `{}` keeps its legacy response.
+Explicit responses distinguish requested/applied simulation and whether this
+request actually applied it. Reconcile remains required for DB terminal state.
+See [all combinations and recovery](tasks/demo-05b2-per-request-fake-executor.md).
 See [the complete route inventory](tasks/demo-01b1-session-ownership-executor-isolation.md).
 
 Demo-01B-2 adds POST /demo/sessions/reset: valid cookie, X-Demo-Session: 1,

@@ -129,6 +129,10 @@ For the optional six-domain Demo configuration, explicitly run
 the same private `DEMO_SEED_DATABASE_URL` and approved Demo environment.
 It preserves CAPEX and adds eight types across the other five domains, with
 published direct dependencies. See [Demo-05A setup and dependency order](docs/tasks/demo-05a-six-domain-configuration.md).
+Manual Demo Run can optionally specify a request-scoped simulation, for example
+`{"simulation":{"dispatch":"ACCEPT","completion":"FAILED"}}`. Explicit Runs
+and Reconcile share the four-slot session gate; legacy `{}` Run stays Exclusive.
+Completion changes only the fake until Reconcile. See [Demo-05B-2 contracts](docs/tasks/demo-05b2-per-request-fake-executor.md).
 Do not edit applied migrations or delete persistent data to bypass migration guards.
 See [local setup and migration notes](docs/REFERENCE.md#local-development).
 

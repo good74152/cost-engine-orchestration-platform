@@ -201,27 +201,29 @@ test('Demo-05B-1: real parallel requests, exclusive barriers and safe Reset', {t
       }finally{commit.release();await creating;await mutation;delete createHooks.beforeCommit;runtime.coordinator.runParallel=parallel;runtime.scenarios.assertFreeExploration=originalAdmission;}
       assert.equal((await creating).statusCode,201);error(await mutation!,409,'DEMO_SCENARIO_MODE_CONFLICT');assert.deepEqual(await owned(c),[]);await idle();
     });
-    await t.test('Run, Reconcile and both Fake controls remain exclusive; no Session/Domain SQL locks span executor dispatch',async()=>{
+    await t.test('legacy Run and Fake controls remain exclusive; parallel Reconcile waits for earlier exclusive Run without SQL locks',async()=>{
       const a=await session();const b=await session();const data=(await create(a)).json<CreateDatasetVersionResult>();
       const fake=new BlockingFake();assigned.push(fake);const job=data.calculationJobs[0]!.jobId;
       const held=post(`/demo/calculation-jobs/${job}/run`,a);const probe=new Client({connectionString:connection(name)});await probe.connect();
-      const pending:Promise<Response>[]=[];const original=runtime.coordinator.run.bind(runtime.coordinator);let signal=barrier();let freeAdmissions=0;
+      const pending:Promise<Response>[]=[];const original=runtime.coordinator.run.bind(runtime.coordinator);
+      const parallel=runtime.coordinator.runParallel.bind(runtime.coordinator);let signal=barrier();let freeAdmissions=0;
       const admission=runtime.scenarios.assertFreeExploration.bind(runtime.scenarios);
       try{
         await bounded(fake.entered.promise,'executor dispatch');const attempt=(await pool.query('SELECT id FROM execution_attempts WHERE calculation_job_id=$1',[job])).rows[0].id;
         runtime.scenarios.assertFreeExploration=async owner=>{if(owner.sessionId===a.context.sessionId)freeAdmissions++;return admission(owner);};
         runtime.coordinator.run=(owner,body)=>{const result=original(owner,body);if(owner.sessionId===a.context.sessionId)signal.release();return result;};
+        runtime.coordinator.runParallel=(owner,body)=>{const result=parallel(owner,body);if(owner.sessionId===a.context.sessionId)signal.release();return result;};
         await probe.query('BEGIN');
         for(const [table,id]of [['demo_sessions',a.context.sessionId],['dataset_versions',data.datasetVersionId],['calculation_jobs',job],['execution_attempts',attempt]])
           await probe.query(`SELECT id FROM ${table} WHERE id=$1 FOR UPDATE NOWAIT`,[id]);
         await probe.query('ROLLBACK');
         for(const [path,body]of [[`/demo/calculation-jobs/${job}/run`,{}],[`/demo/calculation-jobs/${job}/reconcile`,{}],
           ['/demo/fake-executor/dispatch-behavior',{behavior:'ACCEPT'}],[`/demo/execution-attempts/${attempt}/fake-state`,{state:'SUCCEEDED'}]] as const) {
-          signal=barrier();pending.push(post(path,a,body));await bounded(signal.promise,'exclusive queued route');
+          signal=barrier();pending.push(post(path,a,body));await bounded(signal.promise,'route queued behind legacy exclusive Run');
         }
         assert.equal(freeAdmissions,0);assert.equal(fake.getDispatchHistory().length,1);assert.equal(fake.getStatusLookupHistory().length,0);
         assert.equal((await create(b)).statusCode,201);error(await reset(a),409,'RESET_CONFLICT');
-      }finally{fake.finish.release();await held;await Promise.all(pending);await probe.query('ROLLBACK');await probe.end();runtime.coordinator.run=original;runtime.scenarios.assertFreeExploration=admission;}
+      }finally{fake.finish.release();await held;await Promise.all(pending);await probe.query('ROLLBACK');await probe.end();runtime.coordinator.run=original;runtime.coordinator.runParallel=parallel;runtime.scenarios.assertFreeExploration=admission;}
       assert.equal((await held).statusCode,200);for(const r of await Promise.all(pending))assert.equal(r.statusCode,200,r.body);
       assert.equal(fake.getDispatchHistory().length,1);assert.equal(fake.getStatusLookupHistory().length,1);
       const states=(await pool.query(`SELECT j.status AS job,a.status AS attempt FROM calculation_jobs j
