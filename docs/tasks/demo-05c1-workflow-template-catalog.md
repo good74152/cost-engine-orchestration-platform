@@ -4,7 +4,9 @@
 - Authority: System Owner's bounded Demo-05C-1 request.
 - Baseline: main `ed3f29a`; Demo-05B-2 merged as PR #37.
 - Branch: `codex/demo-05c1-workflow-template-catalog`, independent worktree.
-- Status: implementation and verification; awaiting System Owner Review. No merge.
+- Source tested: implementation commit `be2f99a9221ce3c7b7341d5575a773ca1986bd45`;
+  subsequent changes record verification only.
+- Status: implemented; local verification passed; awaiting System Owner Review. No merge.
 
 ## Scope and architecture review
 
@@ -111,4 +113,49 @@ waiting, queued revocation revalidation, and known/unknown Reset blocking.
 Teardown closes all backend connections, requires zero DB backends and normal
 DROP without FORCE. Existing migrations are applied unchanged.
 
-Executed commands/results will be recorded after final verification below.
+Executed on Windows with Node v24.18.0 and real PostgreSQL 18.6, against a newly
+created local-only Docker test service. Every final command below exited 0.
+
+| Command (`npm.cmd run ...`) | Passing tests |
+|---|---:|
+| test:demo-05c1 | 18 (8 unit + 10 HTTP, including parent) |
+| test:milestone | 259, including CON-01/CON-02 and isolated raw ingestion |
+| test:demo-05b2 | 29 |
+| test:demo-05b1 | 12 |
+| test:demo-05a | 23 |
+| test:demo-session-infrastructure | 21 |
+| test:demo-session-reset-recovery | 22 |
+| test:demo-session-ownership-executor-isolation | 19 |
+| test:demo-02a | 23 |
+| test:demo-02b | 26 |
+| test:demo-02c | 27 |
+| test:demo-02d | 25 |
+| test:demo-02e | 37 |
+| test:demo-04 | 23 |
+| test:demo-04-containers | 13 (actual Docker/locally trusted HTTPS/production UI) |
+| ui:test | 41 |
+| ui:smoke | 10 (actual Chromium and PostgreSQL) |
+
+Total: **628 passed, 0 failed/skipped/cancelled/TODO**, counting each suite once.
+The standalone new unit run (8) and additional naming run (13, already included
+in milestone) also passed and are not added again. Build, ui:typecheck, ui:build,
+test:demo-05c1:typecheck, test:demo-05b2:typecheck, test:demo-05b1:typecheck,
+test:demo-05a:typecheck and test:demo-04:typecheck passed. Root and frontend
+`npm audit --audit-level=high` both reported zero vulnerabilities. `git diff --check`
+and the staged diff check passed. A protected-path diff audit confirmed no changes
+to Core services, FakeExecutor, Session/Scenario, migrations or Frontend source.
+
+New HTTP evidence: `demo_05c1_test_2704_e7c13d75a043`, all 12 unchanged migrations,
+full-state equality, Parallel limit 4, zero backend connections before normal
+DROP, no FORCE. Chromium fixture `demo03_browser_15328_b35d78454f4f` also recorded
+zero connections and normal DROP. The disposable Compose project
+`demo04_test_2fbc3af2d2e0` verified TLS, startup/restart, all Guided flows,
+publication/Reset, volume recreation and backup/restore, then confirmed all its
+volumes removed. The source test service contained only the maintenance database
+after all suites; its container/anonymous volume and temporary private URL file
+were removed. No persistent developer database was used or cleaned.
+
+These are local executed results. Remote GitHub CI is separate and must be read
+from the PR checks; this record does not claim its result. No known implementation
+blocker remains. PREVIEW and deferred Workflow UI/progress/execution work are
+intentional scope boundaries. Await System Owner Review; do not merge or deploy.
