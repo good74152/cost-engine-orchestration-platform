@@ -6,7 +6,7 @@ export const DATASET_DOMAINS = [
   'DPR',
   'INSURANCE',
   'ONE_STD_COST',
-  'COWOS_S',
+  'E2E_COST',
 ] as const;
 
 export const DATASET_PERIODS = ['Q1', 'Q2', 'Q3', 'Q4'] as const;

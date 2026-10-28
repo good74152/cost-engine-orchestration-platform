@@ -100,8 +100,8 @@ test('Demo-02C: durable Happy Path steps, exact recovery and isolated reset', { 
     console.log('DEMO_02C_RUNTIME',JSON.stringify({node:process.version,postgres:(await pool.query('SHOW server_version')).rows[0].server_version,database:name,migrations:(await pool.query('SELECT count(*)::int AS n FROM pgmigrations')).rows[0].n}));
 
     await t.test('fresh up, empty ledger down/up and populated down refusal preserve history',async()=>{
-      assert.equal((await pool.query('SELECT count(*)::int AS n FROM pgmigrations')).rows[0].n,11);
-      await migrate('down',3);assert.equal((await pool.query("SELECT to_regclass('demo_scenario_step_executions') AS name")).rows[0].name,null);
+      assert.equal((await pool.query('SELECT count(*)::int AS n FROM pgmigrations')).rows[0].n,12);
+      await migrate('down',4);assert.equal((await pool.query("SELECT to_regclass('demo_scenario_step_executions') AS name")).rows[0].name,null);
       assert.equal((await pool.query("SELECT to_regclass('demo_scenario_instances') AS name")).rows[0].name,'demo_scenario_instances');
       await seedDemoGuidedConfiguration(pool);const retained=await newSession();const before=await progress(retained);
       await migrate('up');assert.deepEqual(await progress(retained),before);assert.equal((await ledgers(retained)).length,0);
@@ -135,7 +135,7 @@ test('Demo-02C: durable Happy Path steps, exact recovery and isolated reset', { 
       await through(fresh,1);error(await next(fresh,3),409,'DEMO_SCENARIO_STEP_CONFLICT');error(await next(fresh,2,fresh.requests[0]),409,'DEMO_SCENARIO_STEP_CONFLICT');
     });
     await t.test('schema rejects invalid state, ownership/parent bindings, duplicate step/request and retained down atomically',async()=>{
-      const before=await whole();await assert.rejects(migrate('down',3),/retained ledger data/);assert.deepEqual(await whole(),before);
+      const before=await whole();await assert.rejects(migrate('down',4),/retained ledger data/);assert.deepEqual(await whole(),before);
       const a=await newSession();await through(a,1);const b=await newSession();await through(b,1);
       const aResult=(await ledgers(a))[0].result.stepResult;const bResult=(await ledgers(b))[0].result.stepResult;
       const insert=(step:number,id:string,intent:unknown,status='PENDING',result:unknown=null,at:Date|null=null)=>pool.query(`INSERT INTO demo_scenario_step_executions(scenario_id,step_number,request_id,intent,status,result,completed_at) VALUES($1,$2,$3,$4,$5,$6,$7)`,[a.id,step,id,intent,status,result,at]);

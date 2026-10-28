@@ -104,7 +104,7 @@ test('Demo 01A: real PostgreSQL session foundation, not protected Domain APIs',
       await t.test('fresh migration and empty down/up are reversible', async () => {
         assert.equal(await count(), 0);
         // Remove empty Step ledger and Scenario tables before Session rollback.
-        await migrate('down', 5);
+        await migrate('down', 6);
         assert.equal((await pool.query("SELECT to_regclass('public.demo_sessions') AS name")).rows[0].name, null);
         await migrate('up');
         assert.equal(await count(), 0);
@@ -527,7 +527,7 @@ test('Demo 01A: real PostgreSQL session foundation, not protected Domain APIs',
         const before = await count();
         // Empty ledger/Scenario migrations roll back first; retained Session history
         // still rejects the complete atomic down operation.
-        await assert.rejects(migrate('down', 5), /retained session history/);
+        await assert.rejects(migrate('down', 6), /retained session history/);
         assert.equal(await count(), before);
         assert.equal((await pool.query("SELECT COUNT(*)::int AS n FROM pgmigrations WHERE name='1792600000000_demo-sessions'")).rows[0].n, 1);
         assert.deepEqual(publicSession(owned.context), owned.response.json());

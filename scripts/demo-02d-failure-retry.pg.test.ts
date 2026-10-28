@@ -85,9 +85,9 @@ test('Demo-02D: bounded Failure Retry, immutable history, durable recovery and i
         {domain:'CAPEX',companyCode:legacy.context.companyCode,fiscalYear:2026,period:'Q4',expectedVersion:1,calculationTypeCode:'DEMO_GUIDED_SUMMARY'}]);
       const guard=await dump();await assert.rejects(migrate('up',1),/Cannot reinterpret/);assert.deepEqual(await dump(),guard);
       await pool.query('DELETE FROM demo_scenario_step_executions WHERE scenario_id=$1',[legacy.id]);await pool.query('DELETE FROM demo_scenario_instances WHERE id=$1',[legacy.id]);
-      await migrate('up');assert.equal((await pool.query('SELECT count(*)::int AS n FROM pgmigrations')).rows[0].n,11);
+      await migrate('up');assert.equal((await pool.query('SELECT count(*)::int AS n FROM pgmigrations')).rows[0].n,12);
     });
-    console.log('DEMO_02D_RUNTIME',JSON.stringify({node:process.version,postgres:(await pool.query('SHOW server_version')).rows[0].server_version,database:name,migrations:11}));
+    console.log('DEMO_02D_RUNTIME',JSON.stringify({node:process.version,postgres:(await pool.query('SHOW server_version')).rows[0].server_version,database:name,migrations:12}));
     await t.test('Create supports Happy/Failure, same-type retry and cross-type conflict; one Scenario per session',async()=>{
       const s=await newSession();const original=(await get('/demo/scenarios/current',s)).json();const before=await dump();
       assert.deepEqual((await create(s)).json(),original);assert.equal((await create(s)).statusCode,200);
@@ -193,7 +193,7 @@ test('Demo-02D: bounded Failure Retry, immutable history, durable recovery and i
         await assert.rejects(pool.query(`UPDATE demo_scenario_step_executions SET status='COMPLETED',completed_at=now(),result=$2 WHERE id=$1`,[before.id,l.result]));}
       finally{await pool.query('UPDATE execution_attempts SET last_dispatch_error=$2 WHERE id=$1',[first.id,first.history.last_dispatch_error]);}
       assert.equal((await next(pending,5)).statusCode,200);
-      const dumpBefore=await dump();await assert.rejects(migrate('down',2),/retained Failure Retry scenarios/);assert.deepEqual(await dump(),dumpBefore);
+      const dumpBefore=await dump();await assert.rejects(migrate('down',3),/retained Failure Retry scenarios/);assert.deepEqual(await dump(),dumpBefore);
     });
     for(const unknown of [false,true])await t.test(`J: concurrent Retry same/different requests and next-step order (${unknown?'UNKNOWN':'ACCEPTED'}), locks released during dispatch`,async()=>{
       const s=await newSession();await through(s,1);const fake=new BlockingFake();assigned.push(fake);await through(s,4,2);fake.block=true;

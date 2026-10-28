@@ -26,10 +26,10 @@ Dataset Series (domain, company_code, fiscal_year, period)
 Canonical domains are exactly:
 
 ```text
-FAB_COST  CAPEX  DPR  INSURANCE  ONE_STD_COST  COWOS_S
+FAB_COST  CAPEX  DPR  INSURANCE  ONE_STD_COST  E2E_COST
 ```
 
-Aliases such as `FAB COST` or `COWOS-S` are not normalized. Period is Q1–Q4; fiscal year is a positive integer.
+The retired `COWOS_S` and aliases such as `FAB COST`, `COWOS-S` or `E2E-COST` are rejected with HTTP 400 `INVALID_DOMAIN`; no normalization or compatibility alias is provided. See [Naming-01 rollout and migration safety](tasks/naming-01-e2e-cost.md#rollout). Period is Q1–Q4; fiscal year is a positive integer.
 
 ### Creation and frozen inputs
 

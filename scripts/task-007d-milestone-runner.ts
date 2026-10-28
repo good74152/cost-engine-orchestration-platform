@@ -6,6 +6,7 @@ const suites = [
   { label: 'npm run build', command: 'build', kind: 'build' },
   { label: 'npm run test:milestone-runner', command: 'test:milestone-runner', kind: 'test' },
   { label: 'npm run test:orchestration-schema-v2', command: 'test:orchestration-schema-v2', kind: 'test' },
+  { label: 'npm run test:naming-01', command: 'test:naming-01', kind: 'test' },
   { label: 'npm run test:dataset-version-creation-v2', command: 'test:dataset-version-creation-v2', kind: 'test' },
   { label: 'npm run test:first-run-immutable-build-snapshot', command: 'test:first-run-immutable-build-snapshot', kind: 'test' },
   { label: 'npm run test:execution-attempt-dispatch-fake-executor', command: 'test:execution-attempt-dispatch-fake-executor', kind: 'test' },

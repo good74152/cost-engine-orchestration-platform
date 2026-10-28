@@ -57,7 +57,7 @@ CAPEX
 DPR
 INSURANCE
 ONE_STD_COST
-COWOS_S
+E2E_COST
 ```
 
 The platform must remain generic across domains. Do not hard-code a global `FAB_COST → CAPEX → DPR` pipeline.

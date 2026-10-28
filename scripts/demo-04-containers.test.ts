@@ -96,7 +96,7 @@ test('Demo-04 isolated Compose, HTTPS, production UI and PostgreSQL operations',
       await compose('--profile', 'operations', 'run', '--rm', 'operator', 'migrate-up');
       const unseeded = await command([...base, 'run', '--rm', '--no-deps', 'backend'], undefined, true); assert.equal(unseeded.code, 1);
       for (let n = 0; n < 2; n++) await compose('--profile', 'operations', 'run', '--rm', 'operator', 'seed');
-      assert.equal(await sql('SELECT count(*) FROM pgmigrations'), '11');
+      assert.equal(await sql('SELECT count(*) FROM pgmigrations'), '12');
     });
     await compose('up', '-d', '--wait', 'backend', 'web');
     const webId = (await compose('ps', '-q', 'web')).out.toString().trim();

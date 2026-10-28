@@ -1,5 +1,7 @@
 # Task 002 — Dataset Version Creation v2
 
+> Naming-01: the original COWOS_S identifier below is now E2E_COST; see [ADR-0014](../adr/0014-canonical-domain-e2e-cost.md). Original identity rules and historical task text are preserved.
+
 ## Goal
 
 Implement the first application slice of the accepted Cost Engine Orchestration Platform v2 architecture: create one dataset version for a canonical reporting series and atomically snapshot all active calculation types for the domain into `PENDING` calculation jobs.
