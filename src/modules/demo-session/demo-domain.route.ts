@@ -20,19 +20,20 @@ export function demoDomainRoutes(runtime: DemoRuntime, options: DemoSessionRoute
       authenticated.set(request, await runtime.sessions.authenticate(request.headers.cookie, policy.cookieName));
       policy.assertMutation(request);
     });
-    const operate = <T>(request: FastifyRequest, command: (session: AuthenticatedDemoSession) => Promise<T>) => {
+    const operate = <T>(request: FastifyRequest, command: (session: AuthenticatedDemoSession) => Promise<T>, parallel = false) => {
       const session = authenticated.get(request)!;
-      return runtime.coordinator.run(session, async () => {
+      const body = async () => {
         await runtime.scenarios.assertFreeExploration(session);
         return command(session);
-      });
+      };
+      return parallel ? runtime.coordinator.runParallel(session, body) : runtime.coordinator.run(session, body);
     };
 
     app.post('/demo/dataset-versions', async (request, reply) => operate(request, async (session) => {
       const body = exactDemoBody(request.body, ['domain', 'fiscalYear', 'period']);
       const input = parseCreateDatasetVersionInput({ ...body, companyCode: session.companyCode });
       return reply.status(201).send(await createDatasetVersionService(input));
-    }));
+    }, true));
 
     const lifecycle = { 'submit-validation': submitDatasetValidationService,
       publish: publishDatasetVersionService, reject: rejectDatasetVersionService, abandon: abandonDatasetVersionService };
@@ -42,7 +43,7 @@ export function demoDomainRoutes(runtime: DemoRuntime, options: DemoSessionRoute
           await runtime.ownership.assertOwned(session, 'dataset', request.params.id);
           exactDemoBody(request.body, []);
           return service(request.params.id);
-        }));
+        }, true));
     }
     for (const command of ['run', 'reconcile'] as const) {
       app.post<{ Params: { id: string } }>(`/demo/calculation-jobs/:id/${command}`, async (request, reply) =>

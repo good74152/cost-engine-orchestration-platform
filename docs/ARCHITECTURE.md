@@ -809,3 +809,22 @@ readiness; no external writer or arbitrary multi-instance guarantee. Startup onl
 verifies migrations/seed; explicit offline tools perform authorized changes.
 See [operations, backup/restore, rollback and limits](DEPLOYMENT.md). Capability
 and local test evidence do not claim actual public VPS/DNS/TLS launch.
+
+## 28. Demo Session Concurrency Gate
+
+Demo-05B-1 supplements the earlier single-queue descriptions under
+[ADR-0015](adr/0015-demo-session-concurrency-gate.md). The same session can execute
+four Parallel operations: manual Dataset creation/lifecycle and protected reads.
+Slots include waiting/revalidation and are reserved before any await; the fifth
+is immediately rejected with 429 DEMO_SESSION_QUEUE_FULL. Scenario Create,
+Guided Next, Run/Reconcile and Fake controls use the existing bounded Exclusive
+FIFO. An Exclusive waits for all earlier operations and prevents later Parallel
+work from overtaking it. Guided request/ledger/retry semantics remain unchanged.
+
+Reset still requires an entirely idle session, including queued operations, and
+reserves admission synchronously. Its 409/unknown-503 blocking and fresh-connection
+recovery are unchanged. All operations revalidate eligibility at execution and
+retain ownership/security checks. No extra SQL lock spans a gate wait or executor
+call. Same-series creates now contend directly through the unchanged Core
+PostgreSQL series protocol. This remains single-instance local admission, not
+distributed coordination. See [scope and executed tests](tasks/demo-05b1-session-concurrency-gate.md).

@@ -345,8 +345,8 @@ test('Demo-02A: explicit seed and session-scoped durable reads', { timeout: 240_
       const hold = runtime.coordinator.run(s.context, async () => { entered.release(); await gate.promise; });
       await entered.promise;
       // Observe actual route admission, not a timing sleep.
-      const original = runtime.coordinator.run.bind(runtime.coordinator);
-      runtime.coordinator.run = (session, body) => {
+      const original = runtime.coordinator.runParallel.bind(runtime.coordinator);
+      runtime.coordinator.runParallel = (session, body) => {
         const result = original(session, body); if (session.sessionId === s.context.sessionId) admitted.release(); return result;
       };
       let reading: Promise<Response> | undefined;
@@ -354,7 +354,7 @@ test('Demo-02A: explicit seed and session-scoped durable reads', { timeout: 240_
         reading = Promise.resolve(get('/demo/dataset-versions', s)); await admitted.promise;
         await runtime.sessions.revoke(s.context.sessionId); gate.release();
         error(await reading, 401, 'DEMO_SESSION_UNAVAILABLE');
-      } finally { gate.release(); await hold; await reading; runtime.coordinator.run = original; }
+      } finally { gate.release(); await hold; await reading; runtime.coordinator.runParallel = original; }
     });
 
     const p = await newSession(); const paged = await create(p, 2040); const pagedJob = paged.calculationJobs[0]!.jobId;

@@ -1,7 +1,13 @@
 import type { AuthenticatedDemoSession, DemoSessionService } from './demo-session.service.js';
 import { DemoSessionError, DemoSessionQueueFullError } from './demo-session.errors.js';
 
-interface Queue { tail: Promise<void>; size: number }
+interface Queue {
+  // Completion of the last admitted exclusive operation. Parallel operations
+  // capture it but do not replace it, so one batch can execute concurrently.
+  tail: Promise<void>;
+  size: number;
+  parallel: Set<Promise<void>>;
+}
 export interface ResetReservation { readonly sessionId: string; unknown: boolean }
 
 /** One instance per backend. Not distributed coordination or a SQL lock replacement. */
@@ -49,31 +55,56 @@ export class DemoSessionCoordinator {
     this.resets.delete(reservation.sessionId);
   }
 
-  async run<T>(session: AuthenticatedDemoSession, body: () => Promise<T>): Promise<T> {
-    // Synchronous trusted-context check preserves enqueue order, without DB I/O.
-    // Durable eligibility is checked at execution, not before a possibly long wait.
+  private admit(session: AuthenticatedDemoSession, parallel: boolean): Queue {
+    // Reserve before any await, including durable revalidation. Reset therefore
+    // sees every admitted operation, even one waiting for an exclusive barrier.
     this.sessions.assertTrusted(session);
     this.assertNotResetting(session.sessionId);
     let queue = this.queues.get(session.sessionId);
-    if (queue ? queue.size >= this.maxOperations : this.queues.size + this.resets.size >= this.maxSessions) {
+    if ((queue ? queue.size >= this.maxOperations : this.queues.size + this.resets.size >= this.maxSessions)
+      || (parallel && queue && queue.parallel.size >= 4)) {
       throw new DemoSessionQueueFullError();
     }
     if (!queue) {
-      queue = { tail: Promise.resolve(), size: 0 };
+      queue = { tail: Promise.resolve(), size: 0, parallel: new Set() };
       this.queues.set(session.sessionId, queue);
     }
-    const previous = queue.tail;
-    const current = queue;
-    current.size += 1;
+    queue.size += 1;
+    return queue;
+  }
+
+  private release(sessionId: string, queue: Queue): void {
+    queue.size -= 1;
+    if (queue.size === 0) this.queues.delete(sessionId);
+  }
+
+  /** Exclusive FIFO operation: wait for all earlier operations, block later ones. */
+  async run<T>(session: AuthenticatedDemoSession, body: () => Promise<T>): Promise<T> {
+    const queue = this.admit(session, false);
+    // Snapshot only EARLIER parallel operations. Later ones wait for this tail;
+    // including them here would create a circular wait.
+    const previous = Promise.all([queue.tail, ...queue.parallel]);
     const operation = previous.then(async () => {
       await this.sessions.revalidate(session);
       return body();
+    }).finally(() => this.release(session.sessionId, queue));
+    queue.tail = operation.then(() => {}, () => {});
+    return operation;
+  }
+
+  /** At most four admitted parallel operations, including any waiting/revalidation. */
+  async runParallel<T>(session: AuthenticatedDemoSession, body: () => Promise<T>): Promise<T> {
+    const queue = this.admit(session, true);
+    let completed!: Promise<void>;
+    const operation = queue.tail.then(async () => {
+      await this.sessions.revalidate(session);
+      return body();
+    }).finally(() => {
+      queue.parallel.delete(completed);
+      this.release(session.sessionId, queue);
     });
-    current.tail = operation.then(() => {}, () => {});
-    try { return await operation; }
-    finally {
-      current.size -= 1;
-      if (current.size === 0) this.queues.delete(session.sessionId);
-    }
+    completed = operation.then(() => {}, () => {});
+    queue.parallel.add(completed);
+    return operation;
   }
 }

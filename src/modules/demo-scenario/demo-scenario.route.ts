@@ -16,10 +16,13 @@ export function demoScenarioRoutes(runtime: DemoRuntime, options: DemoSessionRou
     });
     const operate = <T>(request: FastifyRequest, body: (session: AuthenticatedDemoSession) => Promise<T>) => {
       const session = authenticated.get(request)!;
-      return runtime.coordinator.run(session, () => {
+      const bodyWithQueryCheck = () => {
         if (Object.keys(request.query as object).length) throw new DemoSessionError('INVALID_REQUEST', 400, 'Invalid request');
         return body(session);
-      });
+      };
+      return request.method === 'POST'
+        ? runtime.coordinator.run(session, bodyWithQueryCheck)
+        : runtime.coordinator.runParallel(session, bodyWithQueryCheck);
     };
     app.post('/demo/scenarios', async (request, reply) => operate(request, async (session) => {
       const { scenarioType } = exactDemoBody(request.body, ['scenarioType']);
