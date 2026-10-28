@@ -4,6 +4,9 @@
   "description": "Backend orchestration platform for versioned cost-engine datasets and Airflow/ETL execution workflows.",
   "main": "index.js",
   "scripts": {
+    "test:demo-05c1": "tsx --test scripts/demo-05c1-workflow-template-catalog.test.ts scripts/demo-05c1-workflow-template-catalog.pg.test.ts",
+    "test:demo-05c1:unit": "tsx --test scripts/demo-05c1-workflow-template-catalog.test.ts",
+    "test:demo-05c1:typecheck": "tsc --ignoreConfig --noEmit --strict --skipLibCheck --esModuleInterop --module NodeNext --target ES2022 scripts/demo-05c1-workflow-template-catalog.test.ts scripts/demo-05c1-workflow-template-catalog.pg.test.ts",
     "test:demo-05b2": "tsx --test scripts/demo-05b2-per-request-fake-executor.pg.test.ts",
     "test:demo-05b2:typecheck": "tsc --ignoreConfig --noEmit --strict --skipLibCheck --esModuleInterop --module NodeNext --target ES2022 scripts/demo-05b2-per-request-fake-executor.pg.test.ts",
     "test:demo-05b1": "tsx --test scripts/demo-05b1-session-concurrency-gate.pg.test.ts",

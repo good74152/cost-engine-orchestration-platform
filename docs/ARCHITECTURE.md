@@ -850,3 +850,33 @@ Completion controls only external Fake state. The unchanged Core Reconcile
 service remains the sole authority for terminal PostgreSQL job/attempt changes.
 No Core transaction/lock order, snapshots, identity contract, migration, Session
 ownership/security, or Guided ledger changes. See [API and verification](tasks/demo-05b2-per-request-fake-executor.md).
+
+## 30. Read-only Workflow Template Catalog
+
+Demo-05C-1 adds developer-authored TypeScript descriptions for HAPPY_PATH,
+FAILURE_RETRY, LOST_RESPONSE_RECOVERY and SIX_DOMAIN_WORKFLOW. Stable Template
+and Step IDs, positive integer versions, valid local prerequisites and acyclic
+graphs are validated in memory. Definitions and their nested arrays are frozen.
+All templates are PREVIEW: descriptions are available while the new Workflow
+operation UI is not enabled. Availability does not enable execution or change
+the existing Guided/Free Exploration interfaces.
+
+Demo-only GET /demo/workflow-templates returns ordered summaries; GET
+/demo/workflow-templates/:id returns the full definition. Both retain durable
+cookie authentication, Same-Origin checks, no-store and Parallel admission under
+ADR-0015. GET needs no mutation CSRF header. Unknown IDs use the existing generic
+404; extra query parameters are rejected. Session authentication/revalidation
+still reads PostgreSQL, but catalog contents are independent of database state
+and require no seeded configuration. Reads do not allocate a FakeExecutor or
+inspect/change Domain, Scenario, Guided ledger or Session state.
+
+The six-domain guide describes publication-first order FAB_COST → CAPEX → DPR,
+FAB_COST → INSURANCE and FAB_COST → ONE_STD_COST → E2E_COST. Upstream publication
+is a prerequisite of downstream creation. These are teaching prerequisites only:
+CAPEX's existing seed still has zero Core upstream dependencies. Core resolves
+published inputs at first Run; the guide selects no fixed Dataset version and
+requires every Job in each Dataset to be processed before validation/publication.
+There is no executor, progress store, operation history, second state machine,
+new schema or start/next endpoint. No accepted architecture decision is replaced;
+this bounded read API follows ADR-0011/0012/0015/0016 without extending their
+execution protocols. See [contract and verification](tasks/demo-05c1-workflow-template-catalog.md).

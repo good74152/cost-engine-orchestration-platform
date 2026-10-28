@@ -39,6 +39,8 @@ jobs:
       - run: npm run test:demo-05b1
       - run: npm run test:demo-05b2:typecheck
       - run: npm run test:demo-05b2
+      - run: npm run test:demo-05c1:typecheck
+      - run: npm run test:demo-05c1
       - run: npm run test:milestone
       - run: npx playwright install --with-deps chromium
         working-directory: frontend
