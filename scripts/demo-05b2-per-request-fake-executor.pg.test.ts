@@ -59,7 +59,7 @@ test('Demo-05B-2: per-request simulation, identity-safe concurrency and unchange
       import('../src/db/pool.js'),import('../src/app.js'),import('../src/modules/demo-session/demo-runtime.js'),import('./seed-demo-six-domain-configuration.js')]);
     db=pool; pool.on('connect',c=>ends.push(new Promise<void>(done=>c.once('end',done))));
     assert.equal((await pool.query('SELECT current_database() AS name')).rows[0].name,name);
-    assert.equal((await pool.query('SELECT count(*)::int AS n FROM pgmigrations')).rows[0].n,12);
+    assert.equal((await pool.query('SELECT count(*)::int AS n FROM pgmigrations')).rows[0].n,13);
     await seedDemoSixDomainConfiguration(pool);
     const resetHooks:ResetOptions={log(){}}; const assigned:FakeExecutor[]=[];
     const runtime=new DemoRuntime(pool,'test',{createExecutor:()=>assigned.shift()??new FakeExecutor()},resetHooks);
@@ -378,7 +378,7 @@ test('Demo-05B-2: per-request simulation, identity-safe concurrency and unchange
         if(type==='LOST_RESPONSE_RECOVERY'&&step===2){assert.equal(r.statusCode,202,r.body);r=await post(`/demo/scenarios/${id}/next`,s,body);}assert.equal(r.statusCode,200,r.body);}
       assert.equal((await pool.query('SELECT status FROM demo_scenario_instances WHERE id=$1',[id])).rows[0].status,'COMPLETED');
     });
-    await idle();console.info('DEMO_05B2_EVIDENCE',JSON.stringify({database:name,migrations:12,realPostgres:true,barriers:true,parallelLimit:4,noOpenTransactionDuringExecutor:true}));
+    await idle();console.info('DEMO_05B2_EVIDENCE',JSON.stringify({database:name,migrations:13,realPostgres:true,barriers:true,parallelLimit:4,noOpenTransactionDuringExecutor:true}));
   }finally{
     try{await app?.close();if(db){await db.end();await Promise.all(ends);}}
     finally{

@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { loadDeploymentSecrets, publicDemoConfig } from '../src/deployment/public-demo-config.js';
+import { DemoSessionError } from '../src/modules/demo-session/demo-session.errors.js';
 
 async function main() {
   loadDeploymentSecrets();
@@ -23,6 +24,13 @@ async function main() {
       const { runDemoSixDomainSeed } = await import('../scripts/seed-demo-six-domain-configuration.js');
       await runDemoSixDomainSeed();
     }
-  } else throw new Error('Choose migrate-up, seed or seed-six-domain; automatic down is unsupported');
+  } else if (operation === 'admission-status' || operation === 'admission-drain') {
+    const { runDemoAdmissionCommand } = await import('../scripts/demo-admission.js');
+    await runDemoAdmissionCommand(operation === 'admission-status' ? 'status' : 'drain', process.argv.slice(3));
+  } else throw new Error('Choose migrate-up, seed, seed-six-domain, admission-status or admission-drain; automatic down is unsupported');
 }
-main().catch(() => { console.error('Demo operator operation failed; verify explicit target and compatibility privately'); process.exitCode = 1; });
+main().catch(error => {
+  console.error(error instanceof DemoSessionError ? `${error.code}: ${error.message}`
+    : 'Demo operator operation failed; verify explicit target and compatibility privately');
+  process.exitCode = 1;
+});

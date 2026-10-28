@@ -672,7 +672,15 @@ test('Task 007B integrated regressions: real PostgreSQL cross-workflow races (AD
           try {
             assert.match(name, /^cross_workflow_test_[a-z0-9_]+$/);
             assert.ok(name.length <= 63);
-            const sessions = await admin.query('SELECT pid FROM pg_stat_activity WHERE datname=$1', [name]);
+            const sessions = await bounded((async () => {
+              // A client socket's end event can precede PostgreSQL removing its backend.
+              // Wait for the observed server state; retain zero-backend/non-FORCE DROP.
+              for (;;) {
+                const remaining = await admin.query('SELECT pid FROM pg_stat_activity WHERE datname=$1', [name]);
+                if (!remaining.rowCount) return remaining;
+                await new Promise<void>(resolve => setImmediate(resolve));
+              }
+            })(), 'PostgreSQL backend shutdown');
             assert.equal(sessions.rowCount, 0, 'All owned connections must close before DROP');
             await admin.query(`DROP DATABASE "${name}"`);
             console.log('CROSS_WORKFLOW_TEARDOWN', JSON.stringify({ sessions: 0, dropped: true, forced: false }));

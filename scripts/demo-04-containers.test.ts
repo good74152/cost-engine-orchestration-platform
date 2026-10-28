@@ -96,7 +96,7 @@ test('Demo-04 isolated Compose, HTTPS, production UI and PostgreSQL operations',
       await compose('--profile', 'operations', 'run', '--rm', 'operator', 'migrate-up');
       const unseeded = await command([...base, 'run', '--rm', '--no-deps', 'backend'], undefined, true); assert.equal(unseeded.code, 1);
       for (let n = 0; n < 2; n++) await compose('--profile', 'operations', 'run', '--rm', 'operator', 'seed');
-      assert.equal(await sql('SELECT count(*) FROM pgmigrations'), '12');
+      assert.equal(await sql('SELECT count(*) FROM pgmigrations'), '13');
     });
     await t.test('explicit six-domain operator seed is atomic/idempotent and preserves guided CAPEX', async () => {
       const guided = await sql(`SELECT row_to_json(t) FROM calculation_types t WHERE domain='CAPEX'`);
@@ -217,6 +217,20 @@ test('Demo-04 isolated Compose, HTTPS, production UI and PostgreSQL operations',
       const logs = (await compose('logs', '--no-color', 'backend')).out.toString();
       for (const secret of [password, proxy, oldCookie, databaseUrl]) assert.ok(!logs.includes(secret), 'No credentials in process logs');
       assert.match(logs, /application_draining/); assert.match(logs, /application_ready/);
+    });
+    await t.test('trusted admission operator requires explicit target and drains idempotently without restarting Backend', async () => {
+      const missing = await command([...base, '--profile', 'operations', 'run', '--rm', '--no-deps', 'operator', 'admission-status'], undefined, true);
+      assert.equal(missing.code, 1);
+      const operate = (operation: string) => compose('--profile', 'operations', 'run', '--rm', '--no-deps',
+        '-e', 'DEMO_ADMISSION_DATABASE_URL_FILE=/run/secrets/database_url', 'operator', operation);
+      assert.equal(JSON.parse((await operate('admission-status')).out.toString()).state, 'LEGACY_OPEN');
+      const first = JSON.parse((await operate('admission-drain')).out.toString());
+      const repeated = JSON.parse((await operate('admission-drain')).out.toString());
+      assert.equal(first.state, 'DRAINING'); assert.equal(repeated.updatedAt, first.updatedAt);
+      const blocked = await https('/demo/sessions', 'POST', undefined, {});
+      assert.equal(blocked.status, 503); assert.equal(JSON.parse(blocked.body).code, 'DEMO_ADMISSION_DRAINING');
+      assert.equal(blocked.headers['set-cookie'], undefined);
+      assert.equal((await readiness()).status, 200);
     });
     console.info('DEMO04_CONTAINER_VERIFIED', JSON.stringify({ localHttps: true, publicVps: false, migrations: Number(await sql('SELECT count(*) FROM pgmigrations')), volumePersistence: true, restore: true }));
   } finally {

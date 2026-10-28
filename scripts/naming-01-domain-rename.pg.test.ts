@@ -1,3 +1,4 @@
+import { admissionMigrationPattern, installHistoricalAdmissionFixture } from './support/demo-admission-historical-fixture.js';
 import 'dotenv/config';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
@@ -16,7 +17,7 @@ function connection(name: string) {
 }
 function migrate(databaseUrl: string, direction: 'up' | 'down' = 'up', count?: number, timestamp = false) {
   return runner({ databaseUrl, dir: fileURLToPath(new URL('../migrations/', import.meta.url)),
-    migrationsTable: 'pgmigrations', direction, count, timestamp, singleTransaction: true,
+    migrationsTable: 'pgmigrations', direction, count, timestamp, ignorePattern: admissionMigrationPattern, singleTransaction: true,
     checkOrder: true, logger: { debug() {}, info() {}, warn() {}, error() {} } });
 }
 async function fixture(run: (db: Client, url: string) => Promise<void>, legacy = true) {
@@ -217,6 +218,7 @@ test('Naming-01 real PostgreSQL migration and API contracts', { timeout: 240_000
     pool.on('connect', c => ends.push(new Promise<void>(resolve => c.once('end', resolve))));
     const fake = new FakeExecutor();
     const core = await buildApp({ appMode: 'core', logger: false, nodeEnvironment: 'test', calculationExecutor: fake });
+    await installHistoricalAdmissionFixture(url);
     const runtime = new DemoRuntime(pool, 'test');
     const demo = await buildApp({ appMode: 'demo', logger: false, nodeEnvironment: 'test', demoRuntime: runtime,
       demoSession: { origin: 'https://demo.test' } });

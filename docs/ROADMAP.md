@@ -140,6 +140,24 @@ See [ADR-0014](adr/0014-canonical-domain-e2e-cost.md),
 [verification](verification/naming-01-e2e-cost.md).
 No merge or deployment has been performed.
 
+## Demo-05C — Admission and Configuration Cutover
+
+Demo-05C-1 is merged via PR #38 (`b59fe8a`). Its four PREVIEW Workflow Templates
+are available through read-only Demo APIs; no Workflow operation UI is enabled.
+
+Demo-05C-2 implements PostgreSQL-backed Legacy admission drain on a separate
+feature branch, pending System Owner Review. The shared Gate covers new Session
+and Scenario insertion while preserving established-session work and legitimate
+replays. It introduces no configuration cutover. First installation must wait
+for old-session quiescence without a premature Backend restart; see
+[ADR-0017](adr/0017-demo-admission-drain.md) and the
+[operator/deployment task](tasks/demo-05c2-legacy-admission-drain.md).
+
+Demo-05C-3 CAPEX Configuration Cutover remains unimplemented. It requires a
+confirmed drain, compatible serving binaries, verification of all queued/in-flight
+work and unknown outcomes, no incompatible retained work or external writers,
+and a reviewed cutover/rollback plan. Active Session count alone is insufficient.
+
 ## Deferred until a concrete requirement
 
 - Real Airflow HTTP adapter and external cancellation.

@@ -5,6 +5,7 @@ import { insertScenario, lockScenarioSession, readScenario, requireEmptyScenario
   type DemoScenarioDto } from './demo-scenario.repository.js';
 import type { RunnableScenarioType } from './demo-step.plan.js';
 import type { DemoExecutorRegistry } from '../demo-session/demo-runtime.js';
+import { assertLegacyAdmission, lockDemoAdmission } from '../demo-admission/demo-admission.repository.js';
 
 export interface ScenarioCreateOptions {
   // Test-only transport/barrier seams, never HTTP input or executor calls.
@@ -21,10 +22,12 @@ export class DemoScenarioService {
     const client = await this.db.connect(); let commitSent = false; let discard = false;
     try {
       await client.query('BEGIN');
+      const admission = await lockDemoAdmission(client);
       await lockScenarioSession(client, session);
       let scenario = await readScenario(client, session.sessionId);
       let created = false;
       if (!scenario) {
+        assertLegacyAdmission(admission);
         await requireGuidedConfiguration(client);
         await requireEmptyScenarioSession(client, session.companyCode);
         // An allocated manual fake can retain queued behavior or identity history.
