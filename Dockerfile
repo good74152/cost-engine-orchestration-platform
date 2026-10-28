@@ -9,6 +9,7 @@ RUN npm run build
 FROM backend-build AS operator
 COPY migrations ./migrations
 COPY scripts/seed-demo-guided-configuration.ts ./scripts/
+COPY scripts/seed-demo-six-domain-configuration.ts ./scripts/
 COPY deploy/operator.ts ./deploy/
 USER node
 ENTRYPOINT ["./node_modules/.bin/tsx", "deploy/operator.ts"]

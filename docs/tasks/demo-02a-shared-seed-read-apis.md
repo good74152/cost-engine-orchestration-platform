@@ -65,6 +65,10 @@ rerunning the idempotent command checks durable configuration safely.
 The seed never changes sessions, company codes, datasets, jobs, attempts or
 published definitions. It is not invoked by startup, buildApp, session creation,
 dataset creation or Reset. Shared configuration remains outside owner cleanup.
+Demo-05A adds a separate optional `seed:demo-six-domain` command; the minimal
+`seed:demo-guided` command and its CAPEX contract are unchanged. See
+[six-domain setup](demo-05a-six-domain-configuration.md) for the additional types
+and required published inputs.
 Use the accepted single Demo instance/no concurrent core or external writer
 boundary. Quiesce independent configuration administration while seeding; this
 is not arbitrary cross-table/configuration-writer serialization.

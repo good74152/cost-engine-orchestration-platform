@@ -33,6 +33,8 @@ jobs:
       - run: npm run ui:build
       - run: npm run test:demo-04:typecheck
       - run: npm run test:demo-04
+      - run: npm run test:demo-05a:typecheck
+      - run: npm run test:demo-05a
       - run: npm run test:milestone
       - run: npx playwright install --with-deps chromium
         working-directory: frontend

@@ -4,6 +4,9 @@
   "description": "Backend orchestration platform for versioned cost-engine datasets and Airflow/ETL execution workflows.",
   "main": "index.js",
   "scripts": {
+    "seed:demo-six-domain": "tsx scripts/seed-demo-six-domain-configuration.ts",
+    "test:demo-05a": "tsx --test scripts/demo-05a-six-domain-configuration.pg.test.ts",
+    "test:demo-05a:typecheck": "tsc --ignoreConfig --noEmit --strict --skipLibCheck --esModuleInterop --module NodeNext --target ES2022 scripts/seed-demo-six-domain-configuration.ts scripts/demo-05a-six-domain-configuration.pg.test.ts",
     "test:naming-01": "tsx --test scripts/naming-01-domain-rename.pg.test.ts",
     "test:demo-04": "tsx --test scripts/demo-04-deployment.pg.test.ts",
     "test:demo-04:typecheck": "tsc --ignoreConfig --noEmit --module NodeNext --target ES2022 --skipLibCheck scripts/demo-04-deployment.pg.test.ts scripts/demo-04-containers.test.ts deploy/operator.ts",

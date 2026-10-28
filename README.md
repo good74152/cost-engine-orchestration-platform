@@ -124,6 +124,11 @@ in the [deployment runbook](docs/DEPLOYMENT.md); public launch requires System
 Owner review and operation.
 
 A fresh database is not a configured calculation pipeline. Active calculation types and published dependency definitions must be configured in PostgreSQL; there is no general seed command or management API. The explicit [Demo-02A seed](docs/tasks/demo-02a-shared-seed-read-apis.md) prepares only a minimal local Demo CAPEX configuration and also documents the protected read APIs.
+For the optional six-domain Demo configuration, explicitly run
+`npm run seed:demo-six-domain` against a migrated, dedicated Demo database using
+the same private `DEMO_SEED_DATABASE_URL` and approved Demo environment.
+It preserves CAPEX and adds eight types across the other five domains, with
+published direct dependencies. See [Demo-05A setup and dependency order](docs/tasks/demo-05a-six-domain-configuration.md).
 Do not edit applied migrations or delete persistent data to bypass migration guards.
 See [local setup and migration notes](docs/REFERENCE.md#local-development).
 
@@ -170,8 +175,10 @@ For Lost Response Step 2, select **Recover original execution** after its 202.
 Reset requires confirmation; then start a new session to switch modes/scenarios.
 For Free Exploration, create CAPEX, Run, set fake success/failure, Reconcile,
 then explicitly validate/publish or choose another eligible lifecycle command.
-The local seed configures only CAPEX / DEMO_GUIDED_SUMMARY. Other domains require
-backend configuration. These are development settings, not a public deployment.
+`seed:demo-guided` configures only CAPEX / DEMO_GUIDED_SUMMARY. The separate
+`seed:demo-six-domain` command configures all six domains for existing APIs;
+publish the required upstream dataset with the same session/year/period before
+running a dependent job. These are development settings, not a public deployment.
 
 ```powershell
 npm.cmd run ui:typecheck
