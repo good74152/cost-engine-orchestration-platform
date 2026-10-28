@@ -18,7 +18,7 @@ export function demoReadRoutes(runtime: DemoRuntime, options: DemoSessionRouteOp
     });
     const operate = <T>(request: FastifyRequest, body: (s: AuthenticatedDemoSession) => Promise<T>) => {
       const session = authenticated.get(request)!;
-      return runtime.coordinator.run(session, () => body(session));
+      return runtime.coordinator.runParallel(session, () => body(session));
     };
     app.get('/demo/dataset-versions', async (request) => operate(request, (s) =>
       reads.datasets(s, readPage(request.query, 'datasets', readScope(s)))));

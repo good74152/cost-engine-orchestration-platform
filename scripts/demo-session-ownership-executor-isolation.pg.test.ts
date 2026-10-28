@@ -428,8 +428,8 @@ test('Demo-01B-1: session ownership and executor isolation on real PostgreSQL', 
         const session = await newSession(); const data = await create(session);
         const blocked = new BarrierFake(); assigned.push(blocked);
         const first = run(session, data.jobId); await blocked.entered.promise;
-        const queued = barrier(); const originalRun = runtime.coordinator.run.bind(runtime.coordinator);
-        runtime.coordinator.run = function<T>(context: AuthenticatedDemoSession, body: () => Promise<T>) {
+        const queued = barrier(); const originalRun = runtime.coordinator.runParallel.bind(runtime.coordinator);
+        runtime.coordinator.runParallel = function<T>(context: AuthenticatedDemoSession, body: () => Promise<T>) {
           const result = originalRun(context, body); queued.release(); return result;
         };
         const second = post('/demo/dataset-versions', session, { domain: 'DPR', fiscalYear: 2026, period: 'Q1' });
@@ -438,7 +438,7 @@ test('Demo-01B-1: session ownership and executor isolation on real PostgreSQL', 
           if (expires) await pool.query(`UPDATE demo_sessions SET created_at=clock_timestamp()-INTERVAL '5 hours',
             expires_at=clock_timestamp()-INTERVAL '1 hour' WHERE id=$1`, [session.context.sessionId]);
           else await runtime.sessions.revoke(session.context.sessionId);
-        } finally { runtime.coordinator.run = originalRun; blocked.finish.release(); }
+        } finally { runtime.coordinator.runParallel = originalRun; blocked.finish.release(); }
         assert.equal((await first).statusCode, 200);
         error(await second, 401, 'DEMO_SESSION_UNAVAILABLE');
         assert.equal((await pool.query('SELECT COUNT(*)::int AS n FROM dataset_series WHERE company_code=$1 AND period=$2', [session.context.companyCode, 'Q1'])).rows[0].n, 0);
