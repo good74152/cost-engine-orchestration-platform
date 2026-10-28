@@ -5,6 +5,7 @@ import { abandonDatasetVersionService, publishDatasetVersionService,
   rejectDatasetVersionService, submitDatasetValidationService } from '../dataset-version/dataset-version-lifecycle.service.js';
 import { runCalculationJobService } from '../calculation-job-run.service.js';
 import { reconcileCalculationJobService } from '../calculation-job-reconciliation.service.js';
+import { ExecutorDispatchFailedError } from '../calculation-job.errors.js';
 import type { FakeDispatchBehavior } from '../../executors/fake-executor.js';
 import { DemoResourceUnavailableError, DemoSessionError } from './demo-session.errors.js';
 import type { AuthenticatedDemoSession } from './demo-session.service.js';
@@ -57,6 +58,12 @@ export function demoDomainRoutes(runtime: DemoRuntime, options: DemoSessionRoute
           const result = await runCalculationJobService(request.params.id, scoped ?? fake);
           return reply.status(result.attemptStatus === 'DISPATCHING' ? 202 : 200).send(scoped
             ? { ...result, simulation: scoped.report(result) } : result);
+        } catch (error) {
+          if (scoped && error instanceof ExecutorDispatchFailedError) {
+            const report = scoped.rejectionReport();
+            if (report) return reply.status(502).send({ message: error.message, code: error.code, simulation: report });
+          }
+          throw error;
         } finally { scoped?.finish(); }
       }, simulation !== undefined);
     });

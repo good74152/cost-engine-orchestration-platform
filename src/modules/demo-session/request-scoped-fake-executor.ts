@@ -31,16 +31,24 @@ export interface SimulationReport {
 export class RequestScopedFakeExecutor implements CalculationExecutor {
   private readonly decisions = new Set<FakeSimulationDecision>();
   private readonly releases = new Set<() => void>();
+  private rejectedIdentity: ExecutionIdentity | undefined;
   constructor(private readonly delegate: FakeExecutor, private readonly requested: FakeRunSimulation) {}
 
   async dispatch(command: DispatchCalculationCommand) {
+    const identity = { airflowDagId: command.airflowDagId, airflowDagRunId: command.airflowDagRunId };
     const observation = await this.delegate.dispatchWithSimulation(command, this.requested);
     this.releases.add(observation.finish);
     if (observation.applied && observation.decision) this.decisions.add(observation.decision);
+    if (observation.result.kind === 'REJECTED') this.rejectedIdentity = identity;
     return observation.result;
   }
 
   getExecutionStatus(identity: ExecutionIdentity) { return this.delegate.getExecutionStatus(identity); }
+
+  /** Only an observed rejection supplies its exact full identity; never infer it from a job. */
+  rejectionReport(): SimulationReport | undefined {
+    return this.rejectedIdentity ? this.report(this.rejectedIdentity) : undefined;
+  }
 
   report(identity: ExecutionIdentity): SimulationReport {
     const actual = this.delegate.simulationInfo(identity);

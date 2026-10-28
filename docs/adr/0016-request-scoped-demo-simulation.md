@@ -29,6 +29,15 @@ UNKNOWN means an execution/rejection exists without known explicit settings,
 such as a legacy dispatch. Both unknown cases report applied=null; never infer
 an original simulation from the current live external state.
 
+The same report also accompanies 502 EXECUTOR_DISPATCH_FAILED for an explicit
+Run when its adapter observed REJECTED for the exact full dispatch identity.
+The route catches only ExecutorDispatchFailedError. The adapter copies DAG/run
+identity from that actual command and reads the fake's recorded decision; never
+look up a latest attempt by Job ID or assume requested settings were applied.
+If that identity is unavailable, retain the original error without a report.
+Legacy {} errors and all other errors retain their original contracts. The
+global error boundary, Core service and Fake decision semantics are unchanged.
+
 UNKNOWN_WITHOUT_CREATION does not select an immutable simulation. A later request
 may create or reject that same identity. Keep only a transient count of explicit
 no-run UNKNOWN calls until their Core outcome recording finishes (also release

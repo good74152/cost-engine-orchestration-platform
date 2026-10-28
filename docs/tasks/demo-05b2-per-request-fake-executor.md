@@ -28,7 +28,7 @@ admission. Alternatively send exactly one simulation object:
 
 Unknown keys, aliases, missing/extra completion, null, arrays and other shapes
 return 400 INVALID_REQUEST before executor allocation or Domain mutation.
-An explicit response adds this object to the unchanged Core Run result:
+An explicit success response adds this object to the unchanged Core Run result:
 
 ```json
 {
@@ -47,6 +47,47 @@ when no execution/rejection exists; UNKNOWN reports null for legacy/existing
 identities without known explicit settings. Never claim a later request's
 settings changed an existing execution. Legacy {} responses have no new object.
 Existing 200/202/502 Core dispatch contracts and sanitized errors remain.
+
+### Explicit dispatch rejection (PR #37 review fix)
+
+An explicit Run also adds the report to HTTP 502 EXECUTOR_DISPATCH_FAILED when
+Core confirms dispatch rejection and the adapter observed the exact rejected
+command. Example: another request already applied REJECT to this same identity:
+
+```json
+{
+  "message": "Executor rejected dispatch for calculation job: <owned job UUID>",
+  "code": "EXECUTOR_DISPATCH_FAILED",
+  "simulation": {
+    "requested": {"dispatch":"ACCEPT","completion":"SUCCEEDED"},
+    "applied": {"dispatch":"REJECT"},
+    "application": "EXISTING"
+  }
+}
+```
+
+First explicit rejection reports APPLIED. A known legacy rejection on that same
+identity reports UNKNOWN with applied=null, even if the current request asks
+for ACCEPT. UNBOUND also reports null if that known identity has no recorded
+decision. Never infer applied from requested, from Job ID, or from a latest
+attempt query. The adapter captures the full DAG/run identity from its actual
+REJECTED dispatch command. If no such identity was observed, omit the report.
+Only ExecutorDispatchFailedError is caught locally; dependency/pre-dispatch,
+authentication, ownership, capacity and internal/database errors stay unchanged
+without simulation. Legacy {} success/errors remain unchanged, and the shared
+error handler is not modified. Reporting does not dispatch again, query/mutate
+DB state, create attempts or change the fake decision.
+
+A completed legacy HTTP rejection permits a new attempt on a later explicit
+Run. That new identity may apply new settings; do not borrow the old rejection's
+settings. The UNKNOWN regression fixture instead records a legacy external
+rejection for an existing ambiguous durable identity before explicit recovery.
+
+Existing Core limit: if a newer attempt has already made the logical job RUNNING
+before an old rejected dispatch records its outcome, Core's DISPATCH_FAILED /
+RUNNING guard returns an internal 500. This remains a flat error without any
+simulation report, even though the adapter knows the old rejection's identity.
+This review fix does not change that Core guard or extend late-outcome recovery.
 
 ## Shared fake, identity and recovery
 
@@ -97,7 +138,10 @@ blocked executor. A failing outcome-write trigger checks sanitized 500 and
 release of transient UNKNOWN state. Fixture cleanup uses zero-backend normal
 DROP, never FORCE or a persistent data target.
 
-## Executed verification — 2026-10-28
+## Initial implementation verification — 2026-10-28
+
+These 605-test results belong to commit 1a05c39032e989ef7f08abfe33fa2f9d549097d7,
+before the rejection-report review fix. Its new verification is recorded below.
 
 Windows PowerShell, Node 24.18.0, PostgreSQL 18.6, Chromium 156.0.8078.4.
 All final commands below exited 0; no final suite failed, skipped or cancelled.
@@ -160,4 +204,45 @@ UNKNOWN/rejection handling. Existing single-instance/no external-writer limits
 remain. Executable source/test content was unchanged after the final passing
 runs; only evidence documentation and whitespace cleanup followed.
 
-System Owner review is required. No merge, deployment or later task work.
+## Rejection-report review verification — 2026-10-28
+
+Only the existing PR #37 branch was updated. The local handler catches the exact
+Core ExecutorDispatchFailedError class and includes a report only with a known
+rejected dispatch identity captured by that request adapter. No Core, Fake,
+transaction, global error handler, security, snapshot or migration changes.
+
+| Exact command | Exit | Pass | Fail | Skip |
+|---|---:|---:|---:|---:|
+| npm.cmd run build | 0 | n/a | n/a | n/a |
+| npm.cmd run test:demo-05b2:typecheck | 0 | n/a | n/a | n/a |
+| npm.cmd run test:demo-05b2 | 0 | 29 | 0 | 0 |
+| npm.cmd run test:demo-05b1 | 0 | 12 | 0 | 0 |
+| npm.cmd run test:milestone | 0 | 259 | 0 | 0 |
+| git diff --check | 0 | n/a | n/a | n/a |
+
+**300 pass / 0 fail / 0 skip**, zero cancellations/TODOs. This review-fix total
+does not count the earlier 605-test run again. The expanded suite verifies
+first REJECT/APPLIED, competing same-attempt ACCEPT/EXISTING with applied=REJECT,
+legacy-identity UNKNOWN, pre-dispatch dependency failure without a report, no
+extra attempts/external execution, unchanged legacy response, and a failed DB
+rejection write staying a sanitized 500. All original successful Run, UNKNOWN,
+Guided/Reset/ownership and four-slot barrier tests remain green. Core includes
+all schema/raw-ingestion/concurrency/E2E children listed in the initial table.
+
+An extra development barrier run initially expected 502 for an old REJECT after
+a newer attempt reached RUNNING. It exited 1 (26 pass / 2 fail, including the
+parent / 0 skip). Inspection confirmed the existing Core guard described above,
+outside this response-only fix. The required same-attempt 502 test keeps both
+responses before retry; a separate test now asserts that the later Core guard
+stays 500 without simulation. Core was not changed or a failure relabeled PASS.
+The final expanded suite exited 0 with 29 passed. Logs remain in the temporary
+directory as demo05b2-review-*.log, including the earlier failing development run.
+
+Tests used owned disposable PostgreSQL databases with all 12 original migrations.
+Fixture teardown verified zero backends and normal DROP. The owned source
+service demo05b2_review_pg_c686cb54ffdf retained only the three system databases
+and zero other clients; its container, volume and temporary credentials were
+removed. The five final command logs contain zero warning/deprecation lines.
+Final working/staged diff checks passed; only these two Demo source files, the integration suite,
+ADR-0016 and this task contract changed. System Owner review is required.
+No merge, deployment or later task work.

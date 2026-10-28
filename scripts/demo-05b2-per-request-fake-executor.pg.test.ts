@@ -36,9 +36,11 @@ class ControlledFake extends FakeExecutor {
 }
 type Response = Awaited<ReturnType<FastifyInstance['inject']>>;
 interface Session { cookie: string; context: AuthenticatedDemoSession }
-function error(r: Response, status: number, code: string) {
+function error(r: Response, status: number, code: string, simulation?: SimulationReport) {
   assert.equal(r.statusCode,status,r.body); assert.equal(r.json().code,code);
-  assert.equal(r.headers['cache-control'],'no-store'); assert.deepEqual(Object.keys(r.json()).sort(),['code','message']);
+  assert.equal(r.headers['cache-control'],'no-store');
+  assert.deepEqual(Object.keys(r.json()).sort(),simulation?['code','message','simulation']:['code','message']);
+  if(simulation)assert.deepEqual(r.json().simulation,simulation);
   assert.doesNotMatch(r.body,/token_hash|password|constraint|postgres(?:ql)?:|SELECT |INSERT /i);
 }
 
@@ -91,6 +93,8 @@ test('Demo-05B-2: per-request simulation, identity-safe concurrency and unchange
     const assertStates=async(job:string,expected:string[][])=>assert.deepEqual((await states(job)).map(r=>[r.job,r.attempt]),expected);
     const assertReport=(r:ReturnType<typeof result>,requested:FakeRunSimulation,applied:FakeRunSimulation|null,application:SimulationReport['application'])=>
       assert.deepEqual(r.simulation,{requested,applied,application});
+    const rejectedResponse=(r:Response,requested:FakeRunSimulation,applied:FakeRunSimulation|null,application:SimulationReport['application'])=>
+      error(r,502,'EXECUTOR_DISPATCH_FAILED',{requested,applied,application});
     const frozen=async(id:string)=>({snapshots:(await pool.query('SELECT to_jsonb(s) AS row FROM dataset_build_snapshots s WHERE dataset_version_id=$1',[id])).rows,
       deps:(await pool.query(`SELECT to_jsonb(d) AS row FROM dataset_build_snapshot_dependencies d JOIN dataset_build_snapshots s ON s.id=d.snapshot_id
         WHERE s.dataset_version_id=$1 ORDER BY d.upstream_dataset_series_id`,[id])).rows});
@@ -198,7 +202,7 @@ test('Demo-05B-2: per-request simulation, identity-safe concurrency and unchange
         assertReport(deferred,reject,null,'UNBOUND');await assertStates(job,[['PENDING','DISPATCHING']]);assert.equal(fake.getExternalExecutions().length,0);
       }finally{release.release();await first;}
       const before=result(await first,202);assertReport(before,unknown,null,'UNBOUND');assert.equal(before.executionAttemptId,deferred!.executionAttemptId);
-      const snapshot=await frozen(data.datasetVersionId);error(await run(s,job,reject),502,'EXECUTOR_DISPATCH_FAILED');await assertStates(job,[['PENDING','DISPATCH_FAILED']]);
+      const snapshot=await frozen(data.datasetVersionId);rejectedResponse(await run(s,job,reject),reject,reject,'APPLIED');await assertStates(job,[['PENDING','DISPATCH_FAILED']]);
       const retry=result(await run(s,job,accept('FAILED')));assert.equal(retry.attemptNumber,2);assert.notEqual(retry.executionAttemptId,before.executionAttemptId);
       assert.equal(fake.getExternalExecutions().length,1);assert.deepEqual(await frozen(data.datasetVersionId),snapshot);
     });
@@ -219,12 +223,12 @@ test('Demo-05B-2: per-request simulation, identity-safe concurrency and unchange
         WHEN (NEW.last_dispatch_error IS NOT NULL) EXECUTE FUNCTION demo05b2_fail_unknown()`);
       try{error(await run(s,job,{dispatch:'UNKNOWN_WITHOUT_CREATION'}),500,'INTERNAL_SERVER_ERROR');}
       finally{await pool.query('DROP TRIGGER demo05b2_fail_unknown ON execution_attempts');await pool.query('DROP FUNCTION demo05b2_fail_unknown()');}
-      await assertStates(job,[['PENDING','DISPATCHING']]);error(await run(s,job,{dispatch:'REJECT'}),502,'EXECUTOR_DISPATCH_FAILED');
+      await assertStates(job,[['PENDING','DISPATCHING']]);rejectedResponse(await run(s,job,{dispatch:'REJECT'}),{dispatch:'REJECT'},{dispatch:'REJECT'},'APPLIED');
       await assertStates(job,[['PENDING','DISPATCH_FAILED']]);assert.equal(fake.getExternalExecutions().length,0);
     });
     await t.test('retry rejection preserves FAILED logical state and frozen inputs, then a new attempt may succeed',async()=>{
       const {s,job,data}=await fixture();result(await run(s,job,accept('FAILED')));assert.equal((await reconcile(s,job)).json().jobStatus,'FAILED');
-      const before=await frozen(data.datasetVersionId);error(await run(s,job,{dispatch:'REJECT'}),502,'EXECUTOR_DISPATCH_FAILED');
+      const before=await frozen(data.datasetVersionId);rejectedResponse(await run(s,job,{dispatch:'REJECT'}),{dispatch:'REJECT'},{dispatch:'REJECT'},'APPLIED');
       await assertStates(job,[['FAILED','FAILED'],['FAILED','DISPATCH_FAILED']]);assert.deepEqual(await frozen(data.datasetVersionId),before);
       const next=result(await run(s,job,accept('SUCCEEDED')));assert.equal(next.attemptNumber,3);await assertStates(job,[['RUNNING','FAILED'],['RUNNING','DISPATCH_FAILED'],['RUNNING','ACCEPTED']]);
       assert.deepEqual(await frozen(data.datasetVersionId),before);
@@ -243,12 +247,71 @@ test('Demo-05B-2: per-request simulation, identity-safe concurrency and unchange
       const {s,job,fake}=await fixture();const entered=barrier();const release=barrier();let calls=0;
       fake.after=async()=>{if(++calls===1){entered.release();await release.promise;}};
       const rejected=run(s,job,{dispatch:'REJECT'});
-      try{await bounded(entered.promise,'rejection applied');error(await bounded(run(s,job,accept('SUCCEEDED')),'overlapping rejection tombstone'),502,'EXECUTOR_DISPATCH_FAILED');
+      try{await bounded(entered.promise,'rejection applied');rejectedResponse(await bounded(run(s,job,accept('SUCCEEDED')),'overlapping rejection tombstone'),accept('SUCCEEDED'),{dispatch:'REJECT'},'EXISTING');
         assert.equal(fake.getExternalExecutions().length,0);
       }finally{release.release();await rejected;}
-      error(await rejected,502,'EXECUTOR_DISPATCH_FAILED');assert.equal((await states(job)).length,1);
+      // The first caller applied REJECT; the competing caller only observed it.
+      error(await rejected,502,'EXECUTOR_DISPATCH_FAILED',{requested:{dispatch:'REJECT'},applied:{dispatch:'REJECT'},application:'APPLIED'});
+      assert.equal((await states(job)).length,1);
       const retry=result(await run(s,job,accept('SUCCEEDED')));assert.equal(retry.attemptNumber,2);assertReport(retry,accept('SUCCEEDED'),accept('SUCCEEDED'),'APPLIED');
       assert.equal(fake.getExternalExecutions().length,1);
+    });
+    await t.test('late rejection after a newer accepted attempt retains the existing Core flat 500 contract, without borrowing its simulation',async()=>{
+      const {s,job,fake}=await fixture();const entered=barrier();const release=barrier();let calls=0;
+      fake.after=async()=>{if(++calls===1){entered.release();await release.promise;}};
+      const old=run(s,job,{dispatch:'REJECT'});
+      try{await bounded(entered.promise,'old rejected dispatch');
+        rejectedResponse(await run(s,job,accept('SUCCEEDED')),accept('SUCCEEDED'),{dispatch:'REJECT'},'EXISTING');
+        const next=result(await run(s,job,accept('SUCCEEDED')));assert.equal(next.attemptNumber,2);assertReport(next,accept('SUCCEEDED'),accept('SUCCEEDED'),'APPLIED');
+      }finally{release.release();await old;}
+      // Core guards DISPATCH_FAILED/RUNNING here; do not turn this invariant
+      // failure into a 502, or attach the old/new attempt's known simulation.
+      error(await old,500,'INTERNAL_SERVER_ERROR');
+      await assertStates(job,[['RUNNING','DISPATCH_FAILED'],['RUNNING','ACCEPTED']]);
+      assert.equal(fake.getExternalExecutions().length,1);
+    });
+    await t.test('first explicit rejection reports APPLIED while preserving one durable failed dispatch and no external execution',async()=>{
+      const {s,job,fake,data}=await fixture();const sim:FakeRunSimulation={dispatch:'REJECT'};
+      rejectedResponse(await run(s,job,sim),sim,sim,'APPLIED');await assertStates(job,[['PENDING','DISPATCH_FAILED']]);
+      assert.equal((await states(job)).length,1);assert.equal(fake.getExternalExecutions().length,0);assert.equal(fake.getDispatchHistory().length,1);
+      assert.equal((await frozen(data.datasetVersionId)).snapshots.length,1);
+      const command=fake.getDispatchHistory()[0]!;const before=fake.simulationInfo(command);
+      assert.equal((await fake.dispatchWithSimulation(command,accept('SUCCEEDED'))).result.kind,'REJECTED');
+      assert.deepEqual(fake.simulationInfo(command),before);assert.equal(fake.getExternalExecutions().length,0);
+    });
+    await t.test('legacy rejection on the same durable identity reports UNKNOWN, never the new request or another attempt decision',async()=>{
+      const {s,job,fake}=await fixture();const prepared=result(await run(s,job,{dispatch:'UNKNOWN_WITHOUT_CREATION'}),202);
+      // Seed a legacy external rejection while Core still has the ambiguous attempt.
+      // Legacy HTTP Run is Exclusive, so its public terminal rejection would instead
+      // permit a NEW attempt; it cannot publicly overlap a scoped Run on this identity.
+      const command=fake.getDispatchHistory()[0]!;fake.enqueueBehaviors('REJECT');assert.equal((await fake.dispatch(command)).kind,'REJECTED');
+      const before=fake.simulationInfo(command);const sim=accept('SUCCEEDED');
+      rejectedResponse(await run(s,job,sim),sim,null,'UNKNOWN');assert.deepEqual(fake.simulationInfo(command),before);
+      const rows=await states(job);assert.equal(rows.length,1);assert.equal(rows[0]!.id,prepared.executionAttemptId);
+      await assertStates(job,[['PENDING','DISPATCH_FAILED']]);assert.equal(fake.getExternalExecutions().length,0);
+
+      const other=await dataset(s,2027);const otherJob=other.calculationJobs[0]!.jobId;fake.enqueueBehaviors('REJECT');
+      error(await run(s,otherJob),502,'EXECUTOR_DISPATCH_FAILED'); // Legacy flat envelope.
+      const next=result(await run(s,otherJob,sim));assert.equal(next.attemptNumber,2);assertReport(next,sim,sim,'APPLIED');
+      assert.equal(fake.getExternalExecutions().length,1);assert.equal(fake.getExternalExecutions()[0]!.state,'SUCCEEDED');
+    });
+    await t.test('pre-dispatch dependency failure keeps the flat 409 contract and creates no attempt, snapshot or fake decision',async()=>{
+      const s=await session();const data=await dataset(s,2026,'DPR');const fake=new ControlledFake();assigned.push(fake);
+      error(await run(s,data.calculationJobs[0]!.jobId,{dispatch:'REJECT'}),409,'DEPENDENCY_NOT_READY');
+      for(const job of data.calculationJobs)assert.deepEqual(await states(job.jobId),[]);
+      assert.deepEqual(await frozen(data.datasetVersionId),{snapshots:[],deps:[]});assert.equal(fake.getDispatchHistory().length,0);assert.equal(fake.getExternalExecutions().length,0);
+    });
+    await t.test('a known fake rejection does not decorate a failed PostgreSQL outcome write or other internal error',async()=>{
+      const {s,job,fake}=await fixture();
+      await pool.query(`CREATE FUNCTION demo05b2_fail_rejection() RETURNS trigger LANGUAGE plpgsql AS $$
+        BEGIN RAISE EXCEPTION 'test-only rejection write failure'; END $$`);
+      await pool.query(`CREATE TRIGGER demo05b2_fail_rejection BEFORE UPDATE ON execution_attempts FOR EACH ROW
+        WHEN (NEW.status='DISPATCH_FAILED') EXECUTE FUNCTION demo05b2_fail_rejection()`);
+      try{error(await run(s,job,{dispatch:'REJECT'}),500,'INTERNAL_SERVER_ERROR');}
+      finally{await pool.query('DROP TRIGGER demo05b2_fail_rejection ON execution_attempts');await pool.query('DROP FUNCTION demo05b2_fail_rejection()');}
+      await assertStates(job,[['PENDING','DISPATCHING']]);assert.equal(fake.getExternalExecutions().length,0);
+      rejectedResponse(await run(s,job,accept()),accept(),{dispatch:'REJECT'},'EXISTING');
+      await assertStates(job,[['PENDING','DISPATCH_FAILED']]);assert.equal((await states(job)).length,1);assert.equal(fake.getExternalExecutions().length,0);
     });
     await t.test('shared queue/default and manual Fake state stay intact; scoped settings never consume or rewrite them',async()=>{
       const {s,job,fake}=await fixture();fake.setDefaultBehavior('REJECT');fake.enqueueBehaviors('ACCEPT_THEN_UNKNOWN');
