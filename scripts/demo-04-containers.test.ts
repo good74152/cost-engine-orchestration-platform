@@ -98,6 +98,21 @@ test('Demo-04 isolated Compose, HTTPS, production UI and PostgreSQL operations',
       for (let n = 0; n < 2; n++) await compose('--profile', 'operations', 'run', '--rm', 'operator', 'seed');
       assert.equal(await sql('SELECT count(*) FROM pgmigrations'), '12');
     });
+    await t.test('explicit six-domain operator seed is atomic/idempotent and preserves guided CAPEX', async () => {
+      const guided = await sql(`SELECT row_to_json(t) FROM calculation_types t WHERE domain='CAPEX'`);
+      const definition = await sql(`SELECT row_to_json(d) FROM execution_dependency_definition_versions d`);
+      await compose('--profile', 'operations', 'run', '--rm', 'operator', 'seed-six-domain');
+      assert.equal(await sql('SELECT count(*) FROM calculation_types WHERE is_active'), '9');
+      assert.equal(await sql("SELECT count(*) FROM execution_dependency_definition_versions WHERE status='PUBLISHED'"), '9');
+      assert.equal(await sql(`SELECT row_to_json(t) FROM calculation_types t WHERE domain='CAPEX'`), guided);
+      assert.equal(await sql(`SELECT row_to_json(d) FROM execution_dependency_definition_versions d
+        JOIN calculation_types t ON t.id=d.calculation_type_id WHERE t.domain='CAPEX'`), definition);
+      const before = await sql(`SELECT jsonb_agg(to_jsonb(t) ORDER BY domain,code) FROM calculation_types t`);
+      await compose('--profile', 'operations', 'run', '--rm', 'operator', 'seed-six-domain');
+      assert.equal(await sql(`SELECT jsonb_agg(to_jsonb(t) ORDER BY domain,code) FROM calculation_types t`), before);
+      assert.equal(await sql('SELECT count(*) FROM execution_dependency_definition_dependencies'), '7');
+      assert.equal(await sql('SELECT count(*) FROM dataset_versions'), '0');
+    });
     await compose('up', '-d', '--wait', 'backend', 'web');
     const webId = (await compose('ps', '-q', 'web')).out.toString().trim();
     const caFile = join(directory, 'root.crt'); await command(['cp', `${webId}:/data/caddy/pki/authorities/local/root.crt`, caFile]); ca = await readFile(caFile);

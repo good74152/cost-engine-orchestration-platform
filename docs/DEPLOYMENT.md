@@ -116,6 +116,12 @@ DATABASE_URL fallback. It preserves the exact idempotent minimal CAPEX seed and
 rejects incompatible published configuration instead of rewriting it. No HTTP
 tools or automatic startup migrations/seed/down/wipe.
 
+The optional Demo-05A configuration uses the same stopped-backend operator:
+`sh deploy/scripts/operate.sh seed-six-domain`. Run it explicitly after migrations
+and before `start.sh`; it can initialize all six domains or extend the existing
+guided CAPEX configuration in one transaction. `seed` retains its original minimal
+behavior. See [type codes, dependencies and conflict safety](tasks/demo-05a-six-domain-configuration.md).
+
 Startup validates profile → DB → exact migration inventory → read-only seed
 compatibility → runtime → previous-session invalidation → listen → ready.
 Incomplete startup fails closed. `/health/ready` checks initialization and live

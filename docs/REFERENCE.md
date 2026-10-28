@@ -212,6 +212,23 @@ Full DTOs, pagination limits, seed compatibility, index review, environment
 instructions and PostgreSQL evidence: [Demo-02A](tasks/demo-02a-shared-seed-read-apis.md).
 Focused suite: `npm run test:demo-02a`; existing regression commands remain.
 
+### Demo-05A optional six-domain configuration
+
+`npm run seed:demo-six-domain` explicitly creates or verifies nine active Demo
+types across CAPEX, FAB_COST, DPR, INSURANCE, ONE_STD_COST and E2E_COST.
+It uses the same approved Demo environment and mandatory separate
+DEMO_SEED_DATABASE_URL, with no DATABASE_URL fallback. One transaction covers
+the complete seed, including the unchanged guided CAPEX contract. There is no
+startup seed or user Dataset creation. Existing compatible rows are only read;
+incompatible configuration fails with DEMO_CONFIGURATION_CONFLICT and rolls back.
+
+The original seed and Guided Scenarios remain supported. New dependencies are
+data in the existing definition tables, not a global pipeline in Core code.
+Only published direct inputs for the authenticated company/year/period satisfy
+Run. The existing snapshot, all-jobs validation and Retry rules apply unchanged.
+See [type codes, commands, safety and tests](tasks/demo-05a-six-domain-configuration.md).
+Focused PostgreSQL suite: `npm run test:demo-05a`.
+
 ### Demo-02B Scenario APIs
 
 Demo-only POST /demo/scenarios accepts exactly {"scenarioType":"HAPPY_PATH"}

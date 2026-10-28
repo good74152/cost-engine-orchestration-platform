@@ -658,6 +658,13 @@ block Reset under existing busy rules. No core lifecycle/lock, executor, session
 policy or historical migration changes. No Scenario Runner is implemented.
 See [Demo-02A contracts, compatibility, index review and evidence](tasks/demo-02a-shared-seed-read-apis.md).
 
+Demo-05A adds an optional explicit `seed:demo-six-domain` command. Its single
+transaction preserves the CAPEX guided contract and adds the five requested
+domain configurations with published direct dependencies. It creates no user
+data and performs no startup work; existing incompatible configuration fails
+closed. This is Demo fixture data, not a hard-coded Core domain pipeline.
+See [the bounded configuration and verification task](tasks/demo-05a-six-domain-configuration.md).
+
 ## 22. Demo Scenario Persistence and Mode Isolation
 
 Demo-02B adds one Scenario per durable session, enforced by UNIQUE(session_id),
