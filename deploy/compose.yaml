@@ -47,7 +47,8 @@ services:
     networks: [database, proxy]
     depends_on:
       database: {condition: service_healthy}
-    restart: unless-stopped
+    # Only an explicit start operation may resume this stateful Demo runtime.
+    restart: 'no'
     stop_grace_period: 60s
     read_only: true
     tmpfs: [/tmp]
@@ -61,6 +62,7 @@ services:
       timeout: 3s
       retries: 20
   web:
+    profiles: [public-web]
     image: cost-engine-demo-web:${DEPLOYMENT_VERSION:?Set immutable deployment version}
     build:
       context: ..
@@ -74,7 +76,8 @@ services:
     networks: [edge, proxy]
     depends_on:
       backend: {condition: service_healthy}
-    restart: unless-stopped
+    # Daemon restart must never reopen a previously closed public entrypoint.
+    restart: 'no'
     mem_limit: 256m
   operator:
     profiles: [operations]
