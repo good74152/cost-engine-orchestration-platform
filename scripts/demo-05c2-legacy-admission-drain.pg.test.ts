@@ -51,9 +51,10 @@ test('Demo-05C-2: PostgreSQL admission drain, durable recovery and existing user
       import('../src/app.js'), import('../src/modules/demo-session/demo-runtime.js'), import('../src/db/pool.js'), import('./seed-demo-guided-configuration.js'),
     ]);
     pools.push(corePool);
-    const fixture = async (options: { main?: boolean; scenario?: ScenarioCreateOptions; reset?: ResetOptions } = {}) => {
+    const fixture = async (options: { main?: boolean; scenario?: ScenarioCreateOptions; reset?: ResetOptions; lockTimeout?: string } = {}) => {
       const name = options.main ? mainName : await createDatabase();
-      const db = options.main ? corePool : new Pool({ connectionString: connection(name), max: 12 });
+      const db = options.main ? corePool : new Pool({ connectionString: connection(name), max: 12,
+        options: options.lockTimeout ? `-c lock_timeout=${options.lockTimeout}` : undefined });
       if (!options.main) pools.push(db);
       await seedDemoGuidedConfiguration(db);
       const runtime = new DemoRuntime(db, 'test', {}, options.reset ?? { log() {} }, options.scenario ?? {});
@@ -80,6 +81,54 @@ test('Demo-05C-2: PostgreSQL admission drain, durable recovery and existing user
       try { await probe.query('BEGIN'); await assert.rejects(probe.query('SELECT id FROM demo_admission_control WHERE id=1 FOR UPDATE NOWAIT'), { code: '55P03' }); }
       finally { await probe.query('ROLLBACK'); await probe.end(); }
     };
+
+    for (const originalTimeout of ['0', '750ms']) await t.test(`Scenario Gate timeout rolls back after 3s and restores lock policy (${originalTimeout})`, async () => {
+      const observed: string[] = [];
+      const f = await fixture({ lockTimeout: originalTimeout, scenario: { commit: async client => {
+        observed.push((await client.query('SHOW lock_timeout')).rows[0].lock_timeout as string); await client.query('COMMIT');
+      } } });
+      const s = await f.newSession(); const unassigned = await f.newSession();
+      const blocker = new Client({ connectionString: connection(f.name) }); await blocker.connect();
+      await blocker.query('BEGIN');
+      await blocker.query('SELECT id FROM demo_admission_control WHERE id=1 FOR UPDATE');
+      const blockerPid = (await blocker.query('SELECT pg_backend_pid() AS pid')).rows[0].pid as number;
+      const started = Date.now();
+      const request = Promise.resolve(f.post('/demo/scenarios', s.cookie, { scenarioType: 'HAPPY_PATH' }));
+      try {
+        const [waiting] = await waiters(f.name, '%demo_admission_control%FOR SHARE%');
+        assert.ok(waiting!.blockers.includes(blockerPid));
+        error(await bounded(request), 503, 'DEMO_ADMISSION_UNAVAILABLE');
+        assert.ok(Date.now() - started >= 2500, 'Gate must use 3s even with a shorter connection timeout');
+        assert.equal((await f.db.query('SELECT count(*)::int AS n FROM demo_scenario_instances')).rows[0].n, 0);
+        assert.equal(f.runtime.coordinator.activeSessionCount, 0);
+        const backend = (await admin.query('SELECT state,xact_start FROM pg_stat_activity WHERE pid=$1', [waiting!.pid])).rows[0];
+        assert.equal(backend.state, 'idle'); assert.equal(backend.xact_start, null, 'Timed-out transaction must be rolled back before pool reuse');
+        const reused = await f.db.connect();
+        try { assert.equal((await reused.query('SHOW lock_timeout')).rows[0].lock_timeout, originalTimeout); }
+        finally { reused.release(); }
+      } finally { await blocker.query('ROLLBACK'); await blocker.end(); await request; }
+      const created = await f.post('/demo/scenarios', s.cookie, { scenarioType: 'HAPPY_PATH' }); assert.equal(created.statusCode, 201, created.body);
+      const replay = await f.post('/demo/scenarios', s.cookie, { scenarioType: 'HAPPY_PATH' }); assert.equal(replay.statusCode, 200); assert.deepEqual(replay.json(), created.json());
+      await f.operator.drain();
+      error(await f.post('/demo/scenarios', unassigned.cookie, { scenarioType: 'HAPPY_PATH' }), 503, 'DEMO_ADMISSION_DRAINING');
+      assert.equal((await f.post('/demo/scenarios', s.cookie, { scenarioType: 'HAPPY_PATH' })).statusCode, 200);
+      assert.deepEqual(observed, [originalTimeout, originalTimeout, originalTimeout]);
+    });
+
+    await t.test('successful Gate acquisition restores the original timeout before waiting on the Session row', async () => {
+      const f = await fixture({ lockTimeout: '750ms' }); const s = await f.newSession();
+      const blocker = new Client({ connectionString: connection(f.name) }); await blocker.connect(); await blocker.query('BEGIN');
+      await blocker.query('SELECT id FROM demo_sessions WHERE id=$1 FOR UPDATE', [s.context.sessionId]);
+      const started = Date.now(); const request = Promise.resolve(f.post('/demo/scenarios', s.cookie, { scenarioType: 'HAPPY_PATH' }));
+      try {
+        await waiters(f.name, '%FROM demo_sessions%FOR UPDATE%');
+        // Preserve the pre-existing handling of later Session-lock failures.
+        error(await bounded(request), 500, 'INTERNAL_SERVER_ERROR');
+        assert.ok(Date.now() - started < 2500, 'Session lock must retain 750ms rather than the Gate-only 3s');
+        assert.equal((await f.db.query('SELECT count(*)::int AS n FROM demo_scenario_instances')).rows[0].n, 0);
+      } finally { await blocker.query('ROLLBACK'); await blocker.end(); await request; }
+      assert.equal((await f.post('/demo/scenarios', s.cookie, { scenarioType: 'HAPPY_PATH' })).statusCode, 201);
+    });
 
     await t.test('singleton, state/timestamp constraints, irreversible transition and offline Down guards', async () => {
       const f = await fixture(); const open = await f.operator.status(); assert.equal(open.state, 'LEGACY_OPEN');

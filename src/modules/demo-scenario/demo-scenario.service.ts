@@ -22,7 +22,12 @@ export class DemoScenarioService {
     const client = await this.db.connect(); let commitSent = false; let discard = false;
     try {
       await client.query('BEGIN');
+      const previousLockTimeout = (await client.query<{ lock_timeout: string }>('SHOW lock_timeout')).rows[0]!.lock_timeout;
+      await client.query("SET LOCAL lock_timeout='3s'");
       const admission = await lockDemoAdmission(client);
+      // Bound only Gate admission; later Session/configuration locks retain the
+      // connection's original policy, including a non-default deployment value.
+      await client.query("SELECT set_config('lock_timeout',$1,true)", [previousLockTimeout]);
       await lockScenarioSession(client, session);
       let scenario = await readScenario(client, session.sessionId);
       let created = false;

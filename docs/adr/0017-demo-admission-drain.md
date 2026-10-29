@@ -29,8 +29,14 @@ credential is issued. A possibly committed, unreachable Session remains subject
 to the existing lifetime/capacity/cleanup rules. Existing valid-cookie POST replay
 authenticates without entering new admission and never rotates or extends it.
 
-Scenario Create locks the gate before the Session, then reloads durable Scenario
-state before deciding whether it is a new insertion. Existing same-type replay
+Scenario Create locks the gate before the Session. Its Gate acquisition uses a
+transaction-local 3-second lock timeout,
+installed before FOR SHARE. After acquisition it restores the connection's exact
+prior lock_timeout (including non-default settings) before any Session/configuration
+lock. Gate timeout follows the existing safe rollback and sanitized 503
+DEMO_ADMISSION_UNAVAILABLE path; there is no retry loop or recovery protocol change.
+It then reloads durable Scenario state before deciding whether it is a new
+insertion. Existing same-type replay
 is allowed in DRAINING; different-type remains 409. A missing Scenario requires
 LEGACY_OPEN. Ambiguous Scenario COMMIT retains ADR-0011's 503 and subsequent
 fresh-connection locked durable reload. After a rollback followed by drain, retry
