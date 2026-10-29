@@ -25,6 +25,7 @@ export function DatasetPage(){
  },[id,session?.sessionId,dataset?.datasetStatus,jobs,model]);
  if(!session)return <SessionRequired/>;
  if(problem)return <EmptyState title="Dataset unavailable">{problem}</EmptyState>;
+ if(!dataset)return loading?<LoadingState/>:<EmptyState title="Dataset unavailable">This Dataset is not in the current Session's resource list.</EmptyState>;
  if(!detail)return <LoadingState/>;
  return <><PageHeading eyebrow="Dataset detail" title={detail.domain+' / '+detail.fiscalYear+' '+detail.period+' / v'+detail.version} description="Persisted lifecycle and complete calculation-job history." action={<StatusBadge status={detail.datasetStatus}/>}/>
  <section className="panel"><Identity label="Dataset version ID" value={detail.datasetVersionId}/><Identity label="Dataset series ID" value={detail.datasetSeriesId}/>

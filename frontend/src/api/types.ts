@@ -10,6 +10,12 @@ export interface Job {jobId:string;datasetVersionId:string;calculationTypeCode:s
 export interface JobDetail extends Job {datasetStatus:string}
 export interface Attempt {executionAttemptId:string;attemptNumber:number;attemptStatus:string;createdAt:string;dispatchStartedAt:string|null;acceptedAt:string|null;finishedAt:string|null}
 export interface Page<T>{items:T[];nextCursor:string|null}
+export type AdmissionState='LEGACY_OPEN'|'DRAINING'|'WORKFLOW_OPEN';
+export type WorkflowOperation='CREATE_DATASET'|'RUN_JOB'|'SET_FAKE_STATE'|'RECONCILE_JOB'|'SUBMIT_VALIDATION'|'PUBLISH_DATASET';
+export interface WorkflowStep {id:string;title:string;description:string;operation:WorkflowOperation;domain?:string;prerequisites:string[];expectedResult:string}
+export interface WorkflowSummary {id:string;version:number;title:string;description:string;availability:'PREVIEW'|'AVAILABLE'}
+export interface WorkflowTemplate extends WorkflowSummary {steps:WorkflowStep[]}
+export interface WorkflowCatalog {admissionState:AdmissionState;templates:WorkflowSummary[]}
 export interface StepReply {scenarioId:string;stepNumber:number;requestId:string;stepStatus:'PENDING'|'COMPLETED';completedStep:number;scenarioStatus:string;stepResult:{
  datasetVersionId:string;jobId:string;datasetStatus:string;jobStatus:string;executionAttemptId?:string;attemptNumber?:number;attemptStatus?:string;
  datasetBuildSnapshotId?:string;resolvedDependencyDefinitionVersionId?:string;externalStatus?:'SUCCEEDED'|'FAILED';

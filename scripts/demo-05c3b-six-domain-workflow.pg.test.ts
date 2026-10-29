@@ -13,7 +13,7 @@ import type { DemoJobDto, DemoAttemptDto, DemoDatasetDetailDto } from '../src/mo
 import type { CalculationJobRunResult } from '../src/modules/calculation-job.types.js';
 import type { FakeRunSimulation } from '../src/executors/fake-executor.js';
 import type { DatasetDomain } from '../src/modules/dataset-version/dataset-version.types.js';
-import type { WorkflowTemplate, WorkflowTemplateSummary } from '../src/modules/workflow-template/workflow-template.types.js';
+import type { WorkflowTemplateResponse, WorkflowCatalogResponse } from '../src/modules/workflow-template/workflow-template.types.js';
 import { DemoAdmissionOperator } from '../src/modules/demo-admission/demo-admission.operator.js';
 import { DemoCutoverOperator } from '../src/modules/demo-cutover/demo-cutover.operator.js';
 
@@ -377,11 +377,12 @@ test('Demo-05C-3B: six-domain API workflow on real migrated/cutover PostgreSQL',
         } return rows;
       };
       const before = await dump(); const fakes = runtime.executors.size;
-      const list = result<{ templates: WorkflowTemplateSummary[] }>(await get('/demo/workflow-templates', s));
+      const list = result<WorkflowCatalogResponse>(await get('/demo/workflow-templates', s));
+      assert.equal(list.admissionState, 'WORKFLOW_OPEN');
       assert.equal(list.templates.length, 4);
       for (const summary of list.templates) {
-        assert.equal(summary.version, 2); assert.equal(summary.availability, 'PREVIEW');
-        const { steps, ...detail } = result<WorkflowTemplate>(await get(`/demo/workflow-templates/${summary.id}`, s));
+        assert.equal(summary.version, 2); assert.equal(summary.availability, 'AVAILABLE');
+        const { steps, ...detail } = result<WorkflowTemplateResponse>(await get(`/demo/workflow-templates/${summary.id}`, s));
         assert.deepEqual(detail, summary); assert.ok(steps.length);
       }
       assert.deepEqual(await dump(), before); assert.equal(runtime.executors.size, fakes);

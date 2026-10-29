@@ -73,7 +73,7 @@ test('Demo-05C-1: protected read-only catalog and existing session barriers', { 
       assert.equal((await pool.query('SELECT id FROM calculation_types')).rowCount, 0);
       const list = await get(paths[0]!, s);
       assert.equal(list.statusCode, 200, list.body); assert.equal(list.headers['cache-control'], 'no-store');
-      assert.deepEqual(list.json(), { templates: listWorkflowTemplates() });
+      assert.deepEqual(list.json(), { admissionState: 'LEGACY_OPEN', templates: listWorkflowTemplates() });
       for (const summary of list.json<{ templates: WorkflowTemplateSummary[] }>().templates) {
         const response = await get(`/demo/workflow-templates/${summary.id}`, s);
         assert.equal(response.statusCode, 200, response.body);
@@ -136,14 +136,14 @@ test('Demo-05C-1: protected read-only catalog and existing session barriers', { 
       const before = await dump(); const fakeSize = runtime.executors.size;
       const originalQuery = pool.query;
       const query = st.mock.method(pool, 'query', function (...args: unknown[]) {
-        // Authentication and gate revalidation may read only Demo sessions.
+        // Authentication/revalidation and availability may read only Session/Gate.
         assert.equal(typeof args[0], 'string');
-        assert.match(args[0] as string, /^\s*SELECT (?:id, company_code, expires_at|id) FROM demo_sessions\s+WHERE/);
+        assert.match(args[0] as string, /^\s*SELECT (?:(?:id, company_code, expires_at|id) FROM demo_sessions\s+WHERE|state FROM demo_admission_control WHERE id=1$)/);
         return Reflect.apply(originalQuery, pool, args);
       });
       try {
         for (const s of [empty, free, guided]) {
-          assert.deepEqual((await get(paths[0]!, s)).json(), { templates: listWorkflowTemplates() });
+          assert.deepEqual((await get(paths[0]!, s)).json(), { admissionState: 'LEGACY_OPEN', templates: listWorkflowTemplates() });
           for (const summary of listWorkflowTemplates()) assert.deepEqual((await get(`/demo/workflow-templates/${summary.id}`, s)).json(), getWorkflowTemplate(summary.id));
         }
       } finally { query.mock.restore(); }
@@ -199,6 +199,29 @@ test('Demo-05C-1: protected read-only catalog and existing session barriers', { 
       } finally { runtime.coordinator.finishReset(reservation); }
       for (const path of paths) assert.equal((await get(path, s)).statusCode, 200);
       assert.equal(runtime.coordinator.activeSessionCount, 0);
+    });
+    let drainSession: Session | undefined;
+    await t.test('PostgreSQL DRAINING projects PREVIEW consistently without modifying static definitions or resource state', async () => {
+      const { DemoAdmissionOperator } = await import('../src/modules/demo-admission/demo-admission.operator.js');
+      const s = await session(); drainSession = s; await new DemoAdmissionOperator(pool).drain(); const before = await dump();
+      const list = await get(paths[0]!, s);
+      assert.deepEqual(list.json(), { admissionState: 'DRAINING', templates: listWorkflowTemplates() });
+      for (const summary of listWorkflowTemplates()) {
+        const detail = await get('/demo/workflow-templates/' + summary.id, s);
+        assert.equal(detail.statusCode, 200, detail.body); assert.deepEqual(detail.json(), getWorkflowTemplate(summary.id));
+      }
+      assert.deepEqual(await dump(), before);
+    });
+    await t.test('missing/unreadable PostgreSQL Gate fails both catalog routes closed with sanitized 503', async () => {
+      assert.ok(drainSession); const before = await dump();
+      await pool.query('ALTER TABLE demo_admission_control RENAME TO unavailable_admission_fixture');
+      try {
+        for (const path of paths) {
+          const r = await get(path, drainSession); error(r, 503, 'DEMO_ADMISSION_UNAVAILABLE');
+          assert.doesNotMatch(r.body, /postgres|relation|SELECT|unavailable_admission_fixture/i);
+        }
+      } finally { await pool.query('ALTER TABLE unavailable_admission_fixture RENAME TO demo_admission_control'); }
+      assert.deepEqual(await dump(), before);
     });
     console.info('DEMO_05C1_EVIDENCE', JSON.stringify({ database: name, migrations: 14, domainStateUnchanged: true, parallelLimit: 4 }));
   } finally {

@@ -1,4 +1,4 @@
-import {Link,useNavigate,useParams} from 'react-router-dom';
+import {Link,Navigate,useNavigate,useParams} from 'react-router-dom';
 import {useDemo} from '../../app/demo-context';
 import {catalog} from './scenario-catalog';
 import type {ScenarioType} from '../../api/types';
@@ -7,25 +7,30 @@ import {SessionRequired} from '../sessions/session-card';
 import {CalculationJobCard,DatasetCard} from '../../components/resources';
 
 export function ScenarioCards({overview=false}:{overview?:boolean}){
- const {model,scenario,session,busy,loading,datasets}=useDemo();const navigate=useNavigate();
+ const {model,scenario,session,busy,loading,datasets,catalog:availability}=useDemo();const navigate=useNavigate();
  return <div className="scenario-grid">{(Object.entries(catalog) as [ScenarioType,(typeof catalog)[ScenarioType]][]).map(([type,item],index)=>
  <section className={'scenario-card '+item.tone} key={type}><div className="row"><span className={'icon-box '+item.tone}><Icon name={item.icon} size={23}/></span><span className="small muted">SCENARIO 0{index+1}</span></div>
  <h3>{item.title}</h3><p>{item.description}</p><div className="step-dots" aria-label={item.steps.length+' explicit steps'}>{item.steps.map((_,i)=><i key={i}/>)}<span>{item.steps.length} steps</span></div>
  {overview?<Link className="text-link" to={scenario?.scenarioType===type?'/guided/'+scenario.scenarioId:'/guided'}>{scenario?.scenarioType===type?'Continue scenario':'Explore scenario'} <Icon name="arrow" size={16}/></Link>:
- <Button variant="secondary" disabled={!session||busy||loading||!!(scenario&&scenario.scenarioType!==type)||(!scenario&&datasets.length>0)} onClick={async()=>{
+ <Button variant="secondary" disabled={!session||busy||loading||availability?.admissionState!=='LEGACY_OPEN'||!!(scenario&&scenario.scenarioType!==type)||(!scenario&&datasets.length>0)} onClick={async()=>{
   if(await model.createScenario(type)){const saved=model.getSnapshot().scenario;if(saved)navigate('/guided/'+saved.scenarioId);}
  }}>{scenario?.scenarioType===type?'Continue scenario':scenario?'Reset to switch':'Start '+item.title}<Icon name="arrow" size={16}/></Button>}
  </section>)}</div>;
 }
 export function GuidedSelection(){
- const {session,scenario,datasets}=useDemo();if(!session)return <SessionRequired/>;
+ const {session,scenario,datasets,catalog:availability}=useDemo();if(!session)return <SessionRequired/>;
+ if(availability?.admissionState==='WORKFLOW_OPEN')return <Navigate to="/workflows" replace/>;
+ if(!availability)return <EmptyState title="Guided availability unconfirmed">Refresh Backend availability before choosing a mode.</EmptyState>;
+ if(availability.admissionState==='DRAINING')return <EmptyState title="New Guided Scenarios are paused">{scenario?<Link to={'/guided/'+scenario.scenarioId}>Continue existing Guided Scenario</Link>:'Existing sessions retain their resources. No new Scenario can be created.'}</EmptyState>;
  return <><PageHeading eyebrow="Guided demo" title="Explore the orchestration journey" description="One deliberate action at a time. Real backend state, simulated external calculation."/>
  {(scenario||datasets.length>0)&&<div className="callout"><Icon name="info"/><p>{scenario?'This session already has a guided scenario. Continue it, or use Reset session to choose another.':'Free exploration data already exists. Reset and start a new session before choosing a guided scenario.'}</p></div>}
  <ScenarioCards/><div className="panel explanatory"><h3>What you will see</h3><p>Dataset, job and execution attempt are separate facts. Simulating an executor result does not reconcile the database or publish a dataset. Every step is explicit.</p><p className="muted">Guided scenarios require a fresh session, including no prior manual FakeExecutor configuration. Reset is always your choice.</p></div></>;
 }
 export function GuidedRunner(){
- const {id}=useParams();const {model,session,scenario,pending,lastStep,jobs,datasets,busy,loading}=useDemo();
+ const {id}=useParams();const {model,session,scenario,pending,lastStep,jobs,datasets,busy,loading,catalog:availability}=useDemo();
  if(!session)return <SessionRequired/>;
+ if(availability?.admissionState==='WORKFLOW_OPEN')return <Navigate to="/workflows" replace/>;
+ if(!availability)return <EmptyState title="Guided availability unconfirmed">Refresh Backend availability before continuing.</EmptyState>;
  if(!scenario||scenario.scenarioId!==id)return <EmptyState title="Scenario unavailable">Choose your session's scenario from <Link to="/guided">Guided Demo</Link>.</EmptyState>;
  const plan=catalog[scenario.scenarioType];const next=model.currentStep();const current=plan.steps[next-1];const completed=scenario.status==='COMPLETED';
  const recovering=!!pending||model.hasCurrentRequest();const lost=scenario.scenarioType==='LOST_RESPONSE_RECOVERY'&&next===2&&recovering;

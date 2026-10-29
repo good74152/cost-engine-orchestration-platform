@@ -857,9 +857,8 @@ Demo-05C-1 adds developer-authored TypeScript descriptions for HAPPY_PATH,
 FAILURE_RETRY, LOST_RESPONSE_RECOVERY and SIX_DOMAIN_WORKFLOW. Stable Template
 and Step IDs, positive integer versions, valid local prerequisites and acyclic
 graphs are validated in memory. Definitions and their nested arrays are frozen.
-All templates are PREVIEW: descriptions are available while the new Workflow
-operation UI is not enabled. Availability does not enable execution or change
-the existing Guided/Free Exploration interfaces.
+Static definitions remain PREVIEW. Demo-05C-3C projects response availability from
+the PostgreSQL Gate and provides the explicit Workflow UI described in section 34.
 
 Demo-only GET /demo/workflow-templates returns ordered summaries; GET
 /demo/workflow-templates/:id returns the full definition. Both retain durable
@@ -922,8 +921,8 @@ Demo-05C-3A adds an offline trusted status/cutover CLI under
 extends the same singleton to LEGACY_OPEN → DRAINING → WORKFLOW_OPEN without
 resetting it. New Sessions accept either open state; new Legacy Scenarios accept
 only LEGACY_OPEN. Existing Scenario replay and Guided recovery remain unchanged.
-Old drain rejects WORKFLOW_OPEN. Templates remain PREVIEW; no Workflow UI/runner
-is activated.
+Old drain rejects WORKFLOW_OPEN. The 3A slice kept Templates PREVIEW; section 34
+adds Gate-derived UI availability. No Workflow runner is activated.
 
 One transaction locks Gate, configuration and owned-data tables in explicit order,
 verifies quiescence predicates and the exact nine-Type legacy catalog, preserves
@@ -968,3 +967,34 @@ Step IDs are retained with additive prerequisite/other-Job steps. No historical
 catalog store, progress, runner, UI activation, new API or schema is introduced.
 Legacy Guided regressions retain separate Legacy fixtures. See
 [scope and test evidence](tasks/demo-05c3b-six-domain-workflow-verification.md).
+
+## 34. Workflow Explorer and Browser Recovery
+
+Demo-05C-3C adds `admissionState` to the existing authenticated catalog list.
+Each list/detail response reads Gate from PostgreSQL: LEGACY_OPEN/DRAINING means
+PREVIEW and WORKFLOW_OPEN means AVAILABLE. Missing/unreadable Gate fails closed
+with sanitized 503. Static v2 definitions, Gate transitions and mutation admission
+transactions are unchanged. These GETs retain Cookie/Same-Origin/Parallel/Reset
+security and allocate no business state or Fake. Separate reads are observations,
+not a single cross-request snapshot.
+
+The browser starts neutrally without a Session. After authentication it chooses
+Guided in LEGACY_OPEN, existing Guided only in DRAINING, or Workflow Explorer in
+WORKFLOW_OPEN. Old Guided URLs redirect safely in Workflow mode without Create.
+Availability failures disable mode operations. Free Exploration and Workflow share
+the existing owner-scoped resource graph and add no mode lock. Existing Guided
+ledger and recovery remain on their supported Legacy configuration.
+
+Template/Step/Operation/Domain/prerequisite/expected-result data comes from Backend.
+The UI renders explicit individual Job actions; users select Dataset versions,
+not an assumed first/latest version. URL bindings are non-secret navigation hints
+validated against the freshly read current Session/domain/year/period. Complete
+paginated Dataset/Job/Attempt reads drive current evidence; the UI explicitly
+disclaims cross-page atomicity and never persists completed Workflow steps.
+Fake success is not durable completion, DISPATCHING is unknown and only Dataset
+PUBLISHED means publication. Retry targets one failed Job; lost ACK Recovery calls
+existing Run for the original Job. Network errors refresh by GET without retrying
+POST. Reload and returns from Free Exploration reconstruct verified state. Reset/
+401 clear caches/selections; Cookie/token/Fake internals are never stored by UI.
+Browser recovery does not claim Fake durability across Backend restart. See
+[contracts, deployment boundaries and evidence](tasks/demo-05c3c-workflow-ui.md).

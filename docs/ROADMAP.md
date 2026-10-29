@@ -162,8 +162,9 @@ Configuration Cutover capability under
 [ADR-0018](adr/0018-demo-workflow-configuration-cutover.md). It atomically versions CAPEX configuration and transitions drained
 admission to WORKFLOW_OPEN; it performs no actual production cutover. Old-session
 quiescence/offline verification, compatible images and backup/rollback review
-remain operator requirements. Templates are still PREVIEW and no Workflow UI or
-runner is enabled. See [scope/runbook/evidence](tasks/demo-05c3a-configuration-cutover.md).
+remain operator requirements. That slice retained PREVIEW and no Workflow UI;
+3C below adds Gate-derived UI availability. No runner is enabled. See
+[scope/runbook/evidence](tasks/demo-05c3a-configuration-cutover.md).
 
 Demo-05C-3B adds real PostgreSQL verification of the six-domain, ten-Job Workflow
 using existing Demo APIs after the actual fixture drain/cutover operators. It
@@ -173,7 +174,16 @@ static Templates advance to v2/PREVIEW and describe the post-cutover dependencie
 and complete Job lists. Legacy Guided fixtures remain separate. No Core, Gate,
 cutover, schema, Frontend or production configuration changes; Workflow UI/runner
 remain deferred. See [scope and evidence](tasks/demo-05c3b-six-domain-workflow-verification.md).
-Implementation awaits System Owner Review.
+Demo-05C-3B is merged via PR #41 at `4c0db75`.
+
+Demo-05C-3C implements Workflow Explorer with Backend Gate-derived availability,
+explicit individual Job operations, verified Dataset-version selection and GET-only
+browser recovery. WORKFLOW_OPEN retires Legacy Create UI and redirects old Guided
+links; LEGACY_OPEN and existing DRAINING Guided sessions retain supported behavior.
+All resource state comes from existing paginated Demo APIs. No Core/Gate/cutover/
+ledger/reset/Fake semantics, workflow engine or progress schema changes. Actual
+production cutover remains an offline Owner operation. See
+[scope and verification](tasks/demo-05c3c-workflow-ui.md). Await System Owner Review.
 
 ## Deferred until a concrete requirement
 

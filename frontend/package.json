@@ -11,7 +11,8 @@
     "build": "tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "smoke": "tsx scripts/browser-smoke.ts"
+    "smoke": "tsx scripts/browser-smoke.ts",
+    "smoke:workflow": "tsx --test scripts/workflow-browser-smoke.ts"
   },
   "dependencies": {
     "react": "19.3.1",
