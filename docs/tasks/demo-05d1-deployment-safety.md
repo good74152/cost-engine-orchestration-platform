@@ -117,6 +117,10 @@ restart-policy observations. Database resumes; Backend/Web/unapproved Web remain
 off. No host socket, published daemon port, host-engine restart or production data
 is involved. Real PostgreSQL/Backend behavior is verified by the main fixture and
 Demo-04 regression. Cleanup uses only validated owned projects/volumes/temp paths.
+The outer disposable daemon has a 60-second graceful stop budget, longer than
+its inner dockerd's 30-second shutdown budget. This prevents the fixture's restart
+from force-killing dockerd during inner shutdown; readiness failure retains private
+fixture diagnostics. Production restart policies and shutdown behavior are unchanged.
 
 Executed locally on 2026-10-30 (Node 24, PostgreSQL 18, Docker Linux containers):
 

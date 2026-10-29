@@ -170,13 +170,16 @@ test('Demo-05D-1 real Docker: staged startup, explicit approval, offline operato
   await t.test('real isolated Docker daemon restart cannot auto-activate Web or Backend',async()=>{
    const daemon=id+'_daemon',volume=id+'_daemon_data';await docker(['volume','create',volume]);
    try{
-    await docker(['run','-d','--privileged','--name',daemon,'--env','DOCKER_TLS_CERTDIR=','--volume',volume+':/var/lib/docker','docker:28-dind','--storage-driver=vfs']);
+    // The outer daemon must allow dockerd to finish its inner-container shutdown.
+    // A short outer stop timeout can kill it before its own shutdown budget ends.
+    await docker(['run','-d','--privileged','--stop-timeout','60','--name',daemon,'--env','DOCKER_TLS_CERTDIR=','--volume',volume+':/var/lib/docker','docker:28-dind','--storage-driver=vfs','--shutdown-timeout=30']);
     const inner=(...args:string[])=>docker(['exec',daemon,'docker',...args]);
-    const wait=async()=>{const deadline=Date.now()+60000;for(;;){const r=await docker(['exec',daemon,'docker','info','--format','{{.ServerVersion}}'],false);if(r.code===0)return;assert.ok(Date.now()<deadline,'Owned daemon did not become ready');await setImmediate();}};
+    const wait=async()=>{const deadline=Date.now()+60000;for(;;){const r=await docker(['exec',daemon,'docker','info','--format','{{.ServerVersion}}'],false);if(r.code===0)return;
+     if(Date.now()>=deadline){const logs=await docker(['logs','--tail','60',daemon],false);assert.fail(safe('Owned daemon did not become ready: '+r.err+logs.out+logs.err));}await setImmediate();}};
     await wait();await inner('pull','busybox:1.37');
     for(const [name,restart]of [['database','unless-stopped'],['backend','no'],['web','no']])await inner('run','-d','--name',name!,'--restart',restart!,'busybox:1.37','sleep','3600');
     await inner('stop','web');await inner('create','--name','unapproved-web','--restart','no','busybox:1.37','sleep','3600');
-    await docker(['restart',daemon]);await wait();
+    await docker(['restart','--time','60',daemon]);await wait();
     const observations=JSON.parse((await inner('inspect','database','backend','web','unapproved-web')).out);
     const deadline=Date.now()+15000;while(JSON.parse((await inner('inspect','database')).out)[0].State.Running!==true){assert.ok(Date.now()<deadline);await setImmediate();}
     for(const c of observations.filter((c:{Name:string})=>c.Name!=='/database'))assert.equal(c.State.Running,false,c.Name);
