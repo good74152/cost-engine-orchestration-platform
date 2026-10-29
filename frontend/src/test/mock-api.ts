@@ -1,5 +1,5 @@
 import type {Session,Scenario,ScenarioType,DatasetDetail,Job,Attempt,StepReply,Pending,AdmissionState} from '../api/types';
-import {getWorkflowTemplate,listWorkflowTemplates} from '../../../src/modules/workflow-template/workflow-template.catalog';
+import {workflowFixtureDetail,workflowFixtureList} from './workflow-template-fixture';
 export const id=(n:number)=>'10000000-0000-4000-8000-'+String(n).padStart(12,'0');
 const time='2026-10-27T01:00:00.000Z';
 export const session:Session={sessionId:id(1),companyCode:'DEMO_000000000000001',expiresAt:'2099-10-27T05:00:00.000Z',status:'ACTIVE'};
@@ -53,8 +53,8 @@ export class MockApi {
   if(path==='/demo/sessions'&&method==='POST'){this.active=true;return json(session,201);}
   if(!this.active)return fail('DEMO_SESSION_UNAVAILABLE',401);
   if(path==='/demo/sessions/current')return json(session);
-  if(path==='/demo/workflow-templates')return json({admissionState:this.admissionState,templates:listWorkflowTemplates().map(t=>({...t,availability:this.admissionState==='WORKFLOW_OPEN'?'AVAILABLE':'PREVIEW'}))});
-  if(path.startsWith('/demo/workflow-templates/')){const t=getWorkflowTemplate(decodeURIComponent(path.split('/')[3]!));return t?json({...t,availability:this.admissionState==='WORKFLOW_OPEN'?'AVAILABLE':'PREVIEW'}):fail('DEMO_RESOURCE_UNAVAILABLE',404);}
+  if(path==='/demo/workflow-templates')return json({admissionState:this.admissionState,templates:workflowFixtureList().map(t=>({...t,availability:this.admissionState==='WORKFLOW_OPEN'?'AVAILABLE':'PREVIEW'}))});
+  if(path.startsWith('/demo/workflow-templates/')){const t=workflowFixtureDetail(decodeURIComponent(path.split('/')[3]!));return t?json({...t,availability:this.admissionState==='WORKFLOW_OPEN'?'AVAILABLE':'PREVIEW'}):fail('DEMO_RESOURCE_UNAVAILABLE',404);}
   if(path==='/demo/sessions/reset'){
    if(this.resetFailure)return fail(this.resetFailure,this.resetFailure==='DEMO_RESET_FAILED'?500:503);
    this.active=false;this.scenario=null;this.pending=null;this.datasets=[];this.jobs={};this.attempts={};return new Response(null,{status:204});

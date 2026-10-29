@@ -177,3 +177,47 @@ Guided ledger, Fake semantics, ownership/reset protocol or historical migration 
 changed. No known implementation blocker remains. Review/remote CI and actual
 offline deployment remain separate Owner gates; this task performs no production
 cutover or automatic merge.
+
+## PR #42 production Docker build correction
+
+The first CI run (`40896523488`, head `c1ac3df`) failed at Dockerfile:35 during
+the production Web image build. `frontend/src/test/mock-api.ts` imported the
+Backend catalog directly. A full checkout made local Typecheck/build succeed,
+but the unchanged frontend-build stage correctly copies only `frontend/`.
+The TypeScript compilation therefore could not resolve the Backend source.
+
+Replace that import with `frontend/src/test/workflow-template-fixture.ts`, using
+only Frontend API DTO types and test data. It retains all four stable v2 Template
+IDs, complete valid prerequisite graphs, retry/recovery Step IDs and six-domain
+edges. Test descriptions are intentionally independent of production wording.
+The existing mock still projects PREVIEW for LEGACY_OPEN/DRAINING and AVAILABLE
+for WORKFLOW_OPEN. Three additional contract cases check all four list/detail
+responses, versions, step counts, uniqueness and acyclic prerequisites in each
+admission state. All original 62 Frontend tests remain.
+
+Frontend source/test compilation has no Backend source import. Browser integration
+harnesses under `frontend/scripts/` intentionally start the real Backend from the
+root test checkout; they do not enter the Frontend source compilation or bundle.
+No production Catalog, API contract, Core logic, Dockerfile, deployment architecture,
+TypeScript configuration, dependency or existing test was changed or excluded.
+
+Executed correction verification (2026-10-29, Asia/Taipei):
+
+| Required check | Result |
+|---|---|
+| Frontend Typecheck | PASS |
+| Frontend production build | PASS |
+| Frontend unit tests | 65 PASS (62 retained + 3 fixture contract cases) |
+| `docker build --target web` | PASS, unchanged frontend-only build stage |
+| Demo-04 Container Integration | 15 PASS, including all production images, HTTPS/UI, restart/backup/restore/cutover |
+| Legacy Chromium smoke | 10 PASS, independent Legacy database |
+| Workflow Chromium smoke | 8 PASS, real migrated/seeded/drained/cutover database |
+| Demo-05C-3C strict typecheck | PASS |
+
+Correction gates total 98 passing tests, no failures/skips/cancellations/TODOs.
+Workflow smoke again confirms six published Domains/ten Jobs, 320 cursor reads,
+zero Legacy Create, reload with zero POST and recovery preserving one Attempt.
+Owned browser databases report zero remaining backends and normal DROP. Container
+project `demo04_test_1d16aa6d3839` removes its disposable volumes. The separate
+test service contained only maintenance `postgres` before cleanup. Updated remote
+CI results are recorded on this same PR; no new PR or merge is created.
