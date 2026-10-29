@@ -51,7 +51,7 @@ test('Demo-05A: explicit six-domain configuration and unchanged Demo/Core workfl
       import('./seed-demo-six-domain-configuration.js'),import('./seed-demo-guided-configuration.js')]);
     db=pool; pool.on('connect',c=>ends.push(new Promise<void>(done=>c.once('end',done))));
     assert.equal((await pool.query('SELECT current_database() AS name')).rows[0].name,name);
-    assert.equal((await pool.query('SELECT count(*)::int AS n FROM pgmigrations')).rows[0].n,13);
+    assert.equal((await pool.query('SELECT count(*)::int AS n FROM pgmigrations')).rows[0].n,14);
     const runtime = new DemoRuntime(pool,'test',{}, {log(){}});
     app=await buildApp({appMode:'demo',demoRuntime:runtime,nodeEnvironment:'test',logger:false,demoSession:{origin:'https://demo.test'}});
     const post=async(url:string,s?:Session,payload:unknown={}):Promise<Response>=>app!.inject({method:'POST',url,payload:JSON.stringify(payload),
@@ -262,7 +262,7 @@ test('Demo-05A: explicit six-domain configuration and unchanged Demo/Core workfl
       const row=(await pool.query('SELECT status,completed_step FROM demo_scenario_instances WHERE id=$1',[id])).rows[0];
       assert.deepEqual(row,{status:'COMPLETED',completed_step:type==='FAILURE_RETRY'?9:6});
     });
-    console.log('DEMO_05A_VERIFIED',JSON.stringify({database:name,migrations:13,domains:6,activeTypes:9,postgres:(await pool.query('SHOW server_version')).rows[0].server_version}));
+    console.log('DEMO_05A_VERIFIED',JSON.stringify({database:name,migrations:14,domains:6,activeTypes:9,postgres:(await pool.query('SHOW server_version')).rows[0].server_version}));
   } finally {
     try {await app?.close();if(db){await db.end();await Promise.all(ends);}}
     finally {

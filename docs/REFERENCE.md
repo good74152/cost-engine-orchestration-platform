@@ -401,6 +401,33 @@ Focused checks: `npm run test:demo-05c1:unit` (no PostgreSQL),
 
 ## Local development
 
+### Demo-05C-3A configuration cutover operator
+
+`npm run demo:cutover -- status|cutover` accepts exactly one explicit private
+DEMO_CUTOVER_DATABASE_URL or DEMO_CUTOVER_DATABASE_URL_FILE, with no DATABASE_URL
+or admission/seed fallback. Production operator commands are cutover-status and
+cutover. Status returns state/updatedAt/configuration; cutover adds outcome
+(APPLIED/ALREADY_APPLIED) and confirmation (COMMITTED/DURABLE_RELOAD). Conflicts,
+unavailable truth, NOT_APPLIED and UNKNOWN exit nonzero with sanitized codes.
+
+The Gate's new terminal WORKFLOW_OPEN permits Session Create but rejects first
+Legacy Scenario insertion with 503 DEMO_LEGACY_ADMISSION_CLOSED. Existing Scenario
+replay retains 200/409 type semantics. Old drain rejects WORKFLOW_OPEN with
+DEMO_LEGACY_DRAIN_CLOSED. Read-only admission status recognizes all three states.
+Startup accepts WORKFLOW_OPEN only with exact target configuration. The complete
+dedicated catalog is strict: nine legacy or ten target Types with exact DAGs,
+activation, counters, published versions and dependencies, including no extras.
+
+Cutover requires DRAINING, no active Session/Scenario/ledger/session-owned graph,
+and exact legacy settings. It preserves Definition v1 and all other Domains,
+inserts only the specified CAPEX changes and opens Workflow admission atomically.
+Repeated target validation performs no INSERT/UPDATE. No public management API,
+cleanup, Template activation, Frontend UI or financial execution is added.
+Follow the [offline/failed-deployment runbook and error contract](tasks/demo-05c3a-configuration-cutover.md)
+and [ADR-0018](adr/0018-demo-workflow-configuration-cutover.md). SQL counts do not
+prove the Backend/requests/writers are stopped. Down cannot undo a completed cutover.
+Focused checks: test:demo-05c3a:typecheck and test:demo-05c3a against disposable PG.
+
 ### Demo-05C-2 trusted admission operator
 
 `npm run demo:admission -- status` and `npm run demo:admission -- drain` require
@@ -408,7 +435,8 @@ exactly one private `DEMO_ADMISSION_DATABASE_URL` or
 `DEMO_ADMISSION_DATABASE_URL_FILE`, naming the intended Demo database. There is
 no fallback to DATABASE_URL, DEMO_SEED_DATABASE_URL or mounted runtime secrets.
 Status returns `{state,updatedAt}`. Drain adds `confirmation` (`COMMITTED` or
-`DURABLE_RELOAD`). Only LEGACY_OPEN → DRAINING is supported. No HTTP admin route,
+`DURABLE_RELOAD`). Legacy drain supports LEGACY_OPEN → DRAINING only and rejects
+WORKFLOW_OPEN (the later cutover state described above). No HTTP admin route,
 reverse command or CAPEX configuration change is added.
 
 The production operator supports `admission-status` / `admission-drain`; explicitly
@@ -417,7 +445,7 @@ the existing Compose database secret as the admission target. The command does
 not infer that target automatically. Never print the private URL/token.
 
 New bootstrap/Scenario insertion returns sanitized 503 `DEMO_ADMISSION_DRAINING`
-after drain, or 503 `DEMO_ADMISSION_UNAVAILABLE` if the Gate is absent/unreadable.
+while DRAINING, or 503 `DEMO_ADMISSION_UNAVAILABLE` if the Gate is absent/unreadable.
 Unconfirmed Session COMMIT is 503 `DEMO_SESSION_CREATE_OUTCOME_UNKNOWN` without a
 Cookie. Existing valid-cookie POST /demo/sessions replay returns 200; Scenario
 same-type replay remains 200, another type remains 409, and its COMMIT uncertainty

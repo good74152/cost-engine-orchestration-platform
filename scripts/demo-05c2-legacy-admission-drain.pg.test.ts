@@ -135,17 +135,17 @@ test('Demo-05C-2: PostgreSQL admission drain, durable recovery and existing user
       for (const sql of ["INSERT INTO demo_admission_control(id) VALUES(2)", "INSERT INTO demo_admission_control(id) VALUES(1)",
         "UPDATE demo_admission_control SET state='invalid'", 'DELETE FROM demo_admission_control', 'TRUNCATE demo_admission_control']) await assert.rejects(f.db.query(sql));
       const s = await f.newSession();
-      await assert.rejects(migrate(connection(f.name), 'down', 1));
+      await assert.rejects(migrate(connection(f.name), 'down', 2));
       assert.equal((await f.post('/demo/scenarios', s.cookie, { scenarioType: 'HAPPY_PATH' })).statusCode, 201);
       await f.runtime.sessions.revoke(s.context.sessionId);
-      await assert.rejects(migrate(connection(f.name), 'down', 1));
+      await assert.rejects(migrate(connection(f.name), 'down', 2));
       await f.db.query('DELETE FROM demo_scenario_instances WHERE session_id=$1', [s.context.sessionId]);
-      await migrate(connection(f.name), 'down', 1);
+      await migrate(connection(f.name), 'down', 2);
       assert.equal((await f.db.query("SELECT to_regclass('demo_admission_control') AS name")).rows[0].name, null);
       await migrate(connection(f.name));
       const drained = await f.operator.drain(); assert.equal(drained.state, 'DRAINING'); assert.ok(Date.parse(drained.updatedAt) >= Date.parse(open.updatedAt));
       await assert.rejects(f.db.query("UPDATE demo_admission_control SET state='LEGACY_OPEN'"));
-      await assert.rejects(migrate(connection(f.name), 'down', 1));
+      await assert.rejects(migrate(connection(f.name), 'down', 2));
       assert.equal((await f.operator.status()).state, 'DRAINING');
     });
 
@@ -331,7 +331,7 @@ test('Demo-05C-2: PostgreSQL admission drain, durable recovery and existing user
       for (const guided of guides) assert.equal((await f.post('/demo/sessions/reset', guided.cookie)).statusCode, 204);
       error(await f.post('/demo/sessions'), 503, 'DEMO_ADMISSION_DRAINING');
     });
-    console.info('DEMO_05C2_VERIFIED', JSON.stringify({ databases: names.length, migrations: 13, rowLockBarriers: true, noReopen: true }));
+    console.info('DEMO_05C2_VERIFIED', JSON.stringify({ databases: names.length, migrations: 14, rowLockBarriers: true, noReopen: true }));
   } finally {
     for (const app of apps) await app.close();
     for (const db of pools) await db.end();

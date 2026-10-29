@@ -11,6 +11,7 @@ COPY migrations ./migrations
 COPY scripts/seed-demo-guided-configuration.ts ./scripts/
 COPY scripts/seed-demo-six-domain-configuration.ts ./scripts/
 COPY scripts/demo-admission.ts ./scripts/
+COPY scripts/demo-cutover.ts ./scripts/
 COPY deploy/operator.ts ./deploy/
 USER node
 ENTRYPOINT ["./node_modules/.bin/tsx", "deploy/operator.ts"]

@@ -913,3 +913,31 @@ closed across update, migration and confirmed drain. An unaware rollback binary
 cannot safely reopen traffic. No active-count query alone proves quiescence or
 authorizes CAPEX cutover; Demo-05C-3 remains separate. See the
 [deployment runbook and verification](tasks/demo-05c2-legacy-admission-drain.md).
+
+## 32. Atomic Demo Workflow Configuration Cutover
+
+Demo-05C-3A adds an offline trusted status/cutover CLI under
+[ADR-0018](adr/0018-demo-workflow-configuration-cutover.md). A forward migration
+extends the same singleton to LEGACY_OPEN → DRAINING → WORKFLOW_OPEN without
+resetting it. New Sessions accept either open state; new Legacy Scenarios accept
+only LEGACY_OPEN. Existing Scenario replay and Guided recovery remain unchanged.
+Old drain rejects WORKFLOW_OPEN. Templates remain PREVIEW; no Workflow UI/runner
+is activated.
+
+One transaction locks Gate, configuration and owned-data tables in explicit order,
+verifies quiescence predicates and the exact nine-Type legacy catalog, preserves
+CAPEX/DEMO_GUIDED_SUMMARY published v1, inserts its FAB_COST-dependent published v2,
+and adds DEMO_CAPEX_TABLE_Y with published FAB_COST-dependent v1. Only after exact
+ten-Type target verification does it set WORKFLOW_OPEN and COMMIT. Other Domains
+are untouched. Startup validates the target in WORKFLOW_OPEN and retains legacy
+compatibility checks otherwise. Core creation/snapshots/Run/Retry/Reconcile do not change.
+
+WORKFLOW_OPEN+exact target is read-only ALREADY_APPLIED; inconsistent states fail
+closed without repair. Ambiguous COMMIT destroys the suspect socket and acquires
+the same locks on an independent connection before checking all durable settings.
+Only target+WORKFLOW_OPEN confirms success, legacy+DRAINING confirms NOT_APPLIED;
+unavailable truth remains UNKNOWN. Down refuses completed/partial target changes.
+Backend shutdown, finished requests, no external writers and reviewed backup/
+rollback are operator-proven prerequisites; SQL counts cannot establish them.
+No automatic cleanup or production cutover is performed. See
+[operator/runbook/verification](tasks/demo-05c3a-configuration-cutover.md).
