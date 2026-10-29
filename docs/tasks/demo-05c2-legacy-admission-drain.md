@@ -99,7 +99,7 @@ teardown now waits, within its existing bound, for PostgreSQL to report zero
 backends after client shutdown; it still uses normal DROP and keeps every Core
 concurrency/lifecycle assertion.
 
-Final local results: **PASS — 648 tests, 0 failed/skipped/cancelled/TODO**,
+Initial implementation local results: **PASS — 648 tests, 0 failed/skipped/cancelled/TODO**,
 counting each suite once, including Node test parent counters. Executed on Windows,
 Node v24.18.0 / PostgreSQL 18.6. Every final command exited 0:
 
@@ -150,3 +150,49 @@ retain all original business/security/concurrency assertions and pass.
 No known implementation blocker remains. First-deployment ingress/quiescence
 verification and System Owner Review are still required; this PR performs no
 live deployment, CAPEX cutover, reopening or merge.
+
+## 2026-10-29 review fix — bounded Scenario Gate wait
+
+Source: `7b01a9e7be4e2a35fb5c9d8d28d1e366480b2a29`, on the existing PR #39
+branch. Scenario Create captures its current lock_timeout after BEGIN, installs
+SET LOCAL lock_timeout='3s' before Gate FOR SHARE, and restores the exact captured
+value with transaction-local set_config immediately after successful acquisition.
+Session/configuration locks retain their pre-existing timeout policy; resetting
+to an assumed zero/default would incorrectly overwrite deployment settings.
+Gate timeout uses the unchanged rollback path and sanitized 503
+DEMO_ADMISSION_UNAVAILABLE. No retry loop, state-machine, ledger, recovery,
+Coordinator, Reset, migration or other production-module changes are included.
+
+Three new real-PostgreSQL cases cover default zero and custom 750ms policies:
+an operator transaction holds Gate FOR UPDATE, observed pg_blocking_pids proves
+the Scenario request waits on that blocker, and the request returns 503 while
+the blocker still owns the Gate. A bounded watchdog prevents an unbounded test;
+no sleep is used as the synchronization proof. The database backend is idle with
+no transaction after the response, no Scenario exists, and the reused connection
+retains its original setting. Releasing the Gate allows creation and identical
+replay under LEGACY_OPEN; DRAINING still rejects a new Scenario and permits the
+existing one. Successful commit hooks observe exact restored settings. A separate
+Session-row blocker proves that a subsequent lock still times out under the
+original 750ms policy and keeps its prior sanitized error handling.
+
+All requested final commands exited 0 on Node v24.18.0 / PostgreSQL 18.6:
+
+| Command (`npm.cmd run ...`) | Result |
+|---|---|
+| build | PASS |
+| test:demo-05c2:typecheck | PASS (strict) |
+| test:demo-05c2 | 22 passed |
+| test:demo-02b | 26 passed |
+| test:demo-02c | 27 passed |
+| test:demo-02d | 25 passed |
+| test:demo-02e | 37 passed |
+| test:milestone | 259 passed, including CON-01/02 and isolated raw ingestion |
+
+Current review-fix rerun total: **396 passed, 0 failed/skipped/cancelled/TODO**.
+The earlier 648-test implementation run above is historical evidence, not a claim
+that its broader UI/container suites were rerun for this bounded fix.
+The expanded admission suite created/migrated/dropped 21 owned databases, with
+zero backends and no FORCE. After all suites, only the maintenance DB remained;
+the disposable PostgreSQL container/anonymous volume and private URL file were
+removed. Whitespace checks pass. Update PR #39 directly; no new PR, merge or
+deployment. Remote CI results remain separate from these local results.
