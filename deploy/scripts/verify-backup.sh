@@ -75,7 +75,9 @@ container_id=$(docker_control create --name "$container" --label "cost-engine.re
 assert_container || fail 'Restore isolation rejected before startup'
 docker_control start "$container_id" >/dev/null 2>&1 || fail 'Restore PostgreSQL startup failed'
 remaining=60
-until docker_control exec "$container_id" pg_isready -U restore_owner -d "$database" >/dev/null 2>&1; do
+# The entrypoint's temporary init server exposes only a Unix socket. Wait for
+# final TCP readiness so it cannot be mistaken for the fully initialized DB.
+until docker_control exec "$container_id" pg_isready -h 127.0.0.1 -U restore_owner -d "$database" >/dev/null 2>&1; do
   remaining=$((remaining-1)); [ "$remaining" -gt 0 ] || fail 'Restore PostgreSQL is unavailable'; sleep 1
 done
 assert_volume && assert_container || fail 'Restore isolation rejected before pg_restore'
