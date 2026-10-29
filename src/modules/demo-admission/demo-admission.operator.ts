@@ -36,6 +36,7 @@ export class DemoAdmissionOperator {
       await client.query("SET LOCAL lock_timeout='3s'");
       await client.query("SET LOCAL statement_timeout='5s'");
       const previous = await lockDemoAdmission(client, true);
+      if (previous.state === 'WORKFLOW_OPEN') throw new DemoSessionError('DEMO_LEGACY_DRAIN_CLOSED', 503, 'Legacy drain is unavailable after Workflow cutover');
       if (previous.state === 'LEGACY_OPEN') await client.query("UPDATE demo_admission_control SET state='DRAINING' WHERE id=1");
       const state = await lockDemoAdmission(client, true);
       await this.options.beforeCommit?.();
@@ -43,10 +44,13 @@ export class DemoAdmissionOperator {
       if (this.options.commit) await this.options.commit(client); else await client.query('COMMIT');
       client.release(); client = undefined;
       return { ...state, confirmation: 'COMMITTED' };
-    } catch {
+    } catch (error) {
       // Closing the suspect socket is essential before independent confirmation.
       client?.release(true); client = undefined;
-      if (!commitSent) throw admissionUnavailable();
+      if (!commitSent) {
+        if (error instanceof DemoSessionError) throw error;
+        throw admissionUnavailable();
+      }
       return this.confirmDrain();
     } finally { client?.release(true); }
   }
@@ -65,9 +69,10 @@ export class DemoAdmissionOperator {
       const state = await lockDemoAdmission(recovery, true);
       await recovery.query('COMMIT');
       if (state.state === 'LEGACY_OPEN') throw new DemoSessionError('DEMO_ADMISSION_DRAIN_NOT_APPLIED', 503, 'Durable Demo admission remains open; retry drain');
+      if (state.state !== 'DRAINING') throw new DemoSessionError('DEMO_LEGACY_DRAIN_CLOSED', 503, 'Legacy drain is unavailable after Workflow cutover');
       return { ...state, confirmation: 'DURABLE_RELOAD' };
     } catch (error) {
-      if (error instanceof DemoSessionError && error.code === 'DEMO_ADMISSION_DRAIN_NOT_APPLIED') throw error;
+      if (error instanceof DemoSessionError && ['DEMO_ADMISSION_DRAIN_NOT_APPLIED','DEMO_LEGACY_DRAIN_CLOSED'].includes(error.code)) throw error;
       throw new DemoSessionError('DEMO_ADMISSION_DRAIN_OUTCOME_UNKNOWN', 503, 'Demo drain outcome unavailable; confirm status on a fresh connection');
     } finally { await recovery?.end().catch(() => {}); }
   }

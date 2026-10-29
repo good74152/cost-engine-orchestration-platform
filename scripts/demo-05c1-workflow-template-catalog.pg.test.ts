@@ -47,7 +47,7 @@ test('Demo-05C-1: protected read-only catalog and existing session barriers', { 
     ]);
     db = pool; pool.on('connect', client => ends.push(new Promise<void>(done => client.once('end', done))));
     assert.equal((await pool.query('SELECT current_database() AS name')).rows[0].name, name);
-    assert.equal((await pool.query('SELECT count(*)::int AS n FROM pgmigrations')).rows[0].n, 13);
+    assert.equal((await pool.query('SELECT count(*)::int AS n FROM pgmigrations')).rows[0].n, 14);
     const runtime = new DemoRuntime(pool, 'test', {}, { log() {} });
     app = await buildApp({ appMode: 'demo', demoRuntime: runtime, nodeEnvironment: 'test', logger: false, demoSession: { origin: 'https://demo.test' } });
     const post = (url: string, s?: Session, payload: unknown = {}) => app!.inject({ method: 'POST', url, payload: JSON.stringify(payload),
@@ -200,7 +200,7 @@ test('Demo-05C-1: protected read-only catalog and existing session barriers', { 
       for (const path of paths) assert.equal((await get(path, s)).statusCode, 200);
       assert.equal(runtime.coordinator.activeSessionCount, 0);
     });
-    console.info('DEMO_05C1_EVIDENCE', JSON.stringify({ database: name, migrations: 13, domainStateUnchanged: true, parallelLimit: 4 }));
+    console.info('DEMO_05C1_EVIDENCE', JSON.stringify({ database: name, migrations: 14, domainStateUnchanged: true, parallelLimit: 4 }));
   } finally {
     try { await app?.close(); if (db) { await db.end(); await Promise.all(ends); } }
     finally {

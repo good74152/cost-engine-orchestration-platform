@@ -209,7 +209,9 @@ failures. Logs contain event names/durable IDs/counts, not request headers or SQ
 - Confirm one backend, no external writers, no public DB/Node bindings.
 - Verify secrets/permissions, origin, DNS/ACME and off-host restore-tested backup.
 - Stop admissions/backend before explicit migration/seed; start and check readiness.
-- Exercise Guided flows, Free Exploration, Resource Explorer, Reset and restart.
+- In LEGACY_OPEN exercise Guided flows, Free Exploration, Resource Explorer, Reset and restart.
+- In WORKFLOW_OPEN verify Legacy Scenario admission is denied, and explicitly
+  publish FAB_COST before running both CAPEX Jobs; verify reads, Reset and restart.
 - Record actual public VPS/DNS/TLS evidence separately; no automatic deploy on merge.
 
 CI uses disposable PostgreSQL and isolated local HTTPS containers, never public
@@ -228,3 +230,18 @@ verified replay-aware entrypoint, preserve existing operations and Backend cooki
 validation, confirm actual quiescence, then update/migrate and explicitly drain.
 Keep admission closed when rolling back to a Gate-unaware binary. Configuration
 cutover is deferred to Demo-05C-3 and cannot be authorized by a SQL count alone.
+
+## Workflow configuration cutover capability
+
+Demo-05C-3A provides status/cutover only; applying its migration does not cut over.
+Use the [offline operator and failed-deployment runbook](tasks/demo-05c3a-configuration-cutover.md#offline-runbook-and-failed-deployment-recovery).
+Confirm DRAINING, stop Backend/ingress/requests/writers, resolve retained work and
+review backup/restore before explicitly choosing the intended Demo DB. The new
+operator accepts DEMO_CUTOVER_DATABASE_URL or FILE only; production commands are
+cutover-status/cutover with the explicitly supplied target. No URL fallback.
+
+WORKFLOW_OPEN is irreversible and requires a compatible new Backend with target
+configuration validation. Do not restart an old image, run legacy seeds, auto-down
+or delete v1 to recover a failed deployment. Keep traffic closed, confirm durable
+state and choose a reviewed forward fix/restore. SQL counts do not prove process
+quiescence. No actual public cutover or Workflow UI enablement is included.

@@ -35,6 +35,8 @@ If a decision changes materially, prefer a new ADR that supersedes the old one i
 
 - [ADR-0017 — PostgreSQL Demo Admission Drain](0017-demo-admission-drain.md)
 
+- [ADR-0018 — Atomic Demo Workflow Configuration Cutover](0018-demo-workflow-configuration-cutover.md)
+
 ## Truth Boundary
 
 These ADRs describe the new portfolio architecture. They may be inspired by prior enterprise orchestration experience, but they are not claims that these exact designs, schemas, APIs, or recovery mechanisms were implemented in a former employer's production systems.

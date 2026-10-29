@@ -96,7 +96,7 @@ test('Demo-04 isolated Compose, HTTPS, production UI and PostgreSQL operations',
       await compose('--profile', 'operations', 'run', '--rm', 'operator', 'migrate-up');
       const unseeded = await command([...base, 'run', '--rm', '--no-deps', 'backend'], undefined, true); assert.equal(unseeded.code, 1);
       for (let n = 0; n < 2; n++) await compose('--profile', 'operations', 'run', '--rm', 'operator', 'seed');
-      assert.equal(await sql('SELECT count(*) FROM pgmigrations'), '13');
+      assert.equal(await sql('SELECT count(*) FROM pgmigrations'), '14');
     });
     await t.test('explicit six-domain operator seed is atomic/idempotent and preserves guided CAPEX', async () => {
       const guided = await sql(`SELECT row_to_json(t) FROM calculation_types t WHERE domain='CAPEX'`);
@@ -231,6 +231,30 @@ test('Demo-04 isolated Compose, HTTPS, production UI and PostgreSQL operations',
       assert.equal(blocked.status, 503); assert.equal(JSON.parse(blocked.body).code, 'DEMO_ADMISSION_DRAINING');
       assert.equal(blocked.headers['set-cookie'], undefined);
       assert.equal((await readiness()).status, 200);
+    });
+    await t.test('offline cutover operator preserves v1, opens Workflow admission and restarts the compatible Backend', async () => {
+      await compose('stop', 'backend');
+      // Explicit fixture maintenance is separate from cutover. The cutover command
+      // itself must refuse retained work and must never delete it automatically.
+      await command([...base, '--profile', 'operations', 'run', '--rm', '--no-deps', '--entrypoint', 'node', 'operator', '--import', 'tsx', '-e',
+        "import {loadDeploymentSecrets} from './src/deployment/public-demo-config.ts';loadDeploymentSecrets();const {pool}=await import('./src/db/pool.ts');const {DemoRuntime}=await import('./src/modules/demo-session/demo-runtime.ts');try{const r=await new DemoRuntime(pool).reset.maintainInactiveSessions(1000);if(r.failed||r.pending)throw Error('Fixture cleanup incomplete')}finally{await pool.end()}"]);
+      const legacy = await sql(`SELECT to_jsonb(d) FROM execution_dependency_definition_versions d JOIN calculation_types t ON t.id=d.calculation_type_id
+        WHERE t.domain='CAPEX' AND t.code='DEMO_GUIDED_SUMMARY' AND d.version=1`);
+      const missing = await command([...base, '--profile', 'operations', 'run', '--rm', '--no-deps', 'operator', 'cutover-status'], undefined, true); assert.equal(missing.code, 1);
+      const operate = (operation: string) => compose('--profile', 'operations', 'run', '--rm', '--no-deps',
+        '-e', 'DEMO_CUTOVER_DATABASE_URL_FILE=/run/secrets/database_url', 'operator', operation);
+      assert.equal(JSON.parse((await operate('cutover-status')).out.toString()).state, 'DRAINING');
+      assert.equal(JSON.parse((await operate('cutover')).out.toString()).outcome, 'APPLIED');
+      assert.equal(JSON.parse((await operate('cutover')).out.toString()).outcome, 'ALREADY_APPLIED');
+      assert.equal(await sql('SELECT count(*) FROM calculation_types WHERE is_active'), '10');
+      assert.equal(await sql("SELECT count(*) FROM calculation_types WHERE domain='CAPEX' AND is_active"), '2');
+      assert.equal(await sql(`SELECT to_jsonb(d) FROM execution_dependency_definition_versions d JOIN calculation_types t ON t.id=d.calculation_type_id
+        WHERE t.domain='CAPEX' AND t.code='DEMO_GUIDED_SUMMARY' AND d.version=1`), legacy);
+      await compose('up', '-d', '--wait', 'backend'); assert.equal((await readiness()).status, 200);
+      const s = await https('/demo/sessions', 'POST', undefined, {}); assert.equal(s.status, 201, s.body);
+      const cookie = s.headers['set-cookie']![0]!.split(';')[0]!;
+      const scenario = await https('/demo/scenarios', 'POST', cookie, { scenarioType: 'HAPPY_PATH' });
+      assert.equal(scenario.status, 503); assert.equal(JSON.parse(scenario.body).code, 'DEMO_LEGACY_ADMISSION_CLOSED');
     });
     console.info('DEMO04_CONTAINER_VERIFIED', JSON.stringify({ localHttps: true, publicVps: false, migrations: Number(await sql('SELECT count(*) FROM pgmigrations')), volumePersistence: true, restore: true }));
   } finally {

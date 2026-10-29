@@ -27,7 +27,10 @@ async function main() {
   } else if (operation === 'admission-status' || operation === 'admission-drain') {
     const { runDemoAdmissionCommand } = await import('../scripts/demo-admission.js');
     await runDemoAdmissionCommand(operation === 'admission-status' ? 'status' : 'drain', process.argv.slice(3));
-  } else throw new Error('Choose migrate-up, seed, seed-six-domain, admission-status or admission-drain; automatic down is unsupported');
+  } else if (operation === 'cutover-status' || operation === 'cutover') {
+    const { runDemoCutoverCommand } = await import('../scripts/demo-cutover.js');
+    await runDemoCutoverCommand(operation === 'cutover-status' ? 'status' : 'cutover', process.argv.slice(3));
+  } else throw new Error('Choose migrate-up, seed, seed-six-domain, admission-status, admission-drain, cutover-status or cutover; automatic down is unsupported');
 }
 main().catch(error => {
   console.error(error instanceof DemoSessionError ? `${error.code}: ${error.message}`

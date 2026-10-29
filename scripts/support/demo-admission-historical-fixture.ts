@@ -1,7 +1,7 @@
 import { fileURLToPath } from 'node:url';
 import { runner } from 'node-pg-migrate';
 
-export const admissionMigrationPattern = '1793300000000_demo-admission-control.*';
+export const admissionMigrationPattern = '1793(?:300000000_demo-admission-control|400000000_demo-workflow-admission).*';
 
 /** Historical migration tests keep their original migration inventory/down target.
  * Install the current admission prerequisite using a separate fixture ledger.

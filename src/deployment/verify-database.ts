@@ -1,6 +1,8 @@
 import { readdir } from 'node:fs/promises';
 import type { Pool } from 'pg';
 import { requireGuidedConfiguration } from '../modules/demo-scenario/demo-scenario.repository.js';
+import { lockDemoAdmission } from '../modules/demo-admission/demo-admission.repository.js';
+import { lockCutoverConfiguration, verifyCutoverConfiguration } from '../modules/demo-cutover/demo-cutover.configuration.js';
 
 /** Read-only gate; never migrates, seeds or repairs during HTTP startup. */
 export async function verifyDemoDatabase(db: Pool, migrationsDirectory = 'migrations'): Promise<void> {
@@ -10,6 +12,15 @@ export async function verifyDemoDatabase(db: Pool, migrationsDirectory = 'migrat
   const actual = (await db.query<{ name: string }>('SELECT name FROM pgmigrations ORDER BY name')).rows.map(r => r.name);
   if (!expected.length || JSON.stringify(expected) !== JSON.stringify(actual)) throw new Error('Demo migration inventory mismatch');
   const client = await db.connect();
-  try { await requireGuidedConfiguration(client); }
-  finally { client.release(); }
+  let discard = false;
+  try {
+    await client.query('BEGIN');
+    await client.query("SET LOCAL lock_timeout='3s'");
+    await client.query("SET LOCAL statement_timeout='5s'");
+    const gate = await lockDemoAdmission(client);
+    if (gate.state === 'WORKFLOW_OPEN') { await lockCutoverConfiguration(client, false); await verifyCutoverConfiguration(client, 'WORKFLOW'); }
+    else await requireGuidedConfiguration(client);
+    await client.query('COMMIT');
+  } catch (error) { discard = true; await client.query('ROLLBACK').catch(() => {}); throw error; }
+  finally { client.release(discard); }
 }

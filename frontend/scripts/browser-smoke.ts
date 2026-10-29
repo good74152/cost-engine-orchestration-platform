@@ -35,7 +35,7 @@ test('Demo-03: real Chromium, Vite proxy and unchanged PostgreSQL backend',{time
    import('../../src/db/pool.js'),import('../../src/app.js'),import('../../src/modules/demo-session/demo-runtime.js'),import('../../scripts/seed-demo-guided-configuration.js')]);
   db=pool;pool.on('connect',c=>ends.push(new Promise<void>(r=>c.once('end',r))));
   assert.equal((await pool.query('SELECT current_database() AS name')).rows[0].name,name);
-  assert.equal((await pool.query('SELECT count(*)::int AS n FROM pgmigrations')).rows[0].n,13);
+  assert.equal((await pool.query('SELECT count(*)::int AS n FROM pgmigrations')).rows[0].n,14);
   await seedDemoGuidedConfiguration(pool);
   const runtime=new DemoRuntime(pool,'test',{}, {log(){}});await runtime.reset.startServer();
   app=await buildApp({appMode:'demo',demoRuntime:runtime,nodeEnvironment:'test',logger:false});
@@ -139,7 +139,7 @@ test('Demo-03: real Chromium, Vite proxy and unchanged PostgreSQL backend',{time
    assert.ok(normal.every(m=>m.host===new URL(origin).host&&m.origin===origin&&m.header==='1'&&m.json),'Proxy must preserve normal browser Host/Origin/CSRF headers');
    assert.equal(pageErrors.length,0);assert.ok(await page.evaluate(()=>Object.entries(localStorage).every(([key,value])=>key.startsWith('fcp.step.v1:')&&!/token|cookie|airflowDag|upstreamDatasetVersions/i.test(value))));
   });
-  await context.close();console.log('UI_SMOKE_RUNTIME',JSON.stringify({node:process.version,postgres:(await pool.query('SHOW server_version')).rows[0].server_version,browser:browser.version(),database:name,migrations:13,screenshots}));
+  await context.close();console.log('UI_SMOKE_RUNTIME',JSON.stringify({node:process.version,postgres:(await pool.query('SHOW server_version')).rows[0].server_version,browser:browser.version(),database:name,migrations:14,screenshots}));
  }finally{
   try{await browser?.close();await vite?.close();await app?.close();if(db){await db.end();await Promise.all(ends);}}
   finally{try{if(created){const deadline=Date.now()+5000;let rows=await admin.query('SELECT pid FROM pg_stat_activity WHERE datname=$1',[name]);

@@ -145,18 +145,25 @@ No merge or deployment has been performed.
 Demo-05C-1 is merged via PR #38 (`b59fe8a`). Its four PREVIEW Workflow Templates
 are available through read-only Demo APIs; no Workflow operation UI is enabled.
 
-Demo-05C-2 implements PostgreSQL-backed Legacy admission drain on a separate
-feature branch, pending System Owner Review. The shared Gate covers new Session
+Demo-05C-2 is merged via PR #39 at `04d7e51`. The shared PostgreSQL Gate covers new Session
 and Scenario insertion while preserving established-session work and legitimate
 replays. It introduces no configuration cutover. First installation must wait
 for old-session quiescence without a premature Backend restart; see
 [ADR-0017](adr/0017-demo-admission-drain.md) and the
 [operator/deployment task](tasks/demo-05c2-legacy-admission-drain.md).
 
-Demo-05C-3 CAPEX Configuration Cutover remains unimplemented. It requires a
+Actual production CAPEX Configuration Cutover remains a separate Owner operation. It requires a
 confirmed drain, compatible serving binaries, verification of all queued/in-flight
 work and unknown outcomes, no incompatible retained work or external writers,
 and a reviewed cutover/rollback plan. Active Session count alone is insufficient.
+
+Demo-05C-3A implements the trusted CAPEX Configuration Cutover capability under
+[ADR-0018](adr/0018-demo-workflow-configuration-cutover.md), pending System Owner
+Review. It atomically versions CAPEX configuration and transitions drained
+admission to WORKFLOW_OPEN; it performs no actual production cutover. Old-session
+quiescence/offline verification, compatible images and backup/rollback review
+remain operator requirements. Templates are still PREVIEW and no Workflow UI or
+runner is enabled. See [scope/runbook/evidence](tasks/demo-05c3a-configuration-cutover.md).
 
 ## Deferred until a concrete requirement
 
