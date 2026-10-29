@@ -880,3 +880,36 @@ There is no executor, progress store, operation history, second state machine,
 new schema or start/next endpoint. No accepted architecture decision is replaced;
 this bounded read API follows ADR-0011/0012/0015/0016 without extending their
 execution protocols. See [contract and verification](tasks/demo-05c1-workflow-template-catalog.md).
+
+## 31. PostgreSQL Legacy Admission Drain
+
+Demo-05C-2 adds one durable admission-control row under
+[ADR-0017](adr/0017-demo-admission-drain.md). LEGACY_OPEN → DRAINING is irreversible;
+database constraints/triggers protect the singleton, legal states and transition
+timestamp. Missing or unreadable Gate state fails new admission closed.
+
+New Session creation always uses a transaction, including without capacity limits:
+Gate FOR SHARE → optional capacity table lock/check → allocation → confirmed
+COMMIT → Cookie. Ambiguous COMMIT discards the socket and issues no Cookie.
+Existing valid-cookie bootstrap replay only authenticates, retaining its original
+identity/lifetime. Scenario Create uses Gate FOR SHARE before the Session row lock,
+then reloads durable Scenario state: same-type replay works in DRAINING, another
+type still conflicts, and only an absent Scenario needs LEGACY_OPEN. Existing
+unknown-COMMIT retry/reload rules and Step ledger are unchanged.
+
+The trusted status/drain CLI requires an explicit Demo DB target. Drain locks that
+same row FOR UPDATE through COMMIT; it waits for earlier admissions and prevents
+later inserts. Concurrent/repeated drain preserves the first timestamp. Unknown
+COMMIT is resolved on a genuinely separate connection using the conflicting row
+lock and a fresh durable read, or remains explicitly unknown. No public admin API
+or reopening command exists. Guided/manual work, Reset, expiry/revocation and the
+Parallel/Exclusive coordinator rules do not acquire or change this Gate.
+
+First installation must preserve the old running Backend while new admission is
+stopped at a verified replay-aware entrypoint. Backend authentication, not mere
+Cookie presence, decides whether bootstrap is a valid replay. Startup revocation
+means updating/restarting while existing Sessions remain is unsafe. Keep ingress
+closed across update, migration and confirmed drain. An unaware rollback binary
+cannot safely reopen traffic. No active-count query alone proves quiescence or
+authorizes CAPEX cutover; Demo-05C-3 remains separate. See the
+[deployment runbook and verification](tasks/demo-05c2-legacy-admission-drain.md).

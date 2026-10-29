@@ -4,6 +4,9 @@
   "description": "Backend orchestration platform for versioned cost-engine datasets and Airflow/ETL execution workflows.",
   "main": "index.js",
   "scripts": {
+    "demo:admission": "tsx scripts/demo-admission.ts",
+    "test:demo-05c2": "tsx --test scripts/demo-05c2-legacy-admission-drain.pg.test.ts",
+    "test:demo-05c2:typecheck": "tsc --ignoreConfig --noEmit --strict --skipLibCheck --esModuleInterop --module NodeNext --target ES2022 scripts/demo-admission.ts scripts/demo-05c2-legacy-admission-drain.pg.test.ts scripts/support/demo-admission-historical-fixture.ts migrations/1793300000000_demo-admission-control.ts",
     "test:demo-05c1": "tsx --test scripts/demo-05c1-workflow-template-catalog.test.ts scripts/demo-05c1-workflow-template-catalog.pg.test.ts",
     "test:demo-05c1:unit": "tsx --test scripts/demo-05c1-workflow-template-catalog.test.ts",
     "test:demo-05c1:typecheck": "tsc --ignoreConfig --noEmit --strict --skipLibCheck --esModuleInterop --module NodeNext --target ES2022 scripts/demo-05c1-workflow-template-catalog.test.ts scripts/demo-05c1-workflow-template-catalog.pg.test.ts",

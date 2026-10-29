@@ -1,6 +1,7 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { DemoSessionError, DemoSessionUnavailableError } from './demo-session.errors.js';
+import { admissionUnavailable, assertLegacyAdmission, lockDemoAdmission } from '../demo-admission/demo-admission.repository.js';
 
 export const SESSION_LIFETIME_SECONDS = 4 * 60 * 60;
 export const SECURE_SESSION_COOKIE = '__Host-ce_demo_session';
@@ -16,11 +17,16 @@ export interface AuthenticatedDemoSession {
 
 interface SessionRow { id: string; company_code: string; expires_at: Date }
 interface Candidate { id: string; token: Buffer; companyCode: string }
+class SessionAllocationExhaustedError extends Error {
+  constructor() { super('Demo session allocation exhausted'); }
+}
 export interface DemoSessionServiceOptions {
   // Dependency seams for deterministic tests; never derived from HTTP input.
   candidate?: () => Candidate;
   now?: () => Promise<Date>;
   capacity?: { active: number; retained: number };
+  beforeCommit?: () => Promise<void>;
+  commit?: (client: PoolClient) => Promise<void>;
 }
 
 export function readSessionCookie(header: string | undefined, name: string): string | undefined {
@@ -57,30 +63,36 @@ export class DemoSessionService {
   }
 
   async create(): Promise<{ session: AuthenticatedDemoSession; token: string }> {
-    if (!this.options.capacity) return this.allocate(this.db);
-    const client = await this.db.connect();
+    let client: PoolClient;
+    try { client = await this.db.connect(); } catch { throw admissionUnavailable(); }
     let commitSent = false;
     let discard = false;
     try {
       await client.query('BEGIN');
       await client.query("SET LOCAL lock_timeout='3s'");
       await client.query("SET LOCAL statement_timeout='5s'");
+      assertLegacyAdmission(await lockDemoAdmission(client));
       // Admission only: serialize capacity checks and insert in one transaction.
       // Core version allocation/row-lock protocols are not involved.
-      await client.query('LOCK TABLE demo_sessions IN SHARE ROW EXCLUSIVE MODE');
-      const counts = (await client.query<{ active: number; retained: number }>(`SELECT count(*)::int AS retained,
-        count(*) FILTER (WHERE revoked_at IS NULL AND expires_at>clock_timestamp())::int AS active FROM demo_sessions`)).rows[0]!;
-      if (counts.active >= this.options.capacity.active || counts.retained >= this.options.capacity.retained) {
-        throw new DemoSessionError('DEMO_SESSION_CAPACITY_REACHED', 503, 'Demo session capacity reached');
+      if (this.options.capacity) {
+        await client.query('LOCK TABLE demo_sessions IN SHARE ROW EXCLUSIVE MODE');
+        const counts = (await client.query<{ active: number; retained: number }>(`SELECT count(*)::int AS retained,
+          count(*) FILTER (WHERE revoked_at IS NULL AND expires_at>clock_timestamp())::int AS active FROM demo_sessions`)).rows[0]!;
+        if (counts.active >= this.options.capacity.active || counts.retained >= this.options.capacity.retained) {
+          throw new DemoSessionError('DEMO_SESSION_CAPACITY_REACHED', 503, 'Demo session capacity reached');
+        }
       }
       const created = await this.allocate(client);
+      await this.options.beforeCommit?.();
       commitSent = true;
-      await client.query('COMMIT');
+      if (this.options.commit) await this.options.commit(client); else await client.query('COMMIT');
       return created;
     } catch (error) {
       discard = true;
+      if (commitSent) throw new DemoSessionError('DEMO_SESSION_CREATE_OUTCOME_UNKNOWN', 503, 'Demo session create outcome unavailable; no credential issued');
       if (!commitSent) await client.query('ROLLBACK').catch(() => {});
       if (error instanceof DemoSessionError) throw error;
+      if (error instanceof SessionAllocationExhaustedError) throw error;
       throw new Error('Demo session persistence failed');
     } finally { client.release(discard); }
   }
@@ -94,7 +106,7 @@ export class DemoSessionService {
       if (candidate.token.length !== 32) throw new Error('Invalid session candidate');
       const hash = createHash('sha256').update(candidate.token).digest();
       try {
-        // The caller returns a cookie only after autocommit/the admission COMMIT.
+        // The caller returns a cookie only after confirmed admission COMMIT.
         const result = await db.query<SessionRow>(
           // Match the millisecond precision of the public ISO timestamp exactly.
           `WITH instant AS (SELECT date_trunc('milliseconds', clock_timestamp()) AS now)
@@ -120,7 +132,7 @@ export class DemoSessionService {
         throw new Error('Demo session persistence failed');
       }
     }
-    throw new Error('Demo session allocation exhausted');
+    throw new SessionAllocationExhaustedError();
   }
 
   async authenticate(cookie: string | undefined, name: string): Promise<AuthenticatedDemoSession> {

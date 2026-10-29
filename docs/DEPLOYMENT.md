@@ -217,3 +217,14 @@ credentials/targets. [Executed verification](verification/demo-04-deployment.md)
 Root and frontend dependency audits reject high-severity findings. Use the
 reviewed lockfiles with npm ci; do not replace them with an unreviewed upgrade
 or grant install-script approvals merely to suppress an npm warning.
+
+## Legacy admission drain installation
+
+Before installing Demo-05C-2 on an existing deployment, follow the
+[first-installation and rollback runbook](tasks/demo-05c2-legacy-admission-drain.md#deployment-runbook).
+Do not restart a Backend with active Sessions to install the Gate: startup revokes
+those credentials and loses process-local Fake state. Suspend new admission via a
+verified replay-aware entrypoint, preserve existing operations and Backend cookie
+validation, confirm actual quiescence, then update/migrate and explicitly drain.
+Keep admission closed when rolling back to a Gate-unaware binary. Configuration
+cutover is deferred to Demo-05C-3 and cannot be authorized by a SQL count alone.

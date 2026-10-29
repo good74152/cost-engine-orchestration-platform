@@ -401,6 +401,40 @@ Focused checks: `npm run test:demo-05c1:unit` (no PostgreSQL),
 
 ## Local development
 
+### Demo-05C-2 trusted admission operator
+
+`npm run demo:admission -- status` and `npm run demo:admission -- drain` require
+exactly one private `DEMO_ADMISSION_DATABASE_URL` or
+`DEMO_ADMISSION_DATABASE_URL_FILE`, naming the intended Demo database. There is
+no fallback to DATABASE_URL, DEMO_SEED_DATABASE_URL or mounted runtime secrets.
+Status returns `{state,updatedAt}`. Drain adds `confirmation` (`COMMITTED` or
+`DURABLE_RELOAD`). Only LEGACY_OPEN → DRAINING is supported. No HTTP admin route,
+reverse command or CAPEX configuration change is added.
+
+The production operator supports `admission-status` / `admission-drain`; explicitly
+provide `-e DEMO_ADMISSION_DATABASE_URL_FILE=/run/secrets/database_url` when using
+the existing Compose database secret as the admission target. The command does
+not infer that target automatically. Never print the private URL/token.
+
+New bootstrap/Scenario insertion returns sanitized 503 `DEMO_ADMISSION_DRAINING`
+after drain, or 503 `DEMO_ADMISSION_UNAVAILABLE` if the Gate is absent/unreadable.
+Unconfirmed Session COMMIT is 503 `DEMO_SESSION_CREATE_OUTCOME_UNKNOWN` without a
+Cookie. Existing valid-cookie POST /demo/sessions replay returns 200; Scenario
+same-type replay remains 200, another type remains 409, and its COMMIT uncertainty
+retains `DEMO_SCENARIO_CREATE_OUTCOME_UNKNOWN`. Domain operations, Guided Steps,
+Session lifetime/security, Reset/recovery and coordinator limits are unchanged.
+Operator uncertainty is `DEMO_ADMISSION_DRAIN_OUTCOME_UNKNOWN`; confirmed fresh
+LEGACY_OPEN is `DEMO_ADMISSION_DRAIN_NOT_APPLIED`, requiring retry. Handled HTTP
+errors retain the existing message/code/no-store contract.
+
+Migration down is offline-only and refuses DRAINING, active Sessions or retained
+Scenarios. First installation requires replay-aware ingress suspension and actual
+quiescence before restarting the old Backend, whose startup revokes Sessions.
+Never reopen an unaware rollback Backend directly. A SQL count alone does not
+establish cutover safety. Follow the [complete runbook](tasks/demo-05c2-legacy-admission-drain.md#deployment-runbook)
+and [ADR-0017](adr/0017-demo-admission-drain.md). Focused real PostgreSQL commands:
+`npm run test:demo-05c2:typecheck` and `npm run test:demo-05c2`.
+
 ### Interactive frontend (Demo-03)
 
 frontend/ provides React routes for Dashboard, Guided Demo, Free Exploration,

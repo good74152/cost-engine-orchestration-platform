@@ -1,3 +1,4 @@
+import { admissionMigrationPattern, installHistoricalAdmissionFixture } from './support/demo-admission-historical-fixture.js';
 import 'dotenv/config';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
@@ -44,8 +45,9 @@ test('Demo-02E: Lost Response recovery, durable identity and isolation',{timeout
   try{
     await admin.query(`CREATE DATABASE "${name}" TEMPLATE template0`);created=true;
     const migrate=(direction:'up'|'down',count?:number)=>runner({databaseUrl:connection(name),dir:fileURLToPath(new URL('../migrations/',import.meta.url)),
-      migrationsTable:'pgmigrations',direction,count,singleTransaction:true,checkOrder:true,logger:{debug(){},info(){},warn(){},error(){}}});
+      migrationsTable:'pgmigrations',direction,count,ignorePattern:admissionMigrationPattern,singleTransaction:true,checkOrder:true,logger:{debug(){},info(){},warn(){},error(){}}});
     await migrate('up',10);
+    await installHistoricalAdmissionFixture(connection(name));
     process.env.DATABASE_URL=connection(name);process.env.NODE_ENV='test';process.env.APP_MODE='demo';process.env.EXECUTOR_TYPE='fake';
     const [{pool},{buildApp}]=await Promise.all([import('../src/db/pool.js'),import('../src/app.js')]);db=pool;
     pool.on('connect',c=>ends.push(new Promise<void>(done=>c.once('end',done))));

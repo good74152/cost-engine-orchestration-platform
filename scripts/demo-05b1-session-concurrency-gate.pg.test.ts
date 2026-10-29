@@ -53,7 +53,7 @@ test('Demo-05B-1: real parallel requests, exclusive barriers and safe Reset', {t
       import('../src/db/pool.js'),import('../src/app.js'),import('../src/modules/demo-session/demo-runtime.js'),import('./seed-demo-six-domain-configuration.js')]);
     db=pool; pool.on('connect',c=>ends.push(new Promise<void>(done=>c.once('end',done))));
     assert.equal((await pool.query('SELECT current_database() AS name')).rows[0].name,name);
-    assert.equal((await pool.query('SELECT count(*)::int AS n FROM pgmigrations')).rows[0].n,12);
+    assert.equal((await pool.query('SELECT count(*)::int AS n FROM pgmigrations')).rows[0].n,13);
     await seedDemoSixDomainConfiguration(pool);
     const resetHooks:ResetOptions={log(){}}; const createHooks:ScenarioCreateOptions={}; const assigned:FakeExecutor[]=[];
     const runtime=new DemoRuntime(pool,'test',{createExecutor:()=>assigned.shift()??new FakeExecutor()},resetHooks,createHooks);
@@ -266,7 +266,7 @@ test('Demo-05B-1: real parallel requests, exclusive barriers and safe Reset', {t
       const r=await post(`/demo/dataset-versions/${data.datasetVersionId}/abandon`,a);assert.equal(r.statusCode,200,r.body);
       assert.equal((await pool.query('SELECT status FROM dataset_versions WHERE id=$1',[data.datasetVersionId])).rows[0].status,'ABANDONED');await idle();
     });
-    console.info('DEMO_05B1_EVIDENCE',JSON.stringify({database:name,migrations:12,parallelLimit:4,realPostgresWaiters:true,noExecutorSessionLock:true}));
+    console.info('DEMO_05B1_EVIDENCE',JSON.stringify({database:name,migrations:13,parallelLimit:4,realPostgresWaiters:true,noExecutorSessionLock:true}));
   }finally{
     try{await app?.close();if(db){await db.end();await Promise.all(ends);}}
     finally{

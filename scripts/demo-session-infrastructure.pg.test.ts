@@ -1,3 +1,4 @@
+import { admissionMigrationPattern, installHistoricalAdmissionFixture } from './support/demo-admission-historical-fixture.js';
 import 'dotenv/config';
 import assert from 'node:assert/strict';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
@@ -54,9 +55,10 @@ test('Demo 01A: real PostgreSQL session foundation, not protected Domain APIs',
       created = true;
       const migrate = (direction: 'up' | 'down', count?: number) => runner({
         databaseUrl: urlFor(name), dir: migrationDirectory, migrationsTable: 'pgmigrations',
-        direction, count, singleTransaction: true, checkOrder: true, logger: migrationLogger,
+        direction, count, ignorePattern: admissionMigrationPattern, singleTransaction: true, checkOrder: true, logger: migrationLogger,
       });
       await migrate('up');
+      await installHistoricalAdmissionFixture(urlFor(name));
       process.env.DATABASE_URL = urlFor(name);
       process.env.NODE_ENV = 'test';
       const [{ pool }, { buildApp }, { prepareCalculationJobRunService }] = await Promise.all([
