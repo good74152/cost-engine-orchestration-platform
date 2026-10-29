@@ -4,6 +4,8 @@ Baseline main `04d7e51f4c9a432b23cca2b4cedb118ce8a5a070` (PR #39 confirmed
 merged before implementation). Branch `codex/demo-05c3a-configuration-cutover`.
 Authority: System Owner's bounded specification; await System Owner Review.
 This task builds capability and uses disposable databases only, never production.
+Tested implementation: `8a00ffa24fb1eb18a25990de77d5622d26c1ffa3`; subsequent
+changes record verification only.
 
 ## Contract
 
@@ -114,4 +116,72 @@ data preconditions, all-or-nothing rollback, concurrent operators and Session
 admission, fresh-connection unknown-COMMIT confirmation while the original
 transaction remains active, lock timeout/unavailability, idempotent replay with
 write-blocking triggers, startup and unchanged Core two-Job CAPEX execution.
-Final executed commands and teardown evidence will be recorded below.
+Final local verification on 2026-10-29 (Asia/Taipei), Node v24.18.0 /
+PostgreSQL 18.6: **681 passed, 0 failed/skipped/cancelled/TODO**, counting each
+suite once (including Node parent test counters). Every final command exited 0:
+
+| Command (`npm.cmd run ...`) | Passing tests |
+|---|---:|
+| test:demo-05c3a | 29; 32 independently owned migrated databases |
+| test:milestone | 259; includes CON-01/02 and isolated raw ingestion |
+| test:demo-session-infrastructure | 21 |
+| test:demo-session-reset-recovery | 22 |
+| test:demo-session-ownership-executor-isolation | 19 |
+| test:demo-02a | 23 |
+| test:demo-02b | 26 |
+| test:demo-02c | 27 |
+| test:demo-02d | 25 |
+| test:demo-02e | 37 |
+| test:demo-04 | 23 |
+| test:demo-05a | 23 |
+| test:demo-05b1 | 12 |
+| test:demo-05b2 | 29 |
+| test:demo-05c1 | 18 |
+| test:demo-05c2 | 22 |
+| test:demo-04-containers | 15; actual production-image operator/TLS/UI/restart |
+| ui:test | 41 |
+| ui:smoke | 10; actual Chromium/Vite/Backend/PostgreSQL |
+
+Also PASS: build, test:demo-05c3a:typecheck (strict, including CLI/new migration),
+test:demo-04/05a/05b1/05b2/05c1/05c2:typecheck, ui:typecheck, ui:build,
+root/frontend npm audit --audit-level=high (zero vulnerabilities), git diff --check
+and staged checks. CI now runs the new focused suite/typecheck; remote results
+are separate from this local evidence. Repeated development/final runs are not
+added again to the total.
+
+The final cutover suite verifies original v1 JSON/UUID/publication-time equality,
+exact ten active Types/two CAPEX Types/eleven definitions, unchanged other five
+Domains, no cleanup of retained data, conflict refusal and total rollback. Write-
+rejecting triggers prove ALREADY_APPLIED performs no INSERT/UPDATE/DELETE even
+with active Workflow Sessions. Original-transaction barriers and pg_blocking_pids
+prove independent confirmation really waits on the original PostgreSQL backend
+before COMMIT/ROLLBACK, or returns UNKNOWN on timeout. The read-only replay ACK-
+loss path is also confirmed independently. Two concurrent operators produce one
+APPLIED and one ALREADY_APPLIED; waiting Session admission sees the complete target
+only after COMMIT. Existing Core APIs freeze v2/v1 FAB_COST dependencies for the
+two CAPEX Jobs and explicitly publish their Dataset without new execution logic.
+
+All 32 new fixtures recorded zero remaining backends and normal DROP (no FORCE).
+Final Compose project `demo04_test_c7f96405abad` removed its owned volumes after
+explicit fixture-only maintenance, offline cutover, exact v1 checks, new-binary
+restart/readiness and HTTPS Session/Legacy-Scenario admission checks. Maintenance
+was a separate existing Reset procedure in test setup, never a cutover action.
+Chromium fixture `demo03_browser_18940_055bcb263cb3` also recorded zero backends and
+normal DROP. The source test service contained only maintenance DB `postgres`
+before its container/anonymous volume and private target file were removed.
+No persistent developer or production DB was used.
+
+Problems identified and resolved: startup previously assumed legacy single-Type
+CAPEX and now validates the exact Workflow target; old drain's uncertain-outcome
+path now rejects WORKFLOW_OPEN; the first retained-graph test fixture omitted a
+required UUID and was fixed before final runs. Historical migration tests retain
+their original rollback targets with a separately tracked two-migration Gate
+fixture. Latest-inventory assertions are 14; Demo-05C-2's Gate-removal test now
+removes the extension and Gate together. No historical migration SQL was edited.
+
+Acceptance criteria 1–8 are satisfied by the implementation/local verification:
+one atomic transaction; v1 preservation; exact target; read-only idempotency;
+independent unknown-COMMIT confirmation; fail-closed conflicts; preserved Guided/
+Core behavior; all new/existing regression suites PASS. No known implementation
+blocker remains. Offline process/writer verification, actual production operation
+and System Owner Review remain Owner responsibilities. No merge or live cutover.
