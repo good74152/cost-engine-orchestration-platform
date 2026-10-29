@@ -363,7 +363,7 @@ Summaries contain exactly `id`, `version`, `title`, `description`, `availability
 Details add only `steps`. Each Step contains exactly `id`, `title`, `description`,
 `operation`, `prerequisites`, `expectedResult`, plus `domain` where applicable
 (all current steps include it). Prerequisites are Step IDs within that Template.
-IDs are case-sensitive; initial version is 1. List order is HAPPY_PATH,
+IDs are case-sensitive; current version is 2 for all four Templates. List order is HAPPY_PATH,
 FAILURE_RETRY, LOST_RESPONSE_RECOVERY, SIX_DOMAIN_WORKFLOW. All availability is
 `PREVIEW`: the catalog describes operations, but the new Workflow UI is not enabled.
 The existing Guided and Free Exploration UI behavior is unchanged.
@@ -393,11 +393,37 @@ Cross-site/foreign Origin yields 403 `DEMO_SESSION_CSRF_REJECTED`. Existing 429
 
 The catalog is independent of PostgreSQL configuration and Domain state;
 authentication and admission still perform their existing Session reads.
-It creates no fake, execution, progress, Scenario or ledger. Six-domain edges
-are guidance only, including FAB_COST-before-CAPEX despite CAPEX retaining its
-zero-dependency seed. See [full contract and verification](tasks/demo-05c1-workflow-template-catalog.md).
+It creates no fake, execution, progress, Scenario or ledger. The v2 guides describe
+Workflow configuration after cutover: FAB_COST → CAPEX → DPR, FAB_COST → INSURANCE,
+FAB_COST → ONE_STD_COST → E2E_COST. The first three publish FAB_COST before CAPEX,
+use complete paginated Job lists, and finish all Jobs before validation/publication.
+Failure Retry runs only the failed Job again; Lost Response Recovery reuses the
+original Attempt and DAG/run identity, then explicitly processes every other Job.
+The unchanged Legacy seed/Guided ledger remains a separate configuration fixture.
+Version 2 replaces the static current descriptions without a version-history API.
+See [original read contract](tasks/demo-05c1-workflow-template-catalog.md) and
+[v2 verification](tasks/demo-05c3b-six-domain-workflow-verification.md).
 Focused checks: `npm run test:demo-05c1:unit` (no PostgreSQL),
 `npm run test:demo-05c1:typecheck`, `npm run test:demo-05c1` (owned disposable DB).
+
+### Demo-05C-3B six-domain verification
+
+`npm run test:demo-05c3b:typecheck` checks the strict TypeScript test fixture;
+`npm run test:demo-05c3b` requires an explicitly supplied private TEST_DATABASE_URL
+for an owned disposable PostgreSQL service with CREATE/DROP DATABASE rights.
+It creates a random `demo_05c3b_*` database, migrates all 14 migrations, seeds,
+drains and cuts over through the real operators before creating any Session.
+All Workflow mutations use existing protected Demo APIs. SQL is used for read
+assertions and transaction/row-lock barriers. Teardown closes sockets, confirms
+zero database backends and drops only the exact owned fixture without FORCE.
+It never targets a persistent Demo/developer database or runs production cutover.
+
+The suite verifies six published Datasets/ten Jobs, five input edges, negative
+year/period/Session isolation, CAPEX two-Job snapshot/definition pinning, Retry,
+lost ACK recovery, and three reproducible PostgreSQL lock schedules. It prints
+POSTGRES_LOCK_EVIDENCE with blocking PID chains and selected input versions;
+this is bounded test evidence, not a new application lock manager or executor.
+Legacy Guided suites continue to create their own Legacy configuration databases.
 
 ## Local development
 

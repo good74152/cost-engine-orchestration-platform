@@ -56,17 +56,19 @@ function publicationSteps(domain: DatasetDomain, prerequisites: readonly string[
   ];
 }
 
-const happy = publicationSteps('CAPEX');
+const upstream = publicationSteps('FAB_COST');
+const happy = publicationSteps('CAPEX', ['fab_cost.publish']);
 const definitions: readonly WorkflowTemplate[] = [
   {
-    id: 'HAPPY_PATH', version: 1, title: 'Happy Path',
-    description: 'Create, run, simulate success, reconcile, validate and publish through explicit Demo operations. This describes the existing tutorial without reading or advancing its Guided ledger.',
-    availability: 'PREVIEW', steps: happy,
+    id: 'HAPPY_PATH', version: 2, title: 'Happy Path',
+    description: 'Publish FAB_COST first, then create, Run all CAPEX Jobs, simulate success, Reconcile all Jobs, validate and publish. Use one session, fiscal year and period throughout. These explicit operations describe Workflow configuration without reading or advancing the Legacy Guided ledger.',
+    availability: 'PREVIEW', steps: [...upstream, ...happy],
   },
   {
-    id: 'FAILURE_RETRY', version: 1, title: 'Failure and Retry',
-    description: 'Confirm execution failure, then retry the same Job using the same frozen inputs and a new Attempt. Complete all required Jobs before validation and publication.',
+    id: 'FAILURE_RETRY', version: 2, title: 'Failure and Retry',
+    description: 'Publish FAB_COST first in the same session/year/period. Run all CAPEX Jobs, confirm failure of one selected Job, then retry only that Job with the same frozen inputs and a new Attempt. Complete every other required Job before validation and publication.',
     availability: 'PREVIEW', steps: [
+      ...upstream,
       happy[0]!, happy[1]!,
       step('capex.fake-failure', 'Simulate failure', 'Set the accepted Attempt of a selected Job to FAILED in the Fake; other required Jobs must also be completed before validation.',
         'SET_FAKE_STATE', 'CAPEX', ['capex.run'], 'External Fake state is FAILED; stored Job state has not changed.'),
@@ -79,21 +81,24 @@ const definitions: readonly WorkflowTemplate[] = [
     ],
   },
   {
-    id: 'LOST_RESPONSE_RECOVERY', version: 1, title: 'Lost Response Recovery',
-    description: 'Simulate an executor ACK lost after execution creation, then explicitly recover the original Attempt and full execution identity before continuing the success flow.',
+    id: 'LOST_RESPONSE_RECOVERY', version: 2, title: 'Lost Response Recovery',
+    description: 'Publish FAB_COST first in the same session/year/period. Simulate a lost executor ACK for one selected CAPEX Job; recover its original Attempt without a new Attempt or external execution. Explicitly complete all other Jobs before validation and publication.',
     availability: 'PREVIEW', steps: [
+      ...upstream,
       happy[0]!,
       step('capex.run-lost-response', 'Run with a lost acknowledgement', 'Run a selected Job with ACCEPT_THEN_UNKNOWN / RUNNING simulation. Complete any other required Jobs explicitly; do not infer failure from an uncertain response.',
         'RUN_JOB', 'CAPEX', ['capex.create'], 'The Fake execution exists; the original Attempt remains DISPATCHING and the Job remains PENDING (HTTP 202).'),
       step('capex.recover', 'Recover the original execution', 'Run the same Job again using ACCEPT / RUNNING simulation. Core reuses the original Attempt and DAG/run identity; ALREADY_EXISTS confirms acceptance.',
         'RUN_JOB', 'CAPEX', ['capex.run-lost-response'], 'The original Attempt is ACCEPTED and the Job is RUNNING, without another execution or Attempt.'),
-      { ...happy[2]!, prerequisites: ['capex.recover'] },
+      step('capex.run-other-jobs', 'Run every other CAPEX Job', 'Read all pages of the Dataset Job list through the existing API. Explicitly Run each other required Job with ACCEPT / RUNNING simulation; retain the recovered Job and original Attempt.',
+        'RUN_JOB', 'CAPEX', ['capex.recover'], 'All required Jobs are RUNNING against the same frozen snapshot; recovery has not allocated another Attempt for the selected Job.'),
+      { ...happy[2]!, prerequisites: ['capex.run-other-jobs'] },
       happy[3]!, happy[4]!, happy[5]!,
     ],
   },
   {
-    id: 'SIX_DOMAIN_WORKFLOW', version: 1, title: 'Six Domain Workflow',
-    description: 'Publication-first teaching order: FAB_COST → CAPEX → DPR; FAB_COST → INSURANCE; FAB_COST → ONE_STD_COST → E2E_COST. Use the same fiscal year and period throughout. These are operational prerequisites, not Core Dependency Definitions; the Demo seed intentionally retains CAPEX with no upstream requirement. Explicitly process all Jobs of every Dataset.',
+    id: 'SIX_DOMAIN_WORKFLOW', version: 2, title: 'Six Domain Workflow',
+    description: 'Workflow configuration after cutover: FAB_COST → CAPEX → DPR; FAB_COST → INSURANCE; FAB_COST → ONE_STD_COST → E2E_COST. Use the same session, fiscal year and period throughout. These publication-first teaching prerequisites describe the configured direct dependencies; Core selects inputs at first Run. Read the complete paginated Job list and explicitly process all Jobs of every Dataset.',
     availability: 'PREVIEW', steps: [
       ...publicationSteps('FAB_COST'),
       ...publicationSteps('CAPEX', ['fab_cost.publish']),

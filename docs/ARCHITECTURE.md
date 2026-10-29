@@ -870,10 +870,11 @@ still reads PostgreSQL, but catalog contents are independent of database state
 and require no seeded configuration. Reads do not allocate a FakeExecutor or
 inspect/change Domain, Scenario, Guided ledger or Session state.
 
-The six-domain guide describes publication-first order FAB_COST → CAPEX → DPR,
+The current v2 six-domain guide describes publication-first order FAB_COST → CAPEX → DPR,
 FAB_COST → INSURANCE and FAB_COST → ONE_STD_COST → E2E_COST. Upstream publication
-is a prerequisite of downstream creation. These are teaching prerequisites only:
-CAPEX's existing seed still has zero Core upstream dependencies. Core resolves
+is a prerequisite of downstream creation. These teaching prerequisites describe
+the Workflow configuration after ADR-0018 cutover. The unchanged Legacy seed
+retains CAPEX's zero-dependency v1 for Legacy Guided fixtures. Core resolves
 published inputs at first Run; the guide selects no fixed Dataset version and
 requires every Job in each Dataset to be processed before validation/publication.
 There is no executor, progress store, operation history, second state machine,
@@ -941,3 +942,29 @@ Backend shutdown, finished requests, no external writers and reviewed backup/
 rollback are operator-proven prerequisites; SQL counts cannot establish them.
 No automatic cleanup or production cutover is performed. See
 [operator/runbook/verification](tasks/demo-05c3a-configuration-cutover.md).
+
+## 33. Six-Domain Workflow Verification and Template v2
+
+Demo-05C-3B verifies existing Demo APIs against a disposable PostgreSQL database:
+all latest migrations → six-domain Legacy seed → Admission Operator drain →
+Cutover Operator → WORKFLOW_OPEN → HTTP Session creation. No SQL state edits
+simulate a cutover or execution. Six published Datasets contain ten Jobs:
+FAB_COST 1, CAPEX 2, INSURANCE 1, ONE_STD_COST 2, DPR 2, E2E_COST 2. Each input
+uses the same Session/company/year/period and the configured published upstream.
+Missing or mismatched upstreams retain the existing DEPENDENCY_NOT_READY contract
+and roll back all snapshot/definition/attempt initialization.
+
+CAPEX's summary uses published Definition v2 and TABLE_Y uses v1, both requiring
+FAB_COST. Its two Jobs and Retry share one immutable snapshot even after a newer
+FAB_COST publication; a new CAPEX version can select the newer input. Lost ACK
+recovery confirms the original execution identity/attempt. PostgreSQL row-lock
+barriers and observed blocking PID chains prove competing first Runs and both
+Publish/First Run orderings without changing Core locks or using timing guesses.
+
+All four static Templates are now version 2 and remain PREVIEW. The first three
+publish FAB_COST first and require the complete paginated CAPEX Job set; failure
+retries only the selected Job, recovery reuses its original Attempt. Existing
+Step IDs are retained with additive prerequisite/other-Job steps. No historical
+catalog store, progress, runner, UI activation, new API or schema is introduced.
+Legacy Guided regressions retain separate Legacy fixtures. See
+[scope and test evidence](tasks/demo-05c3b-six-domain-workflow-verification.md).

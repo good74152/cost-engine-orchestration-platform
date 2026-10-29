@@ -4,6 +4,8 @@
   "description": "Backend orchestration platform for versioned cost-engine datasets and Airflow/ETL execution workflows.",
   "main": "index.js",
   "scripts": {
+    "test:demo-05c3b": "tsx --test scripts/demo-05c3b-six-domain-workflow.pg.test.ts",
+    "test:demo-05c3b:typecheck": "tsc --ignoreConfig --noEmit --strict --skipLibCheck --esModuleInterop --module NodeNext --target ES2022 scripts/demo-05c3b-six-domain-workflow.pg.test.ts",
     "demo:cutover": "tsx scripts/demo-cutover.ts",
     "test:demo-05c3a": "tsx --test scripts/demo-05c3a-configuration-cutover.pg.test.ts",
     "test:demo-05c3a:typecheck": "tsc --ignoreConfig --noEmit --strict --skipLibCheck --esModuleInterop --module NodeNext --target ES2022 scripts/demo-cutover.ts scripts/demo-05c3a-configuration-cutover.pg.test.ts migrations/1793400000000_demo-workflow-admission.ts",
