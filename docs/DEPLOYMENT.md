@@ -244,4 +244,25 @@ WORKFLOW_OPEN is irreversible and requires a compatible new Backend with target
 configuration validation. Do not restart an old image, run legacy seeds, auto-down
 or delete v1 to recover a failed deployment. Keep traffic closed, confirm durable
 state and choose a reviewed forward fix/restore. SQL counts do not prove process
-quiescence. No actual public cutover or Workflow UI enablement is included.
+quiescence. No actual public cutover is performed by this implementation.
+
+## Workflow UI deployment and recovery
+
+Demo-05C-3C Frontend reads authenticated Workflow availability from Backend Gate.
+Ship compatible Backend/Frontend images together; no Frontend environment switch
+can open Workflow. LEGACY_OPEN keeps Guided, DRAINING keeps existing Guided only,
+and WORKFLOW_OPEN replaces new Legacy Create with Workflow Explorer. Old Guided
+deep links safely redirect. Missing/unavailable contracts fail UI mode actions
+closed and offer Refresh, rather than guessing WORKFLOW_OPEN. Free Exploration,
+Reset and ownership checks remain. Deployment still requires the offline sequence
+above; serving this UI does not execute Cutover or prove process quiescence.
+
+Verify all four v2 Templates, two independently operated CAPEX Jobs, explicit
+Dataset binding, Reconcile/Validate/Publish, reload with zero mutation, lost ACK
+recovery using one Attempt, network-error recovery, Reset and Session isolation.
+Use separate disposable Workflow-cutover and Legacy browser fixtures in CI;
+`npm run ui:smoke:workflow` and `npm run ui:smoke` must not target live Demo data.
+Browser refresh rereads durable state on the current running Backend. Backend
+restart still loses process-local Fake state and invalidates old Sessions; it is
+not browser recovery. Keep traffic closed if deployment/cutover fails and follow
+the reviewed compatible-forward-fix/restore plan; never reopen an old binary.

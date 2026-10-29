@@ -356,7 +356,7 @@ Registered only with `APP_MODE=demo`:
 
 | Method | Route | Successful JSON (200) |
 |---|---|---|
-| GET | /demo/workflow-templates | `{ "templates": [WorkflowTemplateSummary, ...] }` |
+| GET | /demo/workflow-templates | `{ "admissionState": "LEGACY_OPEN\|DRAINING\|WORKFLOW_OPEN", "templates": [WorkflowTemplateSummary, ...] }` |
 | GET | /demo/workflow-templates/:id | `WorkflowTemplate`, including `steps` |
 
 Summaries contain exactly `id`, `version`, `title`, `description`, `availability`.
@@ -364,9 +364,11 @@ Details add only `steps`. Each Step contains exactly `id`, `title`, `description
 `operation`, `prerequisites`, `expectedResult`, plus `domain` where applicable
 (all current steps include it). Prerequisites are Step IDs within that Template.
 IDs are case-sensitive; current version is 2 for all four Templates. List order is HAPPY_PATH,
-FAILURE_RETRY, LOST_RESPONSE_RECOVERY, SIX_DOMAIN_WORKFLOW. All availability is
-`PREVIEW`: the catalog describes operations, but the new Workflow UI is not enabled.
-The existing Guided and Free Exploration UI behavior is unchanged.
+FAILURE_RETRY, LOST_RESPONSE_RECOVERY, SIX_DOMAIN_WORKFLOW. Static availability is
+PREVIEW; both APIs now project PREVIEW in LEGACY_OPEN/DRAINING and AVAILABLE in
+WORKFLOW_OPEN from one PostgreSQL Gate observation per response. This projection
+does not change the static Template or Gate. Missing/invalid/unreadable Gate yields
+503 DEMO_ADMISSION_UNAVAILABLE without internal details.
 
 Operations describe these existing protected APIs. Job/Attempt operations must
 be explicitly repeated for every relevant Job/Attempt, using actual returned
@@ -391,8 +393,8 @@ Cross-site/foreign Origin yields 403 `DEMO_SESSION_CSRF_REJECTED`. Existing 429
 `DEMO_SESSION_QUEUE_FULL`, 409 `RESET_CONFLICT` and 503
 `DEMO_RESET_OUTCOME_UNKNOWN` remain applicable. Errors use `{ "message", "code" }`.
 
-The catalog is independent of PostgreSQL configuration and Domain state;
-authentication and admission still perform their existing Session reads.
+Template definitions are independent of PostgreSQL configuration and Domain state;
+authentication/revalidation reads Session and availability reads the Gate.
 It creates no fake, execution, progress, Scenario or ledger. The v2 guides describe
 Workflow configuration after cutover: FAB_COST → CAPEX → DPR, FAB_COST → INSURANCE,
 FAB_COST → ONE_STD_COST → E2E_COST. The first three publish FAB_COST before CAPEX,
@@ -405,6 +407,30 @@ See [original read contract](tasks/demo-05c1-workflow-template-catalog.md) and
 [v2 verification](tasks/demo-05c3b-six-domain-workflow-verification.md).
 Focused checks: `npm run test:demo-05c1:unit` (no PostgreSQL),
 `npm run test:demo-05c1:typecheck`, `npm run test:demo-05c1` (owned disposable DB).
+
+### Demo-05C-3C Workflow browser
+
+`/workflows` lists Backend v2 Templates; `/workflows/:id` shows their timeline,
+prerequisites, expected results and explicit operation controls. Select the fiscal
+year/period and each Session-owned Dataset version explicitly, then choose a Step
+and operate each required Job individually. Read all Job/Attempt pages; no batch
+Run or automatic workflow execution exists. Failure/lost-response simulation uses
+explicit controls. Retry affects only the chosen Job; Recover calls existing Run
+on a DISPATCHING Job. Fake-state acknowledgement is distinct from durable progress.
+
+UI modes follow Backend Gate, never an environment flag: neutral Session start;
+LEGACY_OPEN Guided; DRAINING existing Guided only; WORKFLOW_OPEN Workflow Explorer
+with safe old Guided URL redirection and no Scenario Create. Free Exploration is
+retained. Availability errors disable mode mutations. Dataset bindings in URL are
+validated navigation hints, not business state. Reload/return from exploration
+reads Session, Template and complete resources without POST. Network error means
+Outcome Unknown; use Refresh then explicitly choose recovery. Multi-page reads
+are not an atomic snapshot. Reset and 401 clear old resource/template state.
+
+Verification: `ui:typecheck`, `ui:test`, `ui:build`, `ui:smoke` (Legacy fixture),
+`ui:smoke:workflow` (real Chromium/Backend/migrated and cutover PostgreSQL fixture).
+Supply a private explicit TEST_DATABASE_URL for the task-owned disposable service.
+See [UI contract/recovery/deployment and evidence](tasks/demo-05c3c-workflow-ui.md).
 
 ### Demo-05C-3B six-domain verification
 

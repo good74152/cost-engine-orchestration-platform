@@ -1,4 +1,4 @@
-import {createContext,useContext,useEffect,useState,useSyncExternalStore,type ReactNode} from 'react';
+import {createContext,useContext,useState,useSyncExternalStore,type ReactNode} from 'react';
 import {DemoController} from './demo-controller';
 const Context=createContext<DemoController|null>(null);
 export function DemoProvider({children,controller}:{children:ReactNode;controller?:DemoController}){
@@ -9,7 +9,8 @@ export function DemoProvider({children,controller}:{children:ReactNode;controlle
   getItem:key=>window.localStorage.getItem(key),setItem:(key,value)=>window.localStorage.setItem(key,value),
   removeItem:key=>window.localStorage.removeItem(key),clear:()=>window.localStorage.clear(),
  }));
- useEffect(()=>{void model.refresh();},[model]);
+ // App's route effect restores Session, availability and resources together,
+ // including the selected Backend Template. It performs GETs only.
  return <Context.Provider value={model}>{children}</Context.Provider>;
 }
 export function useDemo(){
