@@ -185,6 +185,17 @@ ledger/reset/Fake semantics, workflow engine or progress schema changes. Actual
 production cutover remains an offline Owner operation. See
 [scope and verification](tasks/demo-05c3c-workflow-ui.md). Await System Owner Review.
 
+## Demo-05D — Staged First Deployment Controls
+
+Demo-05C-3C is merged via PR #42 at `10baca8`. Demo-05D-1 adds DB/Backend-only
+startup, explicit Owner-approved public Web activation, verified closure and
+offline existing Operator integration. Web profile and restart policies prevent
+implicit reopening; actual Docker tests verify separate startup, refusal paths,
+Operator safety and an independent daemon restart. Core/configuration/Session
+semantics are unchanged. See [scope and evidence](tasks/demo-05d1-deployment-safety.md).
+Await System Owner Review. Actual VPS deployment, required Demo-05D-2/05D-3
+acceptance and production Cutover remain separate Owner operations.
+
 ## Deferred until a concrete requirement
 
 - Real Airflow HTTP adapter and external cancellation.

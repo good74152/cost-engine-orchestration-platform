@@ -998,3 +998,28 @@ POST. Reload and returns from Free Exploration reconstruct verified state. Reset
 401 clear caches/selections; Cookie/token/Fake internals are never stored by UI.
 Browser recovery does not claim Fake durability across Backend restart. See
 [contracts, deployment boundaries and evidence](tasks/demo-05c3c-workflow-ui.md).
+
+## 35. Staged Deployment and Explicit Public Web Activation
+
+Demo-05D-1 separates preparation, Backend startup and public activation. deploy.sh
+closes Web/stops the unique Backend before DB-only preparation. start.sh leaves
+Web closed, starts/checks DB and the one Backend, and verifies Image Tag, container
+DEPLOYMENT_VERSION and live loopback readiness/version. Repeating Start preserves
+an already-ready same-version process; wrong versions fail without replacement.
+
+Web belongs to public-web profile; Backend/Web have restart: no. Default Compose
+and Docker daemon restart cannot implicitly open Web. open-web.sh requires explicit
+Owner confirmation including necessary 05D-2/05D-3 acceptance and an explicit shared
+Demo DB file. It checks availability/identity/version, invokes unchanged Cutover
+Status and validates complete JSON WORKFLOW_OPEN + WORKFLOW before starting Caddy.
+This reuses full Operator verification without another dependency/configuration
+validator. Public HTTPS/ACME acceptance follows opening; failure requires immediate
+close-web.sh. Close stops only project Web and preserves DB/Backend/data/volumes.
+
+operate.sh exposes existing migrate/seed/six-domain/admission/status/cutover commands.
+Mutations require Backend and Web offline with restart disabled. Status stays
+read-only; no implicit target, subsequent command, retry, migration/down, Cutover
+pipeline or public admin route is added. Existing unknown COMMIT and financial
+protocols are unchanged. Single trusted Owner operation at a time, no external
+writer and ADR-0017/0018 offline/backup restrictions remain prerequisites. No live
+deployment or cutover is performed. See [safety scope/evidence](tasks/demo-05d1-deployment-safety.md).

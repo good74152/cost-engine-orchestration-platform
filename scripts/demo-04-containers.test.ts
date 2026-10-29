@@ -263,7 +263,7 @@ test('Demo-04 isolated Compose, HTTPS, production UI and PostgreSQL operations',
     if (initialized) {
       const config = JSON.parse((await compose('config', '--format', 'json')).out.toString());
       assert.equal(config.name, id);
-      await compose('down', '--volumes', '--remove-orphans');
+      await compose('--profile', 'operations', '--profile', 'public-web', 'down', '--volumes', '--remove-orphans');
       for (const project of [id, id + '_other']) {
         const volumes = await command(['volume', 'ls', '--filter', `label=com.docker.compose.project=${project}`, '--format', '{{.Name}}']);
         assert.equal(volumes.out.toString().trim(), '', 'No owned disposable volumes remain');

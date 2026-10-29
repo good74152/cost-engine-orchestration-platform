@@ -1,7 +1,13 @@
 #!/bin/sh
-set -eu
-: "${DEMO_DEPLOY_ENV:?Set absolute private Compose env file}"
-case "${1:-}" in migrate-up|seed) ;; *) echo 'Choose migrate-up or seed' >&2; exit 1;; esac
-running=$(docker ps --filter name='^/cost-engine-demo-backend$' --format '{{.ID}}')
-[ -z "$running" ] || { echo 'Stop backend before operator mutations' >&2; exit 1; }
-docker compose --env-file "$DEMO_DEPLOY_ENV" -f deploy/compose.yaml --profile operations run --rm operator "$1"
+. "$(dirname -- "$0")/common.sh"
+operation=${1:-}
+case "$operation" in
+  migrate-up|seed|seed-six-domain) [ "$#" -eq 1 ] || fail 'Unexpected Operator arguments'; target='';;
+  admission-status|admission-drain|cutover-status|cutover)
+    [ "$#" -eq 3 ] && [ "$2" = '--database-url-file' ] || fail 'Admission/Cutover require an explicit --database-url-file target'
+    validate_target "$3"; target=$3;;
+  *) fail 'Choose migrate-up, seed, seed-six-domain, admission-status, admission-drain, cutover-status or cutover';;
+esac
+case "$operation" in admission-status|cutover-status) ;; *) assert_offline;; esac
+result=$(run_operator "$operation" "$target" 2>/dev/null) || fail "Operator $operation failed; preserve closure and confirm durable state before any explicit retry; outcome is not assumed"
+printf '%s\n' "$result"

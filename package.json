@@ -4,6 +4,8 @@
   "description": "Backend orchestration platform for versioned cost-engine datasets and Airflow/ETL execution workflows.",
   "main": "index.js",
   "scripts": {
+    "test:demo-05d1": "tsx --test scripts/demo-05d1-deployment-safety.test.ts",
+    "test:demo-05d1:typecheck": "tsc --ignoreConfig --noEmit --strict --types node --skipLibCheck --esModuleInterop --module NodeNext --target ES2022 scripts/demo-05d1-deployment-safety.test.ts",
     "ui:smoke:workflow": "npm --prefix frontend run smoke:workflow",
     "test:demo-05c3c:typecheck": "tsc --ignoreConfig --noEmit --strict --skipLibCheck --esModuleInterop --module NodeNext --target ES2022 frontend/scripts/workflow-browser-smoke.ts",
     "test:demo-05c3b": "tsx --test scripts/demo-05c3b-six-domain-workflow.pg.test.ts",

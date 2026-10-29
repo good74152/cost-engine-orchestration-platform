@@ -93,7 +93,7 @@ docker compose --env-file "$DEMO_DEPLOY_ENV" -f deploy/compose.yaml config --qui
 sh deploy/scripts/deploy.sh
 ```
 
-This builds backend/web/operator images, stops public admission, drains/stops the
+This closes Web, builds backend/web/operator images, drains/stops the
 named backend and starts only DB. It never migrates, seeds, deletes data or opens
 HTTP. First installation initializes a named volume with explicit credentials.
 PG18 mounts `/var/lib/postgresql`, with PGDATA `/var/lib/postgresql/18/docker`.
@@ -106,15 +106,35 @@ explicitly authorize:
 
 ```sh
 sh deploy/scripts/operate.sh migrate-up
-sh deploy/scripts/operate.sh seed
-sh deploy/scripts/start.sh
+sh deploy/scripts/operate.sh seed-six-domain
 ```
+
+These are separate explicit commands, not an automatic initialization pipeline.
+Current public Workflow deployment needs separately reviewed offline drain/cutover
+below. Never execute a Legacy seed against WORKFLOW_OPEN.
 
 Operator tools refuse a running named backend. Seed requires separate explicit
 DEMO_SEED_DATABASE_URL_FILE (operator profile mounts the chosen target), no
 DATABASE_URL fallback. It preserves the exact idempotent minimal CAPEX seed and
 rejects incompatible published configuration instead of rewriting it. No HTTP
 tools or automatic startup migrations/seed/down/wipe.
+
+Modifying commands also require Web stopped and automatic restart disabled for
+stopped writers/entrypoints. deploy.sh prepares this state. Read-only status may
+run with Backend online; --no-deps avoids implicitly starting other services.
+
+```sh
+sh deploy/scripts/operate.sh admission-status --database-url-file /run/secrets/database_url
+# Only after proving offline/quiescence/backup prerequisites:
+sh deploy/scripts/operate.sh admission-drain --database-url-file /run/secrets/database_url
+sh deploy/scripts/operate.sh cutover-status --database-url-file /run/secrets/database_url
+# A separate reviewed invocation; never automatically retried:
+sh deploy/scripts/operate.sh cutover --database-url-file /run/secrets/database_url
+```
+
+Admission/Cutover require that explicit shared Demo target file; no DATABASE_URL
+fallback. Existing Unknown COMMIT semantics remain: preserve closure, confirm
+durable state independently, and never assume rollback or retry automatically.
 
 The optional Demo-05A configuration uses the same stopped-backend operator:
 `sh deploy/scripts/operate.sh seed-six-domain`. Run it explicitly after migrations
@@ -144,8 +164,43 @@ Stop Caddy first, stop Node admission and drain Fastify. SIGTERM stops maintenan
 waits for admitted requests/cleanup, then closes the pool; Docker allows 60s.
 Forced process death does not mean dispatch/step completion. New startup revokes
 old sessions before readiness because fake memory was lost; UI 401 handling shows
-expiry. Brief maintenance downtime is deliberate. Start is repeatable; inspect
-readiness/version before opening traffic. Never remove volumes to repair startup.
+expiry. Brief maintenance downtime is deliberate. Start preserves a ready
+same-version Backend process, starts DB/Backend only and leaves Web closed.
+Wrong running versions are refused rather than replaced. Never remove volumes.
+
+```sh
+sh deploy/scripts/start.sh
+# Complete necessary Demo-05D-2 / 05D-3 Owner acceptance before PUBLIC TRAFFIC:
+sh deploy/scripts/open-web.sh --confirm-owner-acceptance-05d2-05d3 --database-url-file /run/secrets/database_url
+# If public HTTPS/ACME/flow acceptance fails, IMMEDIATELY close the entry:
+sh deploy/scripts/close-web.sh
+```
+
+Approval covers reviewed artifacts/security/host/DNS/firewall/secrets, restore-tested
+backup, quiescence/cutover/readiness/version and immediate closure acceptance. This
+task does not claim production 05D-2/05D-3 acceptance has occurred. Caddy may accept
+traffic immediately. Open checks live DB, unique healthy Backend, configured Image
+Tag/container environment/loopback readiness version, then the existing Cutover
+Status Operator. Complete JSON must confirm WORKFLOW_OPEN + WORKFLOW; exit code or
+matching text is insufficient. No financial configuration validator is duplicated.
+Failed startup attempts explicit closure and retains DB/configuration. Verify public
+HTTPS/ACME after authorized opening and close immediately if checks fail.
+
+Web uses public-web profile and restart: no; Backend also uses restart: no. Default
+Compose selects DB/Backend only; daemon restart cannot resume Backend/public Web.
+Use explicit start/approved open afterward. Close is idempotent, confirms project
+Web stopped and retains Backend/DB/data/Session/Gate/configuration/volumes. External
+CDN/proxies/other ingress are not controlled. If Docker cannot confirm closure,
+use the Owner's external ingress plan rather than claiming the entry is closed.
+
+Controls use an absolute readable DEMO_DEPLOY_ENV and absolute checked-in Compose
+file. Reviewed alternatives use DEMO_COMPOSE_FILE and optional DEMO_COMPOSE_OVERRIDE;
+keep the production host-wide Backend identity. Effective configuration is checked
+as JSON without printing credentials. JSON parsing uses host Node if available or
+the same Node 24 image in an unprivileged read-only network-none parser container.
+Docker-only hosts need no extra installation. One Owner operation at a time;
+arbitrary Docker administrators/external writers remain outside this boundary.
+See [complete safety contract/evidence](tasks/demo-05d1-deployment-safety.md).
 
 ## Maintenance and retention
 
