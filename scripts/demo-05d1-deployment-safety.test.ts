@@ -61,6 +61,11 @@ test('Demo-05D-1 real Docker: staged startup, explicit approval, offline operato
     if(violation==='backend-replicas')unsafe.services.backend.deploy={replicas:2};
     const rejected=await command(process.execPath,['deploy/scripts/control-json.cjs','config'],process.env,JSON.stringify(unsafe));assert.notEqual(rejected.code,0,violation);
    }
+   // POSIX disables implicit errexit inside a function used by an OR guard.
+   // A failed enumeration must never become the valid empty/offline observation.
+   const guarded=await command(shell,['-c','. "$(dirname -- "$0")/common.sh"; service_ids() { return 73; }; backend_observation offline || exit 74; exit 0',posix(resolve('deploy/scripts/operate.sh'))],
+    {...process.env,COMPOSE_PROJECT_NAME:id,DEMO_DEPLOY_ENV:posix(envFile),DEMO_COMPOSE_FILE:posix(resolve('deploy/compose.yaml')),DEMO_COMPOSE_OVERRIDE:posix(override)});
+   assert.notEqual(guarded.code,0,'Failed Backend enumeration must fail closed even inside a conditional');
   });
   await t.test('production images and POSIX deployment scripts build without public operations',async()=>{
    await compose('--profile','operations','--profile','public-web','build','backend','operator','web');

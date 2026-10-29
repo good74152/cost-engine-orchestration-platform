@@ -40,7 +40,8 @@ backend_ids() {
 }
 inspect_ids() { if [ -z "$1" ]; then printf '[]'; else docker_control inspect $1 2>/dev/null; fi; }
 backend_observation() {
-  ids=$(backend_ids); observation=$(inspect_ids "$ids") || fail 'Backend inspection failed'
+  ids=$(backend_ids) || fail 'Backend enumeration failed; offline state is unconfirmed'
+  observation=$(inspect_ids "$ids") || fail 'Backend inspection failed'
   printf '%s' "$observation" | json_check "$1" "$project" "$backend_name" "$backend_image" "$deployment_version" 2>/dev/null
 }
 assert_offline() {

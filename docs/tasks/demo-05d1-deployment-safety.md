@@ -87,6 +87,9 @@ durable status can resolve uncertainty for a new explicit Owner-approved opening
 Backend readiness/version failure, LEGACY_OPEN, DRAINING, configuration conflict,
 unavailable DB and invalid/unknown status all refuse Web. Failed Web startup is
 followed by closure verification; no database/configuration rebuild or rollback.
+Backend enumeration errors explicitly fail closed, including POSIX conditional
+contexts where implicit shell errexit is disabled; an error is never an empty
+offline container list. A targeted conditional-error regression covers this.
 If Docker cannot confirm a stop or target configuration cannot be resolved,
 report closure unconfirmed and use the Owner's reviewed external ingress plan;
 do not claim every public entrypoint is closed.
