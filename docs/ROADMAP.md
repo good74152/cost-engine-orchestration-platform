@@ -157,13 +157,23 @@ confirmed drain, compatible serving binaries, verification of all queued/in-flig
 work and unknown outcomes, no incompatible retained work or external writers,
 and a reviewed cutover/rollback plan. Active Session count alone is insufficient.
 
-Demo-05C-3A implements the trusted CAPEX Configuration Cutover capability under
-[ADR-0018](adr/0018-demo-workflow-configuration-cutover.md), pending System Owner
-Review. It atomically versions CAPEX configuration and transitions drained
+Demo-05C-3A is merged via PR #40 at `890e325`. It implements the trusted CAPEX
+Configuration Cutover capability under
+[ADR-0018](adr/0018-demo-workflow-configuration-cutover.md). It atomically versions CAPEX configuration and transitions drained
 admission to WORKFLOW_OPEN; it performs no actual production cutover. Old-session
 quiescence/offline verification, compatible images and backup/rollback review
 remain operator requirements. Templates are still PREVIEW and no Workflow UI or
 runner is enabled. See [scope/runbook/evidence](tasks/demo-05c3a-configuration-cutover.md).
+
+Demo-05C-3B adds real PostgreSQL verification of the six-domain, ten-Job Workflow
+using existing Demo APIs after the actual fixture drain/cutover operators. It
+covers input isolation, CAPEX's two-Job immutable snapshot, Retry/lost ACK recovery,
+competing first Runs and both upstream Publish/First Run lock orders. All four
+static Templates advance to v2/PREVIEW and describe the post-cutover dependencies
+and complete Job lists. Legacy Guided fixtures remain separate. No Core, Gate,
+cutover, schema, Frontend or production configuration changes; Workflow UI/runner
+remain deferred. See [scope and evidence](tasks/demo-05c3b-six-domain-workflow-verification.md).
+Implementation awaits System Owner Review.
 
 ## Deferred until a concrete requirement
 
