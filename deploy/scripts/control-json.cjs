@@ -27,6 +27,53 @@ try {
       requireValue(service.secrets.some(s => s.source === 'database_url' && ['database_url','/run/secrets/database_url'].includes(s.target)));
     }
     console.log([v,data.name,b.container_name,b.image,w.image].join('|'));
+  } else if (mode === 'backup-manifest' || mode === 'backup-metadata' || mode === 'backup-match' || mode === 'restore-result') {
+    const digest = v => typeof v === 'string' && /^[a-f0-9]{64}$/.test(v);
+    const preflight = v => v && v.result === 'PASS' && v.postgresVersion === '18' && v.admissionState === 'DRAINING'
+      && v.configuration === 'LEGACY' && v.businessDataEmpty === true && /^[A-Za-z0-9._-]{1,80}$/.test(v.deploymentVersion)
+      && typeof v.admissionUpdatedAt === 'string' && new Date(v.admissionUpdatedAt).toISOString() === v.admissionUpdatedAt
+      && Array.isArray(v.migrations) && v.migrations.length > 0 && v.migrations.every(n => /^\d+_[a-z0-9-]+$/.test(n))
+      && v.counts && Object.keys(v.counts).length > 0 && Object.values(v.counts).every(n => n === 0)
+      && digest(v.schemaSha256) && digest(v.configurationSha256);
+    const same = (a,b) => {
+      const normalize = v => Array.isArray(v) ? v.map(normalize) : v && typeof v === 'object' ? Object.fromEntries(Object.keys(v).sort().map(k=>[k,normalize(v[k])])) : v;
+      return JSON.stringify(normalize(a)) === JSON.stringify(normalize(b));
+    };
+    if (mode === 'backup-manifest') {
+      requireValue(preflight(data) && /^cost-engine-backup-[A-Za-z0-9_-]+$/.test(project) && /^[1-9][0-9]*$/.test(name) && digest(image));
+      console.log(JSON.stringify({formatVersion:1,result:'BACKUP_CREATED',identity:project,fileName:'backup.dump',sizeBytes:name,sha256:image,createdAt:new Date().toISOString(),preflight:data}));
+    } else if (mode === 'backup-match') {
+      requireValue(preflight(data.before) && preflight(data.after) && same(data.before,data.after)); console.log('MATCH');
+    } else {
+      const manifest = mode === 'restore-result' ? data.manifest : data;
+      requireValue(manifest && Object.keys(manifest).sort().join(',') === 'createdAt,fileName,formatVersion,identity,preflight,result,sha256,sizeBytes');
+      requireValue(manifest.formatVersion === 1 && manifest.result === 'BACKUP_CREATED' && manifest.fileName === 'backup.dump'
+        && /^cost-engine-backup-[A-Za-z0-9_-]+$/.test(manifest.identity) && /^[1-9][0-9]*$/.test(manifest.sizeBytes)
+        && digest(manifest.sha256) && preflight(manifest.preflight) && new Date(manifest.createdAt).toISOString() === manifest.createdAt);
+      if (mode === 'backup-metadata') {
+        requireValue(manifest.identity === project && manifest.sizeBytes === name && manifest.sha256 === image);
+        console.log([manifest.preflight.deploymentVersion,manifest.sha256,manifest.identity].join('|'));
+      } else {
+        requireValue(preflight(data.restored) && same(manifest.preflight,data.restored));
+        console.log(JSON.stringify({result:'RESTORE_VERIFIED',backupIdentity:manifest.identity,sha256:manifest.sha256,sizeBytes:manifest.sizeBytes,
+          postgresVersion:'18',configuration:'LEGACY',admissionState:'DRAINING',businessDataEmpty:true,schemaSha256:data.restored.schemaSha256,
+          configurationSha256:data.restored.configurationSha256,counts:data.restored.counts,
+          isolation:{container:project,volume:name,database:'restore_'+image,network:'none',publishedPorts:0,cleaned:true}}));
+      }
+    }
+  } else if (mode === 'restore-volume') {
+    requireValue(Array.isArray(data) && data.length === 1); const v=data[0];
+    requireValue(v.Name === project && v.Driver === 'local' && !Object.keys(v.Options ?? {}).length
+      && v.Labels?.['cost-engine.restore.owner'] === name && v.Labels?.['cost-engine.restore.purpose'] === 'demo05d2');
+  } else if (mode === 'restore-container') {
+    requireValue(Array.isArray(data) && data.length === 1); const c=data[0];
+    requireValue(c.Id === project && c.Config.Image === 'postgres:18' && c.Config.Labels?.['cost-engine.restore.owner'] === image
+      && c.Config.Labels?.['cost-engine.restore.purpose'] === 'demo05d2' && c.HostConfig.NetworkMode === 'none'
+      && !Object.keys(c.HostConfig.PortBindings ?? {}).length && !c.HostConfig.Privileged && c.HostConfig.RestartPolicy.Name === 'no');
+    requireValue(Object.keys(c.NetworkSettings.Networks).join(',') === 'none');
+    requireValue(c.Mounts.length === 1 && c.Mounts[0].Type === 'volume' && c.Mounts[0].Name === name && c.Mounts[0].Destination === '/var/lib/postgresql');
+    requireValue(c.Config.Env.includes('POSTGRES_USER=restore_owner') && c.Config.Env.includes('POSTGRES_DB=restore_'+image)
+      && c.Config.Env.includes('POSTGRES_HOST_AUTH_METHOD=trust') && !c.Config.Env.some(v => /^POSTGRES_PASSWORD(?:_FILE)?=/.test(v)));
   } else if (mode === 'workflow-status') {
     requireValue(data && !Array.isArray(data) && Object.keys(data).sort().join(',') === 'configuration,state,updatedAt');
     requireValue(data.state === 'WORKFLOW_OPEN' && data.configuration === 'WORKFLOW');

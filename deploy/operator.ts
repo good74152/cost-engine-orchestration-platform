@@ -7,7 +7,11 @@ async function main() {
   loadDeploymentSecrets();
   if (!publicDemoConfig()) throw new Error('Explicit public Demo profile required');
   const operation = process.argv[2];
-  if (operation === 'migrate-up') {
+  if (operation === 'cutover-preflight') {
+    if (process.argv.length !== 3) throw new Error('Unexpected preflight arguments');
+    const { runCutoverPreflight } = await import('./preflight.js');
+    await runCutoverPreflight();
+  } else if (operation === 'migrate-up') {
     const result = spawnSync('npm', ['run', 'migrate', '--', 'up'], { env: process.env, stdio: 'pipe' });
     // Migration output may include SQL/data. Do not emit it into shared logs.
     if (result.status !== 0) throw new Error('Migration failed; inspect database using private operator tooling');
@@ -30,7 +34,7 @@ async function main() {
   } else if (operation === 'cutover-status' || operation === 'cutover') {
     const { runDemoCutoverCommand } = await import('../scripts/demo-cutover.js');
     await runDemoCutoverCommand(operation === 'cutover-status' ? 'status' : 'cutover', process.argv.slice(3));
-  } else throw new Error('Choose migrate-up, seed, seed-six-domain, admission-status, admission-drain, cutover-status or cutover; automatic down is unsupported');
+  } else throw new Error('Choose migrate-up, seed, seed-six-domain, admission-status, admission-drain, cutover-preflight, cutover-status or cutover; automatic down is unsupported');
 }
 main().catch(error => {
   console.error(error instanceof DemoSessionError ? `${error.code}: ${error.message}`

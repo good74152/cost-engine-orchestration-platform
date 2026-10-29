@@ -53,6 +53,8 @@ jobs:
       - run: npm run test:demo-04-containers
       - run: npm run test:demo-05d1:typecheck
       - run: npm run test:demo-05d1
+      - run: npm run test:demo-05d2:typecheck
+      - run: npm run test:demo-05d2
       - run: npm run ui:smoke
       - run: npm run ui:smoke:workflow
       - run: npm run test:demo-05c3c:typecheck
