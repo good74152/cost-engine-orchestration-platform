@@ -102,7 +102,7 @@ export async function cutoverPreflight(db: Pool, deploymentVersion: string, migr
     if (!/^[A-Za-z0-9._-]{1,80}$/.test(deploymentVersion)) throw rejected();
     client=await db.connect(); await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
     await client.query("SET LOCAL lock_timeout='3s'"); await client.query("SET LOCAL statement_timeout='5s'");
-    await client.query('SET LOCAL search_path=public,pg_catalog');
+    await client.query('SET LOCAL search_path=pg_catalog,public');
     await client.query("SET LOCAL TimeZone='UTC'");
     const gate=await lockDemoAdmission(client);
     if(gate.state!=='DRAINING') throw rejected();
