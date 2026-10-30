@@ -2,6 +2,17 @@ name: Build and isolated verification
 on: [push, pull_request]
 permissions: {contents: read}
 jobs:
+  recovery-readiness:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with: {node-version: '24', cache: npm, cache-dependency-path: 'package-lock.json'}
+      - run: npm ci
+      - run: npm run test:demo-05d3c:typecheck
+      - run: npm run test:demo-05d3c
+      - run: sh -n deploy/scripts/recovery-readiness.sh
+      - run: git diff --check
   verify:
     runs-on: ubuntu-24.04
     services:

@@ -1,5 +1,4 @@
 // Operational backup DTOs only; Workflow/Schema validation stays in TypeScript.
-module.exports = (data, mode, project, name, image, version) => {
   const requireValue = value => { if (!value) throw Error('Invalid operational backup observation'); };
   const digest = v => typeof v === 'string' && /^[a-f0-9]{64}$/.test(v);
   const iso = v => typeof v === 'string' && new Date(v).toISOString() === v;
@@ -13,6 +12,15 @@ module.exports = (data, mode, project, name, image, version) => {
     ? Object.fromEntries(Object.keys(v).sort().map(k => [k, normalize(v[k])])) : v;
   const same = (a, b) => JSON.stringify(normalize(a)) === JSON.stringify(normalize(b));
   const identity = v => /^cost-engine-live-backup-[A-Za-z0-9_-]+$/.test(v);
+  // Shared assertion: offline readiness consumes exactly the existing 3A DTO.
+  const assertOperationalManifest = manifest => {
+    requireValue(manifest && Object.keys(manifest).sort().join(',') === 'createdAt,fileName,formatVersion,identity,purpose,result,sha256,sizeBytes,snapshot,startedAt');
+    requireValue(manifest.formatVersion === 1 && manifest.purpose === 'OPERATIONAL' && manifest.result === 'BACKUP_CREATED'
+      && manifest.fileName === 'backup.dump' && identity(manifest.identity) && /^[1-9][0-9]*$/.test(manifest.sizeBytes)
+      && digest(manifest.sha256) && evidence(manifest.snapshot) && iso(manifest.createdAt) && iso(manifest.startedAt)
+      && manifest.startedAt <= manifest.createdAt);
+  };
+module.exports = (data, mode, project, name, image, version) => {
   if (mode === 'live-holder') {
     requireValue(Array.isArray(data) && data.length === 1); const c = data[0];
     requireValue(typeof c.Id === 'string' && /^[a-f0-9]{64}$/.test(c.Id)
@@ -33,11 +41,7 @@ module.exports = (data, mode, project, name, image, version) => {
       fileName: 'backup.dump', sizeBytes: name, sha256: image, startedAt: version, createdAt: new Date().toISOString(), snapshot: data.evidence })); return;
   }
   const manifest = mode === 'live-restore-result' ? data.manifest : data;
-  requireValue(manifest && Object.keys(manifest).sort().join(',') === 'createdAt,fileName,formatVersion,identity,purpose,result,sha256,sizeBytes,snapshot,startedAt');
-  requireValue(manifest.formatVersion === 1 && manifest.purpose === 'OPERATIONAL' && manifest.result === 'BACKUP_CREATED'
-    && manifest.fileName === 'backup.dump' && identity(manifest.identity) && /^[1-9][0-9]*$/.test(manifest.sizeBytes)
-    && digest(manifest.sha256) && evidence(manifest.snapshot) && iso(manifest.createdAt) && iso(manifest.startedAt)
-    && manifest.startedAt <= manifest.createdAt);
+  assertOperationalManifest(manifest);
   if (mode === 'live-backup-metadata') {
     requireValue(manifest.identity === project && manifest.sizeBytes === name && manifest.sha256 === image);
     console.log([manifest.snapshot.deploymentVersion, manifest.sha256, manifest.identity].join('|'));
@@ -50,3 +54,4 @@ module.exports = (data, mode, project, name, image, version) => {
       isolation: { container: project, volume: name, database: 'restore_' + image, network: 'none', publishedPorts: 0, cleaned: true } }));
   } else throw Error('Unsupported operational observation');
 };
+module.exports.assertOperationalManifest = assertOperationalManifest;

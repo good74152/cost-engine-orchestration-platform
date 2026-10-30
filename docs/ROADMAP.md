@@ -230,6 +230,17 @@ never failed or redispatched automatically. See [runbook](RECOVERY_DRILL.md) and
 [task](tasks/demo-05d3b-dr-drill.md). Await System Owner Review; actual production
 recovery, runtime/executor restoration and public activation remain out of scope.
 
+Demo-05D-3B is merged via PR #46 at `cdfa567`.
+
+Demo-05D-3C adds offline Recovery Readiness evaluation of private Operational
+bundles and current actual Drill reports under explicit Owner policy. Local and
+Disaster recovery points are selected separately; trusted signed Owner review
+binds off-host retrieval to exact archive and Drill hashes. Private reports
+disclose the attestation boundary and never approve production/service recovery.
+No backup/restore/sync/scheduling/activation operation is added. See
+[runbook](RECOVERY_READINESS.md) and [task](tasks/demo-05d3c-recovery-readiness.md).
+Await System Owner Review.
+
 ## Deferred until a concrete requirement
 
 - Real Airflow HTTP adapter and external cancellation.
