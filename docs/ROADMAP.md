@@ -203,9 +203,22 @@ Cutover rewrite or Web activation is introduced. First deployment requires all
 business/history/raw/DPR data empty; Owner checks still exclude other writers,
 concurrent operations and unresolved outcomes. See
 [scope, failure decisions and verification](tasks/demo-05d2-cutover-preflight-backup-recovery.md).
-Await System Owner Review. Actual VPS deployment, required Demo-05D-3 acceptance,
+Demo-05D-2 is merged via PR #44 at `480f5db`, including complete critical Schema
+invariant validation. Actual VPS deployment, required Demo-05D-3 acceptance,
 off-site backup and production Cutover/Disaster Recovery remain separate Owner
 operations; RESTORE_VERIFIED does not grant those approvals.
+
+Demo-05D-3A adds separate WORKFLOW_OPEN online logical backup and real isolated
+PostgreSQL 18 restore verification for retained Session/Dataset/Job/Attempt/
+snapshot data. A held exported snapshot unifies validation/data fingerprints and
+pg_dump while normal API writes continue. Existing Schema/Configuration validation
+and no-target restore ownership protections are reused; first-deployment tools
+retain their stricter contract. Disposable PostgreSQL lock barriers, live Backend
+API concurrency and dump/connection/integrity/restore failure cases are verified.
+See [bounded task and operational policy](tasks/demo-05d3a-operational-backup.md).
+Await System Owner Review. Production database restore, executor/runtime recovery,
+off-host policy execution, scheduling/retention deletion and achieved RPO/RTO
+remain separate Owner work; no public activation or production operation occurs.
 
 ## Deferred until a concrete requirement
 

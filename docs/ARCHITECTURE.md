@@ -1060,3 +1060,47 @@ unchanged. Conflict/UNKNOWN/unavailability stops work with Web closed; confirmed
 DRAINING/LEGACY requires new preflight and separate retry approval. WORKFLOW_OPEN
 stays irreversible; actual restore needs separate Disaster Recovery authorization.
 See [scope/runbook/evidence](tasks/demo-05d2-cutover-preflight-backup-recovery.md).
+
+## 37. Operational Online Backup and Disposable Data Restore
+
+Demo-05D-3A adds a separate `backup-live.sh` entrypoint for WORKFLOW_OPEN with
+the unchanged complete WORKFLOW Configuration validator (six Domains, ten Types).
+Retained Sessions, Datasets, Jobs, Attempts, snapshots and raw/history data are
+permitted. First-deployment DRAINING/LEGACY/empty/offline checks are unchanged.
+
+A dedicated, foreground-operation connection holds REPEATABLE READ and exports
+a PostgreSQL snapshot. Its Schema/Configuration validation, actual FK/CHECK row
+checks, stored snapshot bindings, counts and complete business-row SHA-256 share
+that snapshot with `pg_dump -Fc --snapshot`. Counts describe the snapshot, not a
+before/after equality test. No runtime or FakeExecutor is created by verification.
+Streaming hash reads use batches and deterministic C-collation/UTC formatting;
+sort work still consumes database temporary space. The existing logical Schema
+fingerprint and complete Configuration fingerprint remain intact.
+
+Lock order is Gate FOR SHARE → existing Configuration SHARE → migration inventory
+SHARE → business-table ACCESS SHARE. This permits normal business DML, Session
+capacity admission, Run/Reconcile/Publish and Reset; there is no business-row lock
+or quiescence check. Configuration writes and migration-inventory mutations wait;
+incompatible ACCESS EXCLUSIVE DDL waits behind business relation locks. The
+trusted Owner must exclude concurrent migrations/Cutover/deployment/configuration
+changes and arbitrary administrators; these locks are not a universal DBA fence.
+An exported snapshot pins old row versions: monitor transaction age, disk and
+vacuum pressure. Acquisition is bounded at 3 seconds, SQL at 60 seconds and the
+holder at 60 minutes; failures roll back/release and never publish success.
+
+The separate operational manifest records private archive identity, size,
+SHA-256, Deployment Version, start/completion time and snapshot evidence. No
+Backend stop/start, migration, seed, cleanup, dispatch or durable backup state is
+performed. Each newly owned bundle is exclusive; failed partial bundles alone
+are removed. Backup JSON is metadata, never business rows or credentials.
+
+`verify-backup-live.sh` selects operational validation inside the same Demo-05D-2
+no-target restore harness: fresh PostgreSQL 18, random owned Container/Volume,
+network none, no source mounts/secrets/connection and exact-owned cleanup. Actual
+pg_restore must succeed and Migration/Schema/Configuration/complete data hashes
+and counts must match that snapshot before RESTORE_VERIFIED. It starts no Backend
+and cannot restore a production target. Database restore does not restore lost
+FakeExecutor memory, Session eligibility or users' execution capability; startup
+invalidation and unknown-outcome recovery remain unchanged. Owner-defined backup
+retention, off-host protection and measured RPO/RTO remain operational obligations.
+See [operational contract and recovery boundary](tasks/demo-05d3a-operational-backup.md).
