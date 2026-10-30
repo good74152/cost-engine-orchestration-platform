@@ -15,11 +15,12 @@ module.exports = (data, mode, project, name, image, version) => {
   const identity = v => /^cost-engine-live-backup-[A-Za-z0-9_-]+$/.test(v);
   if (mode === 'live-holder') {
     requireValue(Array.isArray(data) && data.length === 1); const c = data[0];
-    requireValue(c.Name === '/' + name && c.Config.Image === 'cost-engine-demo-operator:' + version
+    requireValue(typeof c.Id === 'string' && /^[a-f0-9]{64}$/.test(c.Id)
+      && c.Name === '/' + name && c.Config.Image === 'cost-engine-demo-operator:' + version
       && c.Config.Labels?.['com.docker.compose.project'] === project
       && c.Config.Labels?.['cost-engine.backup.owner'] === image && identity(image)
       && c.Config.Labels?.['cost-engine.backup.purpose'] === 'demo05d3a');
-    return;
+    console.log(c.Id); return;
   }
   if (mode === 'live-snapshot') {
     requireValue(data && Object.keys(data).sort().join(',') === 'evidence,snapshot' && evidence(data.evidence)

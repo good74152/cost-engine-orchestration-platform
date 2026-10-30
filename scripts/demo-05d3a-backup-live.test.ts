@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { spawn } from 'node:child_process';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
-import { mkdtemp, mkdir, writeFile, readFile, readdir, rm, stat } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, readFile, readdir, rm, rmdir, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { resolve, join, dirname, basename } from 'node:path';
 import { setImmediate } from 'node:timers/promises';
@@ -20,6 +20,11 @@ const digest = (b: Buffer) => createHash('sha256').update(b).digest('hex');
 async function until<T>(read: () => Promise<T>, ready: (v: T) => boolean, label: string) {
   const deadline = Date.now() + 120000;
   for (;;) { const value = await read(); if (ready(value)) return value; assert.ok(Date.now() < deadline, label); await setImmediate(); }
+}
+async function within<T>(pending: Promise<T>, milliseconds: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try { return await Promise.race([pending, new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error('Cleanup exceeded its bounded deadline')), milliseconds); })]); }
+  finally { clearTimeout(timer); }
 }
 
 test('Demo-05D-3A real Docker: live API writes, shared snapshot and isolated data restore', { timeout: 1200000 }, async t => {
@@ -77,7 +82,7 @@ test('Demo-05D-3A real Docker: live API writes, shared snapshot and isolated dat
     const actual = (await command(shell, ['-c', 'command -v docker'])).out.trim(); assert.ok(actual);
     const marker = join(directory, mode + '.ready'), release = join(directory, mode + '.release');
     const dumpFirst = mode === 'connection-after-dump' ? '"$DEMO_TEST_REAL_DOCKER" "$@" || exit 48\n' : '';
-    const stopAfter = mode === 'connection-after-dump' ? 'exit 0\n' : '';
+    const stopAfter = mode === 'connection-after-dump' ? 'exit 0\n' : ['cleanup-dump-failure', 'cleanup-ownership'].includes(mode) ? 'exit 47\n' : '';
     await writeFile(join(bin, 'docker'), `#!/bin/sh\ncase " $* " in *" pg_dump "*)\n ${dumpFirst}printf ready > "$DEMO_TEST_MARKER"\n ${mode === 'fail' ? 'exit 47' : 'while [ ! -f "$DEMO_TEST_RELEASE" ]; do sleep 0.05; done'}\n ${stopAfter};; esac\nexec "$DEMO_TEST_REAL_DOCKER" "$@"\n`, { mode: 0o755 });
     const pending = command(shell, ['-c', 'PATH="$1:$PATH"; export PATH; exec sh "$2" --database-url-file /run/secrets/database_url', 'fault', posix(bin), posix(resolve('deploy/scripts/backup-live.sh'))],
       { ...env, DEMO_TEST_REAL_DOCKER: actual, DEMO_TEST_MARKER: posix(marker), DEMO_TEST_RELEASE: posix(release) });
@@ -163,6 +168,82 @@ test('Demo-05D-3A real Docker: live API writes, shared snapshot and isolated dat
       const initial = (await readdir(backups)).sort(), before = await sourceIdentity(); const f = await fault('fail'); const r = await f.pending;
       assert.notEqual(r.code, 0); assert.match(r.err, /dump failed/); assert.doesNotMatch(r.out, /BACKUP_CREATED/);
       assert.deepEqual((await readdir(backups)).sort(), initial); assert.equal(await sql("SELECT count(*) FROM pg_stat_activity WHERE application_name='cost-engine-operational-backup'"), '0');
+      assert.deepEqual(await sourceIdentity(), before);
+    });
+    const cleanupFailure = async (mode: string) => {
+      const initial = (await readdir(backups)).sort(), before = await sourceIdentity(), originalHash = digest(await readFile(archive));
+      const dataBefore = await sql(`SELECT jsonb_object_agg(name,hash) FROM (
+        SELECT 'sessions' AS name,md5(jsonb_agg(to_jsonb(s) ORDER BY s.id)::text) AS hash FROM demo_sessions s UNION ALL
+        SELECT 'datasets',md5(jsonb_agg(to_jsonb(v) ORDER BY v.id)::text) FROM dataset_versions v UNION ALL
+        SELECT 'jobs',md5(jsonb_agg(to_jsonb(j) ORDER BY j.id)::text) FROM calculation_jobs j UNION ALL
+        SELECT 'attempts',md5(jsonb_agg(to_jsonb(a) ORDER BY a.id)::text) FROM execution_attempts a) x`);
+      const f = await fault(mode); let bundle = '', held: any, foreign: any;
+      try {
+        await until(() => stat(f.marker).then(() => true, () => false), Boolean, 'cleanup fault / dump barrier');
+        const active = (await readdir(backups)).filter(n => !initial.includes(n)); assert.equal(active.length, 1); bundle = join(backups, active[0]!);
+        const heldId = (await docker(['ps', '--filter', 'label=cost-engine.backup.owner=' + active[0]!, '--format', '{{.ID}}'])).out.trim(); assert.ok(heldId);
+        held = JSON.parse((await docker(['inspect', heldId])).out)[0]; assert.equal(held.Config.Labels['com.docker.compose.project'], id);
+        assert.equal(await sql("SELECT count(*) FROM pg_stat_activity WHERE application_name='cost-engine-operational-backup' AND state='idle in transaction'"), '1');
+        // A directory is deterministically unwritable as a regular file on both
+        // Windows and Linux. This touches only this disposable backup attempt.
+        await mkdir(join(bundle, 'release.control'));
+        if (mode === 'cleanup-ownership') {
+          // Simulate replacement by an administrator: the attached original keeps
+          // its immutable ID; the old name now belongs to a proven foreign decoy.
+          await docker(['rename', held.Id, basename(bundle) + '-original']);
+          const decoyId = (await docker(['create', '--name', held.Name.slice(1), '--label', 'cost-engine.cleanup-test.foreign=' + id,
+            '--network', 'none', 'node:24-bookworm-slim', 'node', '-e', 'process.exit(0)'])).out.trim();
+          foreign = JSON.parse((await docker(['inspect', decoyId])).out)[0];
+        }
+        const start = Date.now(); await writeFile(f.release, 'release'); const r = await within(f.pending, 60000);
+        assert.ok(Date.now() - start < 60000); assert.notEqual(r.code, 0); assert.doesNotMatch(r.out, /BACKUP_CREATED/);
+        for (const secret of privateValues) assert.ok(!(r.out + r.err).includes(secret));
+        if (mode === 'cleanup-ownership') {
+          assert.match(r.err, /ownership unconfirmed.*inspect manually/i);
+          assert.equal(JSON.parse((await docker(['inspect', foreign.Id])).out)[0].Id, foreign.Id, 'Unknown owner must never be removed');
+        }
+        await until(async () => (await docker(['inspect', held.Id], false)).code, c => c !== 0, 'Owned attached holder must exit without a release file');
+        assert.equal(await sql("SELECT count(*) FROM pg_stat_activity WHERE application_name='cost-engine-operational-backup'"), '0');
+        assert.deepEqual((await readdir(backups)).sort(), initial); assert.equal(digest(await readFile(archive)), originalHash);
+        assert.deepEqual(await sourceIdentity(), before);
+        const dataAfter = await sql(`SELECT jsonb_object_agg(name,hash) FROM (
+          SELECT 'sessions' AS name,md5(jsonb_agg(to_jsonb(s) ORDER BY s.id)::text) AS hash FROM demo_sessions s UNION ALL
+          SELECT 'datasets',md5(jsonb_agg(to_jsonb(v) ORDER BY v.id)::text) FROM dataset_versions v UNION ALL
+          SELECT 'jobs',md5(jsonb_agg(to_jsonb(j) ORDER BY j.id)::text) FROM calculation_jobs j UNION ALL
+          SELECT 'attempts',md5(jsonb_agg(to_jsonb(a) ORDER BY a.id)::text) FROM execution_attempts a) x`);
+        assert.equal(dataAfter, dataBefore);
+      } finally {
+        // Test rescue is exact-owned and also unblocks a regressed producer so
+        // a failing test cannot leave an unbounded host process or DB transaction.
+        if (bundle && await stat(bundle).then(() => true, () => false)) {
+          assert.equal(dirname(resolve(bundle)), resolve(backups)); assert.match(basename(bundle), /^cost-engine-live-backup-[A-Za-z0-9_-]+$/);
+          await rm(join(bundle, 'release.control'), { force: true }).catch(() => rmdir(join(bundle, 'release.control')));
+          await writeFile(join(bundle, 'release.control'), 'ABORT\n');
+        }
+        await writeFile(f.release, 'release'); await within(f.pending, 60000);
+        if (held && (await docker(['inspect', held.Id], false)).code === 0) {
+          const now = JSON.parse((await docker(['inspect', held.Id])).out)[0]; assert.equal(now.Config.Labels['cost-engine.backup.owner'], basename(bundle));
+          await docker(['rm', '--force', '--volumes', held.Id]);
+        }
+        if (foreign) { const now = JSON.parse((await docker(['inspect', foreign.Id])).out)[0]; assert.equal(now.Config.Labels['cost-engine.cleanup-test.foreign'], id); await docker(['rm', foreign.Id]); }
+        if (bundle) { assert.equal(dirname(bundle), backups); assert.ok(basename(bundle).startsWith('cost-engine-live-backup-')); await rm(bundle, { recursive: true, force: true }); }
+      }
+    };
+    await t.test('A: release.control write failure still cleans the verified holder and never waits indefinitely', () => cleanupFailure('cleanup-release'));
+    await t.test('B: pg_dump failure plus unwritable release.control preserves prior backups and source data', () => cleanupFailure('cleanup-dump-failure'));
+    await t.test('C: unknown ownership preserves the foreign replacement and returns a bounded sanitized failure', () => cleanupFailure('cleanup-ownership'));
+    await t.test('cleanup failure after a confirmed dump still prevents manifest publication and BACKUP_CREATED', async () => {
+      const initial = (await readdir(backups)).sort(), before = await sourceIdentity(), bin = join(directory, 'shim-post-dump-cleanup'); await mkdir(bin);
+      const actual = (await command(shell, ['-c', 'command -v sha256sum'])).out.trim(); assert.ok(actual);
+      // This private PATH shim changes only the current bundle after checksumming;
+      // there is no test switch, arbitrary path or fault endpoint in production.
+      await writeFile(join(bin, 'sha256sum'), '#!/bin/sh\n"$DEMO_TEST_REAL_SHA" "$@" || exit\nrm -f -- release.control || exit\nmkdir release.control\n', { mode: 0o755 });
+      const r = await within(command(shell, ['-c', 'PATH="$1:$PATH"; export PATH; exec sh "$2" --database-url-file /run/secrets/database_url',
+        'fault', posix(bin), posix(resolve('deploy/scripts/backup-live.sh'))], { ...env, DEMO_TEST_REAL_SHA: actual }), 120000);
+      assert.notEqual(r.code, 0); assert.doesNotMatch(r.out, /BACKUP_CREATED/); assert.match(r.err, /cleanup failed/i);
+      for (const secret of privateValues) assert.ok(!(r.out + r.err).includes(secret));
+      assert.deepEqual((await readdir(backups)).sort(), initial); assert.equal(digest(await readFile(archive)), manifest.sha256);
+      assert.equal(await sql("SELECT count(*) FROM pg_stat_activity WHERE application_name='cost-engine-operational-backup'"), '0');
       assert.deepEqual(await sourceIdentity(), before);
     });
     await t.test('snapshot connection loss during dump fails closed and cleans only the current attempt', async () => {

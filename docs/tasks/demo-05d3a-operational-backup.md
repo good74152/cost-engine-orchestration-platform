@@ -174,3 +174,34 @@ Actual initial disposable restore evidence (source remained running):
 | Runtime boundary | unchanged original Backend ID/start time and Fake execution identities; no restored Backend started |
 
 No production operation is performed.
+
+## PR #45 review fix — Failure Cleanup Hardening
+
+Reviewed baseline `f1ae4d480887336e5e3d4d949c703ed97d2839fa`. Cleanup now
+accumulates filesystem failures without errexit skipping later actions. It does
+not wait on the background pipeline. The producer observes the foreground
+process lifetime (signal 0 only) and has a finite lifetime; no arbitrary host
+process is killed. Normal holder completion is bounded at 15 seconds.
+
+Each cleanup Docker call uses GNU coreutils timeout (8s plus a 2s kill grace).
+The command only bounds its own Docker client process. Container removal requires
+the existing exact name/image/project/purpose/owner checks plus a valid immutable
+Container ID; removal targets that ID, preventing name-replacement deletion.
+A failed inspect requires successful separate exact-name enumeration to prove
+absence. Unknown ownership/unavailability withholds success and emits a sanitized
+backup-identity-only manual inspection message. No unknown resource is removed.
+
+Resource cleanup must succeed before publishing archive/manifest or printing
+BACKUP_CREATED. Failure removes only the newly reserved incomplete bundle;
+previous successful backups and source business state remain unchanged. When
+filesystem/Docker faults prevent confirmed cleanup, the Owner must investigate
+the reported attempt manually. There is no automatic retry or production action.
+
+Additional real Docker faults use private test PATH wrappers and an empty
+directory at the attempt's release.control path, not a full disk or production
+test endpoint. They cover A: control write failure with a successful dump,
+B: dump failure plus control write failure, C: ownership loss through a real
+foreign name replacement, and failure after dump/holder confirmation before
+manifest publication. Tests enforce bounded completion, preserved foreign
+resources/old archives/source identities and data, no retained snapshot
+transaction, sanitized failure output and exact-owned fixture teardown.
