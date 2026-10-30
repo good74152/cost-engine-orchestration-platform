@@ -7,7 +7,11 @@ async function main() {
   loadDeploymentSecrets();
   if (!publicDemoConfig()) throw new Error('Explicit public Demo profile required');
   const operation = process.argv[2];
-  if (operation === 'cutover-preflight') {
+  if (operation === 'backup-live-snapshot') {
+    if (process.argv.length !== 3) throw new Error('Unexpected backup arguments');
+    const { runLiveBackupSnapshot } = await import('./backup-live.js');
+    await runLiveBackupSnapshot();
+  } else if (operation === 'cutover-preflight') {
     if (process.argv.length !== 3) throw new Error('Unexpected preflight arguments');
     const { runCutoverPreflight } = await import('./preflight.js');
     await runCutoverPreflight();

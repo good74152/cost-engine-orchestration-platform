@@ -5,6 +5,7 @@ const [mode, project, name, image, version] = process.argv.slice(2);
 const requireValue = value => { if (!value) throw Error('Invalid deployment observation'); };
 try {
   const data = JSON.parse(fs.readFileSync(0, 'utf8'));
+  if (mode.startsWith('live-')) return require('./live-json.cjs')(data, mode, project, name, image, version);
   if (mode === 'config') {
     const {database: d, backend: b, web: w, operator: o} = data.services;
     const v = b.environment.DEPLOYMENT_VERSION;

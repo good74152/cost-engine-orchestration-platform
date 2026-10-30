@@ -4,6 +4,10 @@
   "description": "Backend orchestration platform for versioned cost-engine datasets and Airflow/ETL execution workflows.",
   "main": "index.js",
   "scripts": {
+    "test:demo-05d3a": "tsx --test scripts/demo-05d3a-operational-backup.pg.test.ts scripts/demo-05d3a-backup-live.test.ts",
+    "test:demo-05d3a:pg": "tsx --test scripts/demo-05d3a-operational-backup.pg.test.ts",
+    "test:demo-05d3a:containers": "tsx --test scripts/demo-05d3a-backup-live.test.ts",
+    "test:demo-05d3a:typecheck": "tsc --ignoreConfig --noEmit --strict --types node --skipLibCheck --esModuleInterop --module NodeNext --target ES2022 deploy/backup-live.ts deploy/verify-restored-live.ts scripts/demo-05d3a-operational-backup.pg.test.ts scripts/demo-05d3a-backup-live.test.ts",
     "test:demo-05d2": "tsx --test scripts/demo-05d2-preflight.pg.test.ts scripts/demo-05d2-backup-restore.test.ts",
     "test:demo-05d2:pg": "tsx --test scripts/demo-05d2-preflight.pg.test.ts",
     "test:demo-05d2:containers": "tsx --test scripts/demo-05d2-backup-restore.test.ts",

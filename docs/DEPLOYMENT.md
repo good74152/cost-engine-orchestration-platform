@@ -286,6 +286,10 @@ See [full contract, transaction boundary and evidence](tasks/demo-05d2-cutover-p
 
 ## Rollback
 
+For WORKFLOW_OPEN operational backups containing business data, use the separate
+[online backup runbook](#operational-backup-after-workflow-cutover). The existing
+first-deployment backup remains DRAINING/LEGACY/empty/offline only.
+
 Retain previous immutable backend/web/operator images and env files. Stop traffic
 and backend, backup, check previous-image schema compatibility, select that image
 version and start one backend. Exact startup inventory rejects incompatible schema;
@@ -362,3 +366,98 @@ Browser refresh rereads durable state on the current running Backend. Backend
 restart still loses process-local Fake state and invalidates old Sessions; it is
 not browser recovery. Keep traffic closed if deployment/cutover fails and follow
 the reviewed compatible-forward-fix/restore plan; never reopen an old binary.
+
+## Operational backup after Workflow cutover
+
+This capability operates only against the explicitly selected existing Compose
+Demo database with WORKFLOW_OPEN and the complete WORKFLOW catalog. It does not
+authorize any production operation. One System Owner coordinates the operation;
+exclude deployments, migration/seed/configuration/Cutover commands and other DBA
+changes for its duration. Keep immutable images, Compose files and secrets fixed.
+Normal user API traffic continues; do not stop/restart Backend for this backup.
+If Backend is running its actual health/image/version must match the selected
+Deployment Version; a stopped/absent Backend is also permitted without starting it.
+
+Provision a private outside-Git directory owned by the trusted operator, mode
+0700 on POSIX (equivalent private Windows ACLs). Ensure free space for the dump,
+SQL sorts and restored Docker volume. Retain the matching immutable local
+`cost-engine-demo-operator:<Deployment Version>` image and trusted manifest.
+
+```sh
+export DEMO_DEPLOY_ENV=/opt/cost-engine-demo/compose.env
+export DEMO_BACKUP_DIR=/var/backups/cost-engine-demo
+sh deploy/scripts/backup-live.sh --database-url-file /run/secrets/database_url
+
+# Only the archive is supplied. No production URL/volume/target is accepted.
+sh deploy/scripts/verify-backup-live.sh --backup-file /var/backups/cost-engine-demo/cost-engine-live-backup-IDENTITY/backup.dump
+```
+
+The target file must name `database:5432/cost_engine_demo` as `demo_owner`, without
+connection query overrides. No implicit DATABASE_URL fallback. Each backup uses
+a fresh private bundle, pg_dump custom format, SHA-256 and byte size. Output
+records Deployment Version, timestamps and validated snapshot evidence. Do not
+log, publish or commit archives/manifests; they include retained private data.
+SHA-256 is corruption detection, not authentication: protect/encrypt the bundle
+and verify the trusted off-host copy after transfer. Never replace a manifest to
+make a failed archive appear trusted.
+
+REPEATABLE READ establishes the data view before export; the holder remains alive
+until pg_dump finishes with that exact snapshot. Concurrent committed Session,
+Dataset, Job/Attempt and Publish changes after the snapshot are intentionally
+excluded. Snapshot counts need not equal live counts after backup. Nontransactional
+sequence counters can advance; gaps are normal. This is a logical single-database
+backup, not cluster roles/tablespaces, external executor state or PITR/WAL backup.
+See PostgreSQL's [pg_dump snapshot option](https://www.postgresql.org/docs/18/app-pgdump.html)
+and [exported snapshot semantics](https://www.postgresql.org/docs/18/functions-admin.html#FUNCTIONS-SNAPSHOT-SYNCHRONIZATION).
+
+Database/connection/dump/validation/checksum/holder failure returns nonzero and
+removes only the newly created incomplete bundle; earlier backups remain. The
+transaction releases locks on exit/disconnection. Inspect any reported unresolved
+owned-resource cleanup privately; never prune arbitrary resources. No automatic
+retry follows an outage. Investigate, confirm source health, then explicitly
+start a new backup. Limits: lock wait 3 seconds, individual SQL 60 seconds,
+snapshot readiness 120 seconds and holder lifetime 60 minutes. A large database
+may exceed these bounds; do not claim a backup succeeded or loosen verification
+to bypass them. Review capacity/retention and a separate scale plan if necessary.
+
+Verification restores into a fresh isolated PostgreSQL 18 Container/Volume, with
+no published ports, no source volume/secrets and network none. It reuses existing
+ownership checks/cleanup and shared Configuration/Schema validators. It verifies
+actual FK/CHECK data and complete row hashes as well as schema/configuration,
+migrations and counts. Only successful real restore, evidence match and cleanup
+produce RESTORE_VERIFIED. Run it with the source offline as an independence drill;
+it must not start Backend. Any failure means no recovery capability is confirmed.
+
+### Backup policy to be set by System Owner
+
+Record the approved values, owners, alerts and executed evidence; none is an
+achieved RPO/RTO claim. No scheduler or automatic historical-backup deletion is
+implemented by this task.
+
+| Control | Owner sets / measures |
+| --- | --- |
+| Backup frequency | Maximum interval, operating window, explicit operator/scheduling ownership; account for write rate and failed backups. |
+| Retention | Required daily/weekly/monthly history and legal/privacy constraints; review copies before any separately authorized manual deletion. |
+| Off-host backup | Independent host/storage, encryption/access/key handling, verified hash after transfer and restore drill from that copy. |
+| Backup age monitoring | Alert threshold from snapshot/start time, latest successful bundle and latest independent restore evidence; failure must not reset age. |
+| Restore verification frequency | Every release/schema change and Owner-selected periodic interval/sample; retain exact archive/image/version evidence. |
+| Disk usage monitoring | Host backup storage, PostgreSQL temporary space/MVCC growth, Docker data/verification volume and retention headroom; alert thresholds. |
+| RPO | Desired acceptable data-loss window versus age of the newest trusted restore-verified snapshot and write-volume evidence. |
+| RTO | Desired service recovery window; measure retrieval, restore, validation, secrets/images, reviewed runtime/executor recovery and authorized reopening separately. |
+
+### Production recovery limitation
+
+**Database Restore and restoring users' calculation execution capability are
+different operations.** This tool verifies only disposable database restoration.
+Actual production recovery requires separate System Owner authorization, explicit
+target/data-loss review and a reviewed recovery plan. There is no production
+restore command, automatic Backend restart, Job rerun or Attempt redispatch.
+Restored accepted/dispatching/unknown Attempts are stored evidence; they do not
+prove a corresponding running executor exists.
+
+FakeExecutor execution/rejection memory is not in pg_dump. Restart loses it, and
+normal Backend startup invalidates prior Sessions before listening. Do not bypass
+that invalidation, reconstruct fake outcomes from stored rows, replay unknown
+dispatches automatically or alter existing Unknown Outcome/Reset recovery.
+RESTORE_VERIFIED cannot approve public activation or claim end-to-end recovery.
+See [scope, evidence and failure handling](tasks/demo-05d3a-operational-backup.md).

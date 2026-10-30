@@ -24,6 +24,7 @@ json_check() {
   else
     docker_control run --rm -i --network none --read-only --cap-drop ALL --security-opt no-new-privileges:true --user node \
       --mount "type=bind,source=$(host_path "$CONTROL_DIR/control-json.cjs"),target=/control-json.cjs,readonly" \
+      --mount "type=bind,source=$(host_path "$CONTROL_DIR/live-json.cjs"),target=/live-json.cjs,readonly" \
       node:24-bookworm-slim node /control-json.cjs "$@"
   fi
 }

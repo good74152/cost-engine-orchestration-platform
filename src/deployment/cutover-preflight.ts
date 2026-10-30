@@ -43,7 +43,7 @@ export interface CutoverPreflightResult {
   schemaSha256: string; configurationSha256: string;
 }
 
-async function schemaEvidence(client: PoolClient): Promise<string> {
+export async function schemaEvidence(client: PoolClient): Promise<string> {
   const relations = (await client.query<{name:string;kind:string;partition:boolean}>(`SELECT n.nspname||'.'||c.relname AS name,c.relkind AS kind,c.relispartition AS partition
     FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname !~ '^pg_' AND n.nspname<>'information_schema'
     AND c.relkind IN ('r','p','f','v','m') ORDER BY n.nspname,c.relname`)).rows;

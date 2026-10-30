@@ -1,16 +1,23 @@
 #!/bin/sh
 # No deployment target, Compose env, deployed credentials or restore URL is read.
 set -eu
+operational=no
+if [ "${1:-}" = '--operational' ]; then operational=yes; shift; fi
 CONTROL_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 fail() { printf '%s\n' "$1" >&2; exit 1; }
 docker_control() { MSYS_NO_PATHCONV=1 docker "$@"; }
 host_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s\n' "$1"; fi; }
 json_check() {
-  if command -v node >/dev/null 2>&1; then node "$CONTROL_DIR/control-json.cjs" "$@"
+  mode=$1; shift
+  if [ "$operational" = yes ]; then
+    case "$mode" in backup-metadata|restore-result) mode=live-$mode;; esac
+  fi
+  if command -v node >/dev/null 2>&1; then node "$CONTROL_DIR/control-json.cjs" "$mode" "$@"
   else
     docker_control run --rm -i --network none --read-only --cap-drop ALL --security-opt no-new-privileges:true --user node \
       --mount "type=bind,source=$(host_path "$CONTROL_DIR/control-json.cjs"),target=/control-json.cjs,readonly" \
-      node:24-bookworm-slim node /control-json.cjs "$@"
+      --mount "type=bind,source=$(host_path "$CONTROL_DIR/live-json.cjs"),target=/live-json.cjs,readonly" \
+      node:24-bookworm-slim node /control-json.cjs "$mode" "$@"
   fi
 }
 [ "$#" -eq 2 ] && [ "$1" = '--backup-file' ] || fail 'Choose only --backup-file with an explicit archive; restore targets are never accepted'
@@ -83,8 +90,10 @@ done
 assert_volume && assert_container || fail 'Restore isolation rejected before pg_restore'
 docker_control exec -i "$container_id" pg_restore -U restore_owner -d "$database" --exit-on-error --no-owner --no-privileges < "$archive" >/dev/null 2>&1 \
   || fail 'Actual PostgreSQL restore failed; no restore verification or production recovery claimed'
+verifier=deploy/verify-restored.ts
+if [ "$operational" = yes ]; then verifier=deploy/verify-restored-live.ts; fi
 restored=$(docker_control run --rm --network "container:$container_id" --read-only --tmpfs /tmp --cap-drop ALL --security-opt no-new-privileges:true \
-  --entrypoint ./node_modules/.bin/tsx --env "DEPLOYMENT_VERSION=$version" "cost-engine-demo-operator:$version" deploy/verify-restored.ts "$nonce" 2>/dev/null) \
+  --entrypoint ./node_modules/.bin/tsx --env "DEPLOYMENT_VERSION=$version" "cost-engine-demo-operator:$version" "$verifier" "$nonce" 2>/dev/null) \
   || fail 'Restored schema, configuration or empty-data verification failed'
 result=$(printf '{"manifest":%s,"restored":%s}' "$(cat -- "$bundle/manifest.json")" "$restored" \
   | json_check restore-result "$container" "$volume" "$nonce" 2>/dev/null) || fail 'Restored state does not match backup evidence'
