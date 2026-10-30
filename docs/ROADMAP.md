@@ -193,8 +193,19 @@ offline existing Operator integration. Web profile and restart policies prevent
 implicit reopening; actual Docker tests verify separate startup, refusal paths,
 Operator safety and an independent daemon restart. Core/configuration/Session
 semantics are unchanged. See [scope and evidence](tasks/demo-05d1-deployment-safety.md).
-Await System Owner Review. Actual VPS deployment, required Demo-05D-2/05D-3
-acceptance and production Cutover remain separate Owner operations.
+Demo-05D-1 is merged via PR #43 at `d2b61c5`.
+
+Demo-05D-2 adds offline read-only first-Cutover Preflight, private non-overwriting
+custom backups with complete integrity/state evidence, and actual PostgreSQL 18
+restore verification in proven-owned random disposable resources. No restore
+target URL, production credential/network/volume, automatic recovery/retry,
+Cutover rewrite or Web activation is introduced. First deployment requires all
+business/history/raw/DPR data empty; Owner checks still exclude other writers,
+concurrent operations and unresolved outcomes. See
+[scope, failure decisions and verification](tasks/demo-05d2-cutover-preflight-backup-recovery.md).
+Await System Owner Review. Actual VPS deployment, required Demo-05D-3 acceptance,
+off-site backup and production Cutover/Disaster Recovery remain separate Owner
+operations; RESTORE_VERIFIED does not grant those approvals.
 
 ## Deferred until a concrete requirement
 

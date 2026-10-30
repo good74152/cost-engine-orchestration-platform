@@ -1023,3 +1023,40 @@ pipeline or public admin route is added. Existing unknown COMMIT and financial
 protocols are unchanged. Single trusted Owner operation at a time, no external
 writer and ADR-0017/0018 offline/backup restrictions remain prerequisites. No live
 deployment or cutover is performed. See [safety scope/evidence](tasks/demo-05d1-deployment-safety.md).
+
+## 36. First-Deployment Preflight and Disposable Restore Verification
+
+Demo-05D-2 adds an offline-only `cutover-preflight` operation through the existing
+operator image. It reuses Admission SHARE locking, complete LEGACY Configuration
+verification and Cutover Quiescence, then applies the stricter first-deployment
+contract: zero rows in every audited business/history/raw/DPR table, exact current
+migration inventory and important schema constraints. A bounded contract audited
+from the forward migrations compares complete critical index definitions (table,
+key, method and predicate) and table-bound UNIQUE/CHECK expressions; names alone
+are insufficient. The two active-work partial indexes retain their exact active
+status sets. Existing fingerprints and restore comparison remain. Unexpected relations fail.
+No row is written or removed. Lock order remains Gate → configuration → existing
+quiescence graph → retained/raw/DPR tables → migration inventory. A normal READ
+COMMITTED transaction permits row/table locks; it performs no DML. Lock/statement/
+query bounds remain 3/5/6 seconds. COMMIT error withholds PASS; no retry is added.
+
+Backup requires verified offline services and explicit shared Compose DB target.
+A new private outside-Git bundle holds custom archive, SHA-256, byte size, identity
+and deterministic preflight/schema/configuration evidence. Before/after evidence
+must match; actual pg_dump uses its own consistent snapshot. Arbitrary external
+writers remain an Owner exclusion, not something SQL counts can prove.
+
+Restore accepts only that archive, never a replacement DB URL. It creates fresh
+random labelled PostgreSQL 18 resources, validates exact ownership/mounts/network,
+publishes no ports and uses network none. A separate read-only operator shares
+only the disposable namespace to re-run the same verifier after actual pg_restore.
+Full restored evidence must match the manifest. Cleanup is exact-owned only and
+precedes RESTORE_VERIFIED. No deployed DB/network/volume/credential is used.
+
+PASS and RESTORE_VERIFIED are observations, not persisted workflow state, Cutover
+approval, off-site backup or actual Disaster Recovery. Atomic Cutover transaction,
+locks, APPLIED/ALREADY_APPLIED and independent unknown-COMMIT confirmation remain
+unchanged. Conflict/UNKNOWN/unavailability stops work with Web closed; confirmed
+DRAINING/LEGACY requires new preflight and separate retry approval. WORKFLOW_OPEN
+stays irreversible; actual restore needs separate Disaster Recovery authorization.
+See [scope/runbook/evidence](tasks/demo-05d2-cutover-preflight-backup-recovery.md).

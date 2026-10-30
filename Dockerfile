@@ -13,6 +13,7 @@ COPY scripts/seed-demo-six-domain-configuration.ts ./scripts/
 COPY scripts/demo-admission.ts ./scripts/
 COPY scripts/demo-cutover.ts ./scripts/
 COPY deploy/operator.ts ./deploy/
+COPY deploy/preflight.ts deploy/verify-restored.ts ./deploy/
 USER node
 ENTRYPOINT ["./node_modules/.bin/tsx", "deploy/operator.ts"]
 

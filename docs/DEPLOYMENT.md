@@ -217,31 +217,72 @@ purge history or increase limits indefinitely. Foreign-FK cleanup fails closed.
 
 ## Backup and restore
 
-Before migrations and at the owner's required recovery interval:
+Demo-05D-2's tools verify the **first public deployment**: migrated, completely
+empty business data, exact six-domain/nine-Type LEGACY configuration and DRAINING.
+They do not replace a separately reviewed operational backup policy for a running
+or already-cut-over service. Existing Session history is intentionally a failure;
+do not delete history to make the check pass.
+
+First keep Web and Backend stopped with restart disabled using the Demo-05D-1
+runbook. The Owner must confirm no other Backend, external writer, concurrent
+deployment or unresolved unknown outcome. Docker/SQL checks cannot prove those
+facts. Then explicitly select the shared Demo database:
 
 ```sh
+sh deploy/scripts/operate.sh cutover-preflight --database-url-file /run/secrets/database_url
+# Provision a private existing directory OUTSIDE every Git worktree:
 export DEMO_BACKUP_DIR=/var/backups/cost-engine-demo
-sh deploy/scripts/backup.sh
+sh deploy/scripts/backup.sh --database-url-file /run/secrets/database_url
 ```
 
-The script uses pg_dump -Fc, private `.partial` output and rename only on success.
-Failed output is not a backup. Encrypt and copy successful dumps OFF HOST. Backups
-contain bearer hashes/history: restrict access and never commit them. Monitor
-backup age, free disk (`df -h`) and Docker storage (`docker system df`).
+Preflight returns deterministic JSON with PASS, Deployment Version, PostgreSQL 18,
+DRAINING/LEGACY, exact migration names, all 21 business-table counts and schema/
+configuration fingerprints. It reuses existing Gate/configuration/quiescence
+validators and never writes, migrates, seeds, cleans, cuts over or opens Web.
+PASS describes the checked instant only; it is neither approval nor durable state.
 
-Validate on a separate disposable PostgreSQL 18 target with no application:
+Backup additionally requires that the mounted target names this Compose database
+service (`database`, `demo_owner`, `cost_engine_demo`, normal port, no URL query
+overrides). It must not validate a different database and then dump this one.
+It creates a fresh private `cost-engine-backup-*` directory, custom pg_dump -Fc,
+600-mode archive/manifest and SHA-256/decimal-byte-size/identity evidence. It checks
+preflight again afterward and compares all evidence. Failure removes only its new
+incomplete bundle; older backups are never replaced or removed. No retry occurs.
+Each pg_dump has its own consistent PostgreSQL snapshot. Before/after checks do
+not fence arbitrary external writers; maintain Owner-proven offline quiescence.
+
+Use the returned identity to explicitly verify the archive:
 
 ```sh
-# Private pgpass/service files should supply isolated restore credentials.
-createdb --maintenance-db=service=restore_admin restore_validation
-pg_restore --dbname=service=restore_validation --exit-on-error --no-owner backup.dump
-psql service=restore_validation -c 'SELECT count(*) FROM pgmigrations'
+sh deploy/scripts/verify-backup.sh --backup-file /var/backups/cost-engine-demo/cost-engine-backup-IDENTITY/backup.dump
 ```
 
-Verify migration names, seed compatibility, representative graph relationships,
-counts and ownership. Retain restore evidence. Never test a restore over live DB.
-Disaster restore requires stopped backend, reviewed backup/target and human approval
-before traffic. The container suite validates a real dump on a separate owned DB.
+Verify accepts no target URL/database/container/volume. It checks custom format,
+size/checksum/complete manifest before creating a 128-bit random, labelled own
+PostgreSQL 18 container/database/volume. Its network is `none`, no port is published,
+no deployment secret/network/volume is mounted and no real credential is used.
+Only a read-only operator container shares that new namespace to reuse the actual
+configuration/schema/preflight verifier after pg_restore --exit-on-error. The
+corresponding immutable `cost-engine-demo-operator:<Deployment Version>` image must
+already exist. Every restored field must match the recorded backup evidence.
+Ownership, network and mount checks precede startup/restore/cleanup. Only exact
+owned resources are removed; uncertainty refuses cleanup and withholds success.
+
+RESTORE_VERIFIED is emitted only after real restore, validation and cleanup. It
+does not approve Cutover, perform production recovery or prove off-host storage.
+SHA-256 proves file consistency, not authenticity or restorability; retain the
+trusted manifest with the archive. Encrypt/copy successful bundles OFF HOST under
+the Owner's policy and retain restore evidence. Backups may contain secrets/history;
+never log contents or commit them. Monitor disk, backup age and Docker storage.
+
+On failure keep Web closed. WORKFLOW_OPEN + WORKFLOW means use compatible forward
+fixes, not reapplication or reversal. DRAINING + LEGACY requires fresh Preflight
+and separate human approval before an explicit Cutover retry. Conflict/UNKNOWN/
+DB unavailable means stop and use existing durable confirmation; never infer
+rollback, automatically retry, restore, down-migrate, delete Definition v1/v2 or
+open Web. Actual disaster recovery needs separate explicit authorization and a
+reviewed target/data-loss plan. This tool can only restore disposable targets.
+See [full contract, transaction boundary and evidence](tasks/demo-05d2-cutover-preflight-backup-recovery.md).
 
 ## Rollback
 
