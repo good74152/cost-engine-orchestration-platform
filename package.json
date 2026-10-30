@@ -4,6 +4,11 @@
   "description": "Backend orchestration platform for versioned cost-engine datasets and Airflow/ETL execution workflows.",
   "main": "index.js",
   "scripts": {
+    "demo:dr-drill": "tsx deploy/dr-drill.ts",
+    "test:demo-05d3b": "tsx --test scripts/demo-05d3b-assessment.pg.test.ts scripts/demo-05d3b-dr-drill.test.ts",
+    "test:demo-05d3b:pg": "tsx --test scripts/demo-05d3b-assessment.pg.test.ts",
+    "test:demo-05d3b:containers": "tsx --test scripts/demo-05d3b-dr-drill.test.ts",
+    "test:demo-05d3b:typecheck": "tsc --ignoreConfig --noEmit --strict --types node --skipLibCheck --esModuleInterop --module NodeNext --target ES2022 deploy/dr-drill.ts deploy/dr-assess-restored.ts scripts/demo-05d3b-assessment.pg.test.ts scripts/demo-05d3b-dr-drill.test.ts",
     "test:demo-05d3a": "tsx --test scripts/demo-05d3a-operational-backup.pg.test.ts scripts/demo-05d3a-backup-live.test.ts",
     "test:demo-05d3a:pg": "tsx --test scripts/demo-05d3a-operational-backup.pg.test.ts",
     "test:demo-05d3a:containers": "tsx --test scripts/demo-05d3a-backup-live.test.ts",

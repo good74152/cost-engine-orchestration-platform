@@ -216,9 +216,19 @@ and no-target restore ownership protections are reused; first-deployment tools
 retain their stricter contract. Disposable PostgreSQL lock barriers, live Backend
 API concurrency and dump/connection/integrity/restore failure cases are verified.
 See [bounded task and operational policy](tasks/demo-05d3a-operational-backup.md).
-Await System Owner Review. Production database restore, executor/runtime recovery,
+Demo-05D-3A is merged via PR #45 at `410b785`, including Failure Cleanup Hardening.
+Production database restore, executor/runtime recovery,
 off-host policy execution, scheduling/retention deletion and achieved RPO/RTO
 remain separate Owner work; no public activation or production operation occurs.
+
+Demo-05D-3B adds a repeatable read-only DR Drill using existing operational
+backups, the same isolated restore/verification/ownership engine, a bounded
+read-only Job/Attempt assessment and a private report after cleanup. Explicit RPO
+targets are compared to conservative snapshot age; data loss stays UNKNOWN and
+service RTO/approval remain untested. Unknown work is flagged for human review,
+never failed or redispatched automatically. See [runbook](RECOVERY_DRILL.md) and
+[task](tasks/demo-05d3b-dr-drill.md). Await System Owner Review; actual production
+recovery, runtime/executor restoration and public activation remain out of scope.
 
 ## Deferred until a concrete requirement
 

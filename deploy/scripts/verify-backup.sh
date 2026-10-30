@@ -2,7 +2,9 @@
 # No deployment target, Compose env, deployed credentials or restore URL is read.
 set -eu
 operational=no
-if [ "${1:-}" = '--operational' ]; then operational=yes; shift; fi
+drill=no
+if [ "${1:-}" = '--drill' ]; then drill=yes; operational=yes; shift
+elif [ "${1:-}" = '--operational' ]; then operational=yes; shift; fi
 CONTROL_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 fail() { printf '%s\n' "$1" >&2; exit 1; }
 docker_control() { MSYS_NO_PATHCONV=1 docker "$@"; }
@@ -20,7 +22,21 @@ json_check() {
       node:24-bookworm-slim node /control-json.cjs "$mode" "$@"
   fi
 }
+phase() {
+  if [ "$drill" = yes ]; then
+    node -e 'console.log(JSON.stringify({event:"PHASE",name:process.argv[1],state:process.argv[2],at:new Date().toISOString(),monotonicNs:process.hrtime.bigint().toString()}))' "$1" "$2"
+  fi
+}
+if [ "$drill" = yes ]; then
+  timeout --version >/dev/null 2>&1 || fail 'GNU timeout required for drill resource bounds'
+  : "${DEMO_DRILL_WORKSPACE:?Private drill workspace required}"
+  node --import tsx --input-type=module -e 'import {assertDrillWorkspace} from "./deploy/dr-drill.ts";assertDrillWorkspace(process.argv[1]);' "$(host_path "$DEMO_DRILL_WORKSPACE")" >/dev/null 2>&1 \
+    || fail 'Private drill workspace rejected'
+  docker_deadline=600s
+  docker_control() { MSYS_NO_PATHCONV=1 timeout --kill-after=2s "$docker_deadline" docker "$@"; }
+fi
 [ "$#" -eq 2 ] && [ "$1" = '--backup-file' ] || fail 'Choose only --backup-file with an explicit archive; restore targets are never accepted'
+phase INTEGRITY_CHECK START
 case "$2" in /*/backup.dump) ;; *) fail 'Use an absolute backup.dump path';; esac
 [ -f "$2" ] && [ ! -L "$2" ] || fail 'Backup archive is unavailable or is a symlink'
 bundle=$(CDPATH= cd -P -- "$(dirname -- "$2")" && pwd) || fail 'Backup directory unavailable'
@@ -40,6 +56,8 @@ metadata=$(json_check backup-metadata "$(basename -- "$bundle")" "$size" "$check
 IFS='|' read -r version checksum identity <<EOF
 $metadata
 EOF
+phase INTEGRITY_CHECK PASS
+phase RESTORE START
 nonce=$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')
 case "$nonce" in ''|*[!a-f0-9]*) fail 'Cannot create independent restore identity';; esac
 [ "${#nonce}" -eq 32 ] || fail 'Invalid restore identity'
@@ -57,6 +75,7 @@ assert_container() {
   printf '%s' "$observation" | json_check restore-container "$container_id" "$volume" "$nonce" >/dev/null 2>&1
 }
 cleanup_restore() {
+  if [ "$drill" = yes ]; then docker_deadline=8s; fi
   if [ -n "$container_id" ]; then
     assert_container || { printf '%s\n' 'Restore ownership unconfirmed; refuse cleanup' >&2; return 1; }
     docker_control rm --force --volumes "$container_id" >/dev/null 2>&1 || return 1
@@ -90,6 +109,8 @@ done
 assert_volume && assert_container || fail 'Restore isolation rejected before pg_restore'
 docker_control exec -i "$container_id" pg_restore -U restore_owner -d "$database" --exit-on-error --no-owner --no-privileges < "$archive" >/dev/null 2>&1 \
   || fail 'Actual PostgreSQL restore failed; no restore verification or production recovery claimed'
+phase RESTORE PASS
+phase VALIDATION START
 verifier=deploy/verify-restored.ts
 if [ "$operational" = yes ]; then verifier=deploy/verify-restored-live.ts; fi
 restored=$(docker_control run --rm --network "container:$container_id" --read-only --tmpfs /tmp --cap-drop ALL --security-opt no-new-privileges:true \
@@ -97,5 +118,20 @@ restored=$(docker_control run --rm --network "container:$container_id" --read-on
   || fail 'Restored schema, configuration or empty-data verification failed'
 result=$(printf '{"manifest":%s,"restored":%s}' "$(cat -- "$bundle/manifest.json")" "$restored" \
   | json_check restore-result "$container" "$volume" "$nonce" 2>/dev/null) || fail 'Restored state does not match backup evidence'
+phase VALIDATION PASS
+if [ "$drill" = yes ]; then
+  phase ASSESSMENT START
+  # The current trusted assessment sources are read-only mounts. This also works
+  # with retained pre-drill operator images selected by the backup manifest.
+  (umask 077; set -C
+    docker_control run --rm --network "container:$container_id" --read-only --tmpfs /tmp --cap-drop ALL --security-opt no-new-privileges:true \
+      --mount "type=bind,source=$(host_path "$CONTROL_DIR/../dr-assess-restored.ts"),target=/app/deploy/dr-assess-restored.ts,readonly" \
+      --mount "type=bind,source=$(host_path "$CONTROL_DIR/../../src/deployment/recovery-assessment.ts"),target=/app/src/deployment/recovery-assessment.ts,readonly" \
+      --entrypoint ./node_modules/.bin/tsx "cost-engine-demo-operator:$version" deploy/dr-assess-restored.ts "$nonce" \
+      > "$DEMO_DRILL_WORKSPACE/assessment.json.partial" 2>/dev/null) || fail 'Read-only drill assessment failed'
+  phase ASSESSMENT PASS
+fi
+phase CLEANUP START
 cleanup_restore || fail 'Restore completed but owned resource cleanup failed; verification withheld'
+phase CLEANUP PASS
 printf '%s\n' "$result"
