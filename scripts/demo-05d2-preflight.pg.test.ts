@@ -78,6 +78,45 @@ test('Demo-05D-2 PostgreSQL: strict first-deployment preflight and unchanged dur
   await t.test('a same-name view cannot masquerade as an expected empty table',async()=>{const f=await fixture();await f.db.query('DROP TABLE raw_ingestion_batches; CREATE VIEW raw_ingestion_batches AS SELECT 1 AS id WHERE false');await reject(f);});
   await t.test('missing critical FK refuses despite correct migration inventory',async()=>{const f=await fixture();await f.db.query('ALTER TABLE calculation_jobs DROP CONSTRAINT fk_calculation_jobs_calculation_type');await reject(f);});
   await t.test('disabled FK enforcement refuses even when the constraint remains validated',async()=>{const f=await fixture();await f.db.query('ALTER TABLE calculation_jobs DISABLE TRIGGER ALL');await reject(f);});
+  // Destructive DDL is confined to fresh disposable fixtures. These definitions
+  // are independent mutations of the migrations, not imports of the verifier's
+  // expected contract; names and valid UNIQUE/CHECK object types stay intact.
+  for(const [name,table,column,states]of [
+   ['uq_dataset_versions_active_series','dataset_versions','dataset_series_id',["DRAFT","BUILDING","VALIDATING"]],
+   ['uq_execution_attempt_active_job','execution_attempts','calculation_job_id',["PREPARED","DISPATCHING","ACCEPTED"]],
+  ] as const)for(const mutation of ['different-column','weakened-predicate','missing-predicate','different-table']){
+   await t.test(`${name}: same name with ${mutation} refuses`,async()=>{
+    const f=await fixture();await f.db.query(`DROP INDEX ${name}`);
+    const fullPredicate=`WHERE status IN (${states.map(s=>`'${s}'`).join(',')})`;
+    const ddl=mutation==='different-column'?`ON ${table} (id) ${fullPredicate}`
+     :mutation==='weakened-predicate'?`ON ${table} (${column}) WHERE status='${states[0]}'`
+     :mutation==='missing-predicate'?`ON ${table} (${column})`:'ON assets (asset_id)';
+    await f.db.query(`CREATE UNIQUE INDEX ${name} ${ddl}`);await reject(f);
+   });
+  }
+  for(const [table,name]of [
+   ['dataset_series','ck_dataset_series_fiscal_year'],['dataset_series','ck_dataset_series_period'],['dataset_series','dataset_series_last_version_check'],
+   ['dataset_versions','ck_dataset_versions_status'],['dataset_versions','dataset_versions_version_check'],
+   ['calculation_jobs','ck_calculation_jobs_status'],['calculation_types','calculation_types_last_allocated_dependency_definition_ve_check'],
+   ['execution_attempts','execution_attempts_attempt_number_check'],['execution_attempts','execution_attempts_status_check'],
+   ['execution_dependency_definition_versions','execution_dependency_definition_versions_status_check'],['execution_dependency_definition_versions','execution_dependency_definition_versions_version_check'],
+   ['demo_sessions','ck_demo_sessions_company'],['demo_sessions','ck_demo_sessions_hash'],['demo_sessions','ck_demo_sessions_expiry'],['demo_sessions','ck_demo_sessions_revocation'],
+   ['demo_admission_control','demo_admission_control_id_check'],['demo_admission_control','demo_admission_control_state_check'],
+  ])await t.test(`${table}.${name}: same-name CHECK(true) cannot disable the migrated rule`,async()=>{
+   const f=await fixture();await f.db.query(`ALTER TABLE ${table} DROP CONSTRAINT ${name}`);
+   await f.db.query(`ALTER TABLE ${table} ADD CONSTRAINT ${name} CHECK (true)`);await reject(f);
+  });
+  for(const [table,name]of [
+   ['dataset_series','uq_dataset_series_identity'],['calculation_jobs','uq_calculation_jobs_dataset_type'],
+   ['execution_attempts','uq_execution_attempt_job_number'],['execution_attempts','uq_execution_attempt_airflow_run'],['dataset_build_snapshots','uq_dataset_build_snapshot_version'],
+  ])await t.test(`${table}.${name}: same-name UNIQUE(id) cannot replace the migrated key`,async()=>{
+   const f=await fixture();await f.db.query(`ALTER TABLE ${table} DROP CONSTRAINT ${name}`);
+   await f.db.query(`ALTER TABLE ${table} ADD CONSTRAINT ${name} UNIQUE (id)`);await reject(f);
+  });
+  await t.test('correct CHECK name/type on another table cannot substitute for the original constraint',async()=>{
+   const f=await fixture();await f.db.query('ALTER TABLE dataset_versions DROP CONSTRAINT ck_dataset_versions_status');
+   await f.db.query('ALTER TABLE dataset_series ADD CONSTRAINT ck_dataset_versions_status CHECK (fiscal_year>0)');await reject(f);
+  });
   await t.test('read-only behavior holds with DML-denying triggers on every application table',async()=>{
    const f=await fixture();await f.db.query("CREATE FUNCTION forbid_preflight_writes() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'Unexpected write'; END $$");
    for(const table of [...firstDeploymentBusinessTables.filter(n=>!n.startsWith('raw_dpr_')),'calculation_types','execution_dependency_definition_versions','execution_dependency_definition_dependencies','demo_admission_control','pgmigrations'])

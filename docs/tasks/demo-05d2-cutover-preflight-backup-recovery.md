@@ -228,3 +228,36 @@ CI retains all existing suites and adds the new strict check and real integratio
 suite. Final exact-commit CI links are recorded in the PR. All ten acceptance
 criteria are implemented and locally verified. Production deployment/Cutover/
 Disaster Recovery, off-site storage and Demo-05D-3 Owner acceptance are unperformed.
+
+## PR #44 follow-up — Schema Integrity Validation
+
+System Owner requested stronger existing-rule verification on the same branch.
+The read-only bounded contract in `src/deployment/cutover-schema-invariants.ts`
+was audited against fresh PostgreSQL 18 output from the existing forward
+migrations: 1786634529143, 1788700000000, 1792600000000, 1793300000000 and
+1793400000000. It executes no DDL and is not a Schema Migration Engine.
+
+- `uq_dataset_versions_active_series`: UNIQUE btree on
+  `public.dataset_versions(dataset_series_id)`, exactly DRAFT/BUILDING/VALIDATING.
+- `uq_execution_attempt_active_job`: UNIQUE btree on
+  `public.execution_attempts(calculation_job_id)`, exactly PREPARED/DISPATCHING/ACCEPTED.
+- Compare the full deparsed definitions after the unchanged narrow Cast
+  normalization, including relation/keys/predicate rather than name/prefix.
+- Match 17 CHECK expressions, 12 current UNIQUE key sets and the Gate primary
+  key by owning table, name, type and complete definition. Checks cover canonical
+  identity/year/period, allocation/version bounds, Dataset/Job/Attempt/Definition
+  states, Attempt numbering, Session hash/company/lifetime/revocation and Gate
+  singleton/allowed states, exactly as defined by the existing migrations.
+
+The 31 new independently mutated fixtures preserve names/object types: changed
+index columns, weakened/missing predicates and wrong owning tables (both indexes),
+all 17 CHECKs replaced by CHECK(true), five UNIQUE keys replaced by UNIQUE(id),
+and a same-name/type CHECK moved to another table. Each must fail without data
+repair or writes. Existing PostgreSQL/Docker cases, complete schema fingerprint
+and actual restore comparison remain. Core, historical migrations, Cutover/Gate
+transactions/state machines, Backup Isolation and Restore Target Protection are
+unchanged. The PostgreSQL follow-up passed 58 tests (the original 27 plus 31
+destructive cases) and removed its 56 independently migrated fixture databases.
+The required Docker restore, Demo-05D-1, Demo-05C-3A and isolated Core Milestone
+runs are repeated; final counters and exact-commit CI evidence accompany the
+review delivery. No additional PR or production operation is performed.

@@ -1030,7 +1030,11 @@ Demo-05D-2 adds an offline-only `cutover-preflight` operation through the existi
 operator image. It reuses Admission SHARE locking, complete LEGACY Configuration
 verification and Cutover Quiescence, then applies the stricter first-deployment
 contract: zero rows in every audited business/history/raw/DPR table, exact current
-migration inventory and important schema constraints. Unexpected relations fail.
+migration inventory and important schema constraints. A bounded contract audited
+from the forward migrations compares complete critical index definitions (table,
+key, method and predicate) and table-bound UNIQUE/CHECK expressions; names alone
+are insufficient. The two active-work partial indexes retain their exact active
+status sets. Existing fingerprints and restore comparison remain. Unexpected relations fail.
 No row is written or removed. Lock order remains Gate → configuration → existing
 quiescence graph → retained/raw/DPR tables → migration inventory. A normal READ
 COMMITTED transaction permits row/table locks; it performs no DML. Lock/statement/

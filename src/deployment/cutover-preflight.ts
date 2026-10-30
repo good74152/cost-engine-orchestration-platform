@@ -4,6 +4,7 @@ import { lockDemoAdmission } from '../modules/demo-admission/demo-admission.repo
 import { lockCutoverConfiguration, requireCutoverQuiescence, verifyCutoverConfiguration } from '../modules/demo-cutover/demo-cutover.configuration.js';
 import { DemoSessionError } from '../modules/demo-session/demo-session.errors.js';
 import { verifyMigrationInventory } from './verify-database.js';
+import { criticalConstraintDefinitions, criticalIndexDefinitions } from './cutover-schema-invariants.js';
 
 // Inventory audited against all existing forward migrations, including retained v1
 // and raw-ingestion tables. An unknown/missing relation fails closed, even if empty.
@@ -67,16 +68,14 @@ async function schemaEvidence(client: PoolClient): Promise<string> {
     ['demo_scenario_step_executions','FOREIGN KEY (scenario_id) REFERENCES demo_scenario_instances(id) ON DELETE RESTRICT'],
     ['execution_dependency_definition_dependencies','FOREIGN KEY (definition_version_id) REFERENCES execution_dependency_definition_versions(id) ON DELETE RESTRICT'],
   ]) if (!constraints.some(c=>c.table_name===table && c.type==='f' && c.definition===definition)) throw rejected();
-  for (const name of ['uq_dataset_series_identity','uq_calculation_jobs_dataset_type','uq_execution_attempt_job_number',
-    'uq_execution_attempt_airflow_run','uq_dataset_build_snapshot_version','ck_dataset_versions_status','ck_calculation_jobs_status',
-    'ck_demo_sessions_hash','ck_demo_sessions_company','ck_demo_sessions_expiry','demo_admission_control_id_check','demo_admission_control_state_check']) {
-    if (!constraints.some(c=>c.name===name && c.type===(name.startsWith('uq_')?'u':'c'))) throw rejected();
+  for (const [table,name,type,definition] of criticalConstraintDefinitions) {
+    if (!constraints.some(c=>c.table_name===table && c.name===name && c.type===type && c.definition===logicalDDL(definition))) throw rejected();
   }
-  if(!constraints.some(c=>c.table_name==='demo_admission_control' && c.type==='p' && c.definition==='PRIMARY KEY (id)')) throw rejected();
   const indexes = (await client.query<{name:string;definition:string;valid:boolean}>(`SELECT i.relname AS name,pg_get_indexdef(i.oid) AS definition,x.indisvalid AS valid
     FROM pg_index x JOIN pg_class i ON i.oid=x.indexrelid JOIN pg_namespace n ON n.oid=i.relnamespace
     WHERE n.nspname='public' ORDER BY i.relname`)).rows.map(i=>({...i,definition:logicalDDL(i.definition)}));
-  if (indexes.some(i=>!i.valid) || !['uq_dataset_versions_active_series','uq_execution_attempt_active_job'].every(name=>indexes.some(i=>i.name===name && i.definition.startsWith('CREATE UNIQUE INDEX ')))) throw rejected();
+  if (indexes.some(i=>!i.valid) || !criticalIndexDefinitions.every(([name,definition])=>
+    indexes.some(i=>i.name===name && i.definition===logicalDDL(definition)))) throw rejected();
   const triggers = (await client.query<{name:string;enabled:string;definition:string}>(`SELECT t.tgname AS name,t.tgenabled AS enabled,pg_get_triggerdef(t.oid) AS definition
     FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid JOIN pg_namespace n ON n.oid=c.relnamespace
     WHERE n.nspname='public' AND NOT t.tgisinternal ORDER BY c.relname,t.tgname`)).rows;
