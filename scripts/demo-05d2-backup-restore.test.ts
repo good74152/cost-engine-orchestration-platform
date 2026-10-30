@@ -42,9 +42,13 @@ test('Demo-05D-2 real Docker: offline backup, actual isolated restore and fail-c
  const inspect=async(service:string)=>{const value=(await compose('ps','--all','-q',service)).out.trim();return value?JSON.parse((await docker(['inspect',value])).out)[0]:null;};
  const resources=async()=>({containers:(await docker(['ps','--all','--filter','label=cost-engine.restore.purpose=demo05d2','--format','{{.ID}}'])).out.trim().split(/\r?\n/).filter(Boolean).sort(),
   volumes:(await docker(['volume','ls','--filter','label=cost-engine.restore.purpose=demo05d2','--format','{{.Name}}'])).out.trim().split(/\r?\n/).filter(Boolean).sort()});
- const sourceEvidence=async()=>({dbId:(await inspect('database')).Id,volume:(await inspect('database')).Mounts[0].Name,
-  gate:await sql('SELECT row_to_json(g) FROM demo_admission_control g'),migrations:await sql('SELECT count(*) FROM pgmigrations'),
-  config:await sql("SELECT md5(string_agg(to_jsonb(t)::text,',' ORDER BY to_jsonb(t)::text)) FROM calculation_types t")});
+ const sourceEvidence=async()=>{
+  const database=await inspect('database');
+  const volume=database.Mounts.find((m:{Type:string;Destination:string})=>m.Type==='volume'&&m.Destination==='/var/lib/postgresql');
+  assert.ok(volume?.Name,'Source must retain its named database volume');
+  return {dbId:database.Id,volume:volume.Name,gate:await sql('SELECT row_to_json(g) FROM demo_admission_control g'),
+   migrations:await sql('SELECT count(*) FROM pgmigrations'),config:await sql("SELECT md5(string_agg(to_jsonb(t)::text,',' ORDER BY to_jsonb(t)::text)) FROM calculation_types t")};
+ };
  let first:any;let archive='';let initialized=false;
  try{
   await t.test('production operator images include read-only tools and all POSIX scripts parse',async()=>{
@@ -86,7 +90,7 @@ test('Demo-05D-2 real Docker: offline backup, actual isolated restore and fail-c
   await t.test('injected pg_dump failure removes its incomplete artifact while preserving older backups',async()=>{
    const shim=join(directory,'fault-bin');await mkdir(shim);const actual=(await command(shell,['-c','command -v docker'])).out.trim();assert.ok(actual);
    await writeFile(join(shim,'docker'),'#!/bin/sh\ncase " $* " in *" pg_dump "*) exit 47;; esac\nexec "$DEMO_TEST_REAL_DOCKER" "$@"\n',{mode:0o755});
-   const before=(await readdir(backups)).sort();const r=await command(shell,['-c','PATH="$1:$PATH"; export PATH; exec "$2" --database-url-file /run/secrets/database_url','fault',posix(shim),posix(resolve('deploy/scripts/backup.sh'))],{...env,DEMO_TEST_REAL_DOCKER:actual});
+   const before=(await readdir(backups)).sort();const r=await command(shell,['-c','PATH="$1:$PATH"; export PATH; exec sh "$2" --database-url-file /run/secrets/database_url','fault',posix(shim),posix(resolve('deploy/scripts/backup.sh'))],{...env,DEMO_TEST_REAL_DOCKER:actual});
    assert.notEqual(r.code,0);assert.match(r.err,/dump failed/);assert.deepEqual((await readdir(backups)).sort(),before);assert.equal(digest(await readFile(archive)),first.sha256);
   });
   await t.test('restore accepts no caller-selected URL, database, target container or extra arguments',async()=>{
