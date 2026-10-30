@@ -16,6 +16,7 @@ import type { DatasetDomain } from '../src/modules/dataset-version/dataset-versi
 import type { WorkflowTemplateResponse, WorkflowCatalogResponse } from '../src/modules/workflow-template/workflow-template.types.js';
 import { DemoAdmissionOperator } from '../src/modules/demo-admission/demo-admission.operator.js';
 import { DemoCutoverOperator } from '../src/modules/demo-cutover/demo-cutover.operator.js';
+import { types, upstream } from './support/six-domain-workflow-expectations.js';
 
 const source = process.env.TEST_DATABASE_URL;
 if (!source) throw new Error('Demo-05C-3B requires an explicit disposable TEST_DATABASE_URL');
@@ -24,14 +25,6 @@ type Response = Awaited<ReturnType<FastifyInstance['inject']>>;
 interface Session { cookie: string; context: AuthenticatedDemoSession }
 interface Page<T> { items: T[]; nextCursor: string | null }
 interface Waiter { pid: number; blockers: number[]; wait_event: string }
-const types: Record<DatasetDomain, string[]> = {
-  FAB_COST: ['DEMO_FAB_COST_SUMMARY'], CAPEX: ['DEMO_CAPEX_TABLE_Y', 'DEMO_GUIDED_SUMMARY'],
-  INSURANCE: ['DEMO_INSURANCE_SUMMARY'], ONE_STD_COST: ['DEMO_ONE_STD_COST_TABLE_X', 'DEMO_ONE_STD_COST_TABLE_Y'],
-  DPR: ['DEMO_DPR_TABLE_X', 'DEMO_DPR_TABLE_Y'], E2E_COST: ['DEMO_E2E_COST_TABLE_X', 'DEMO_E2E_COST_TABLE_Y'],
-};
-const upstream: Partial<Record<DatasetDomain, DatasetDomain>> = {
-  CAPEX: 'FAB_COST', INSURANCE: 'FAB_COST', ONE_STD_COST: 'FAB_COST', DPR: 'CAPEX', E2E_COST: 'ONE_STD_COST',
-};
 function result<T>(r: Response, status = 200): T {
   assert.equal(r.statusCode, status, r.body); assert.equal(r.headers['cache-control'], 'no-store'); return r.json<T>();
 }
