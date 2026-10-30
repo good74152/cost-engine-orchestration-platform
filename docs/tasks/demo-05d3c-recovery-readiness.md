@@ -1,6 +1,6 @@
 # Demo-05D-3C — Recovery Readiness Assessment
 
-Status: implemented; local verification passed, GitHub verification pending;
+Status: implemented; local verification and GitHub evidence recorded below;
 awaits System Owner Review.
 Baseline: latest main `cdfa5670352d4feff268db25911739307f188bda` (PR #46).
 Branch: `codex/demo-05d3c-recovery-readiness`.
@@ -71,6 +71,12 @@ Linux CI verifies POSIX restrictions.
 The PostgreSQL checks used a newly owned disposable PostgreSQL 18 Container and
 owned fixture databases; the Container/anonymous volume and private connection
 file were removed afterward. No production resource was accessed. The local
-Docker transport failure is not a passing restore result; unchanged real Docker
-suites remain mandatory in GitHub CI, including new downstream validation of
-actual 3B emitted reports. CI evidence will be linked in delivery.
+Docker transport failure is not a passing restore result. GitHub Actions for
+code-bearing commit `3cb2a63933776b7601568800f2498835072eac99` independently ran
+the unchanged real Docker suites, including new downstream validation of actual
+3B emitted reports: [verification run 41070067572](https://github.com/good74152/cost-engine-orchestration-platform/actions/runs/41070067572).
+Readiness, 3A operational backup/restore, 3B disaster-recovery-drill and 3D2
+preflight-backup-restore jobs succeeded. The full final-head CI conclusion and
+commit are reported with delivery; this record does not treat a running check
+as passed. No private reports, manual-review identifiers or credentials are
+published as artifacts.
