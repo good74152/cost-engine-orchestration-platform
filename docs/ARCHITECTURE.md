@@ -1104,3 +1104,47 @@ FakeExecutor memory, Session eligibility or users' execution capability; startup
 invalidation and unknown-outcome recovery remain unchanged. Owner-defined backup
 retention, off-host protection and measured RPO/RTO remain operational obligations.
 See [operational contract and recovery boundary](tasks/demo-05d3a-operational-backup.md).
+
+## 38. Read-only Disaster Recovery Drill and Private Assessment
+
+Demo-05D-3B adds a separate `dr-drill.sh` / `demo:dr-drill` entrypoint. It selects
+explicit internal drill mode in the existing restore harness, retaining its exact
+Manifest checks, custom pg_restore, PostgreSQL 18 network-none ownership boundary,
+Schema/Configuration/data verification and exact-owned cleanup. Existing
+`verify-backup-live.sh` arguments, JSON and success predicate are unchanged.
+No caller-selected restore URL, Container, Volume or database is accepted.
+
+Before owned target cleanup, current trusted assessment sources are mounted
+read-only into the manifest-selected retained operator image, sharing only the
+disposable database namespace. This supports pre-drill backup images without
+rewriting the archive or maintaining another restore engine. The Assessment
+opens a real REPEATABLE READ READ ONLY transaction. It reads Job/Attempt status
+counts and the complete bounded manual-review set: nonterminal Jobs or Attempts,
+including a latest recorded Attempt when no active Attempt exists. It never
+imports an executor/runtime or changes statuses/Session eligibility.
+
+PREPARED/no-attempt/recorded rejected dispatch are distinguished from DISPATCHING
+unknown outcomes and ACCEPTED work whose executor state is unavailable. Reports
+are observations, not Run/Retry eligibility or proof of external executor truth.
+At more than 10,000 manual items the drill fails, rather than silently truncating.
+Terminal SUCCEEDED/FAILED history remains intact and participates in data hashes.
+
+A trusted Node 24 host coordinator measures Integrity Check, Restore, Validation,
+Assessment and Cleanup boundaries using process.hrtime.bigint. Wall-clock
+reversal or more than one second of divergence from monotonic elapsed time
+invalidates RPO evidence. Canonical ISO backup times must be ordered and cannot
+be in the future. Backup Age uses the manifest startedAt conservatively at the
+assessment boundary. Target RPO is explicit or null; age may EXCEEDS_TARGET while
+technical validation succeeds, but Actual Data Loss always stays UNKNOWN.
+serviceRecoveryTested=false, achievedRtoMs=null and productionRecoveryApproved=false
+are unconditional. No production RPO/RTO or recovery approval is inferred.
+
+Manual Job/Attempt IDs flow only into a private 0700 workspace/file, never the
+phase channel or Console. Strict allowlisted report projection excludes tokens,
+Session hashes, connection secrets, raw business columns and arbitrary error text.
+After every stage and exact-owned Docker cleanup passes, the coordinator removes
+its workspace and creates a fresh exclusive random report directory. A 0600
+temporary JSON file is synced and atomically renamed there. Failed stages, clock
+checks, filesystem writes or cleanup publish no successful report. Prior reports
+and source backups are preserved; unknown Docker ownership requires investigation.
+See [drill runbook](RECOVERY_DRILL.md) and [bounded task](tasks/demo-05d3b-dr-drill.md).

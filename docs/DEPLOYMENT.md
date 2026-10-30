@@ -461,3 +461,14 @@ that invalidation, reconstruct fake outcomes from stored rows, replay unknown
 dispatches automatically or alter existing Unknown Outcome/Reset recovery.
 RESTORE_VERIFIED cannot approve public activation or claim end-to-end recovery.
 See [scope, evidence and failure handling](tasks/demo-05d3a-operational-backup.md).
+
+## Disaster Recovery Drill
+
+After an operational backup exists, use the separate
+[read-only DR Drill runbook](RECOVERY_DRILL.md) to restore and assess only an
+isolated PostgreSQL target and publish a private JSON report. It reuses the
+existing verification engine. Existing `verify-backup-live.sh` remains available
+with its unchanged RESTORE_VERIFIED contract. The drill starts no Backend and
+provides no production restore target or automatic runtime/executor recovery.
+Report duration measures database-drill stages, not achieved service RTO; Owner
+recovery approval and measured production RPO/RTO remain separate obligations.
