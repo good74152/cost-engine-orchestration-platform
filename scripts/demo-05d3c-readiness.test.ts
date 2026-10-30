@@ -169,3 +169,7 @@ scenario('freshness includes time spent reading archives, using paired wall/mono
  const clock=new DrillClock(()=>fixtureNow+1000*(sample++),()=>BigInt(sample-1)*1000000000n);
  const r=await assessReadiness(f.options,clock);assert.equal(r.localRecoveryReadiness.status,'NOT_VERIFIED');assert.ok(r.evidenceIssues.some(i=>i.code==='RESTORE_DRILL_EXPIRED'));
 });
+scenario('private policy can share the private parent of sibling inventory/report directories',async f=>{
+ f.options.policyFile=join(f.root,'owner-policy.json');await f.savePolicy();const b=await f.backup(),d=await f.drill(b);await f.offhost(b,d);
+ const r=await assess(f);assert.equal(r.disasterRecoveryReadiness.status,'READY');assert.equal(r.evidenceReferences.backups.length,1);assert.equal(r.evidenceReferences.drills.length,1);assert.equal(r.evidenceReferences.ownerReviewedOffHost.length,1);await runReadiness(f.options);
+});

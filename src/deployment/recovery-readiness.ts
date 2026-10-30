@@ -45,7 +45,7 @@ export async function assessReadiness(options: ReadinessOptions, clock = new Dri
     [dirname(options.policyFile),policyRoot],...offHostRoot ? [[options.offHostDirectory!,offHostRoot]]:[]];
   requireEvidence(isAbsolute(options.policyFile) && !related(backupRoot,drillRoot)
     && (!offHostRoot || (!related(offHostRoot,backupRoot) && !related(offHostRoot,drillRoot)))
-    && [backupRoot,drillRoot,policyRoot,...offHostRoot ? [offHostRoot] : []].every(root => !related(root,reportRoot)), 'UNSAFE_INPUT');
+    && [backupRoot,drillRoot,...offHostRoot ? [offHostRoot] : []].every(root => !related(root,reportRoot)), 'UNSAFE_INPUT');
   const budget = new ReadBudget(), policyFile = await readJson(options.policyFile,readinessLimits.policyBytes,budget), policy = parseRecoveryPolicy(policyFile.value);
   let now = clock.sample().at; const issues: Issue[] = [], backups: Backup[] = [], drills: Drill[] = [];
   const rejected = (source: Issue['source'], name: string, error: unknown) => {
@@ -126,6 +126,11 @@ export async function assessReadiness(options: ReadinessOptions, clock = new Dri
       verifiedBy:remote.evidence.verifiedBy,reviewId:remote.evidence.ownerReview.reviewId,keyId:remote.evidence.ownerReview.keyId,
       reviewedAt:remote.evidence.ownerReview.reviewedAt,storageReferenceSha256:sha256(remote.evidence.storageReference)}}:null,
     localRecoveryReadiness,disasterRecoveryReadiness,evidenceIssues:issues.sort((a,b)=>a.source.localeCompare(b.source)||a.reference.localeCompare(b.reference)||a.code.localeCompare(b.code)),
+    evidenceReferences:{policy:{sha256:policyFile.sha256},
+      backups:backups.map(b=>({backupId:b.manifest.identity,manifestSha256:b.manifestSha256,archiveSha256:b.manifest.sha256})),
+      drills:drills.map(d=>({drillId:d.drillId,backupId:d.backupId,reportSha256:d.reportSha256,current:d.current})),
+      ownerReviewedOffHost:offHost.map(v=>({evidenceId:v.evidence.evidenceId,fileSha256:v.sha256,backupId:v.backup.manifest.identity,
+        drillId:v.drill.drillId,current:currentOffHost.includes(v)})).sort((a,b)=>a.evidenceId.localeCompare(b.evidenceId))},
     inventory:{validBackups:backups.length,validDrills:drills.length,trustedCurrentOffHostEvidence:currentOffHost.length,rejectedOrExpiredEvidence:issues.length},
     evidenceScope:{independentlyVerified:['LOCAL_ARCHIVE_BYTES_AND_HASH','MANIFEST_AND_DRILL_CONTRACT_BINDINGS','EVIDENCE_TIMES_AND_POLICY','OWNER_REVIEW_SIGNATURE'],
       ownerAttested:['PRIVATE_BACKUP_AND_DRILL_STORE_PROVENANCE','PHYSICAL_OFF_HOST_STORAGE_AND_RETRIEVAL','RETRIEVED_COPY_USED_BY_BOUND_DRILL'],

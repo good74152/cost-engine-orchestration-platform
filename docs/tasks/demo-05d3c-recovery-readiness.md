@@ -60,7 +60,7 @@ Linux CI verifies POSIX restrictions.
 
 | Check | Result |
 | --- | --- |
-| Offline readiness / CLI / real filesystem fault injection | 43 PASS, 0 FAIL |
+| Offline readiness / CLI / real filesystem fault injection | 44 PASS, 0 FAIL |
 | 3B real PostgreSQL read-only assessment regression | 12 PASS, 0 FAIL |
 | 3A real PostgreSQL operational backup regression | 19 PASS, 0 FAIL |
 | 3D2 real PostgreSQL preflight/schema regression | 58 PASS, 0 FAIL |

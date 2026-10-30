@@ -13,7 +13,9 @@ current user and exactly 0700; source JSON/archives must be owner-private regula
 files (no group/other bits). On Windows, as in 3B, the System Owner must provision
 equivalent restrictive ACLs; POSIX mode bits do not establish Windows privacy.
 Do not use shared, mutable or untrusted locations. No source/output overlap is
-allowed. Keep sources unchanged during assessment. No remote URL is accepted.
+allowed for the inventory directories. The read-only policy file may live in
+their private parent; it does not require a separate directory. Keep sources
+unchanged during assessment. No remote URL is accepted.
 
 Backup layout: `BACKUPS/cost-engine-live-backup-…/{manifest.json,backup.dump}`.
 Drill layout: `DRILLS/drill-<32 lowercase hex>/report.json`. Copy only completed
@@ -155,7 +157,9 @@ Fixed state reason codes: `VERIFIED_RECOVERY_POINT_WITHIN_RPO`,
 `LATEST_SUCCESSFUL_BACKUP_NOT_RESTORE_VERIFIED`,
 `OFF_HOST_EVIDENCE_NOT_PROVIDED`, `NO_TRUSTED_OFF_HOST_EVIDENCE`,
 `OFF_HOST_EVIDENCE_EXPIRED`. All invalid/expired candidates have individual
-`evidenceIssues` with fixed codes and bounded references. Rejected arbitrary
+`evidenceIssues` with fixed codes and bounded references. `evidenceReferences`
+lists the exact hashes of every valid backup, Drill and Owner-reviewed envelope,
+including stale history, rather than retaining only the selected point. Rejected arbitrary
 filenames are represented by a name SHA, never echoed. Retained invalid history
 does not invalidate an independently sound selected point; it is always disclosed.
 
