@@ -1,25 +1,17 @@
 import { randomBytes } from 'node:crypto';
 import { spawn } from 'node:child_process';
-import { constants, lstatSync, realpathSync } from 'node:fs';
+import { constants } from 'node:fs';
 import { lstat, mkdir, open, readFile, rename, rmdir, unlink } from 'node:fs/promises';
 import { dirname, isAbsolute, join, resolve, basename } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { DrillClock, assessRpo, drillPhases, drillRejected, type DrillPhase, type DrillReport } from '../src/deployment/drill-report.js';
 import { parseRecoveryAssessment } from '../src/deployment/recovery-assessment.js';
+import { assertPrivateDirectory } from '../src/deployment/private-directory.js';
+export { assertPrivateDirectory } from '../src/deployment/private-directory.js';
 
 const repository = fileURLToPath(new URL('../', import.meta.url));
 const posix = (path: string) => process.platform === 'win32' ? path.replaceAll('\\', '/').replace(/^([A-Za-z]):/, (_, drive: string) => '/' + drive.toLowerCase()) : path;
 const digest = (value: unknown): value is string => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
-export function assertPrivateDirectory(path: string): string {
-  if (!isAbsolute(path)) throw drillRejected(); const stat = lstatSync(path);
-  if (!stat.isDirectory() || stat.isSymbolicLink()) throw drillRejected(); const physical = realpathSync(path);
-  if (process.platform !== 'win32' && ((stat.mode & 0o777) !== 0o700 || stat.uid !== process.getuid!())) throw drillRejected();
-  for (let ancestor = physical; ; ancestor = dirname(ancestor)) {
-    try { lstatSync(join(ancestor, '.git')); throw drillRejected(); } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
-    if (dirname(ancestor) === ancestor) break;
-  }
-  return physical;
-}
 export function assertDrillWorkspace(path: string): void {
   assertPrivateDirectory(path); if (!/^\.drill-work-[a-f0-9]{32}$/.test(basename(path))) throw drillRejected();
 }

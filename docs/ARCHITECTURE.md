@@ -1148,3 +1148,30 @@ temporary JSON file is synced and atomically renamed there. Failed stages, clock
 checks, filesystem writes or cleanup publish no successful report. Prior reports
 and source backups are preserved; unknown Docker ownership requires investigation.
 See [drill runbook](RECOVERY_DRILL.md) and [bounded task](tasks/demo-05d3b-dr-drill.md).
+
+## 39. Offline Recovery Readiness
+
+Demo-05D-3C consumes existing private Operational bundles, 3B Drill reports, an
+explicit three-duration Owner policy and optional signed off-host retrieval
+evidence. It calls no database, Docker, network or restore engine. Shared 3A
+manifest assertions and 3B DTO/assessment/time/RPO validation preserve their
+existing contracts. Archive bytes, SHA, size, header, version and full Drill
+bindings are checked before candidate selection. Each recovery point needs its
+own current complete Drill evidence; new undrilled backups cannot refresh it.
+
+Local and Disaster READY/AT_RISK/NOT_VERIFIED are evaluated independently from
+their respective backup startedAt. Disaster recovery additionally requires a
+current exact-SHA-bound retrieval/Drill review signed by an Ed25519 reviewer key
+explicitly trusted in the private policy. The signature authenticates Owner review;
+physical off-host provenance and the retrieved copy's historical use in the Drill
+remain Owner-attested facts. Local report provenance relies on the Owner-controlled
+private store. No JSON boolean or evidence-supplied key grants trust. See
+[ADR-0019](adr/0019-offline-recovery-readiness-evidence.md).
+
+The CLI records every rejection without truncation; bounded resources or required
+I/O failure withhold final publication. A random exclusive 0700 output directory,
+synced 0600 temporary file and atomic rename publish private reports without
+changing source evidence or previous reports. Production approval/service recovery
+remain false and actual data loss UNKNOWN. The tool has no restore target,
+scheduler, sync, redispatch or runtime activation capability. See
+[runbook](RECOVERY_READINESS.md) and [task](tasks/demo-05d3c-recovery-readiness.md).

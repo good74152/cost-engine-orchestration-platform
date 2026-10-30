@@ -472,3 +472,14 @@ with its unchanged RESTORE_VERIFIED contract. The drill starts no Backend and
 provides no production restore target or automatic runtime/executor recovery.
 Report duration measures database-drill stages, not achieved service RTO; Owner
 recovery approval and measured production RPO/RTO remain separate obligations.
+
+## Offline Recovery Readiness
+
+After retaining trusted Operational Backup and actual 3B Drill evidence, run the
+separate [Recovery Readiness CLI](RECOVERY_READINESS.md) with explicit private
+source/output directories and Owner policy. It performs no backup, restore,
+database connection, storage sync or automatic scheduling. Local and Off-host
+recovery points are assessed separately; Disaster READY additionally requires a
+hash-bound Owner-signed retrieval and actual Drill review under policy-trusted
+keys. The report distinguishes independent local checks from physical provenance
+attestation. No production RPO/RTO, execution recovery or approval is granted.

@@ -6,6 +6,7 @@ import { mkdtemp, mkdir, readFile, writeFile, readdir, stat, rm } from 'node:fs/
 import { tmpdir } from 'node:os';
 import { resolve, join, dirname, basename } from 'node:path';
 import type { DrillReport } from '../src/deployment/drill-report.js';
+import { parseOperationalManifest, parseVerifiedDrill } from '../src/deployment/readiness-evidence.js';
 
 interface Result { code:number; out:string; err:string }
 function command(exe:string,args:string[],env=process.env,input?:string):Promise<Result>{return new Promise((done,reject)=>{
@@ -44,6 +45,10 @@ test('Demo-05D-3B real Docker: isolated DR drill and private recovery report',{t
  const readNewReport=async(before:string[])=>{
   const after=await reportNames(),created=after.filter(n=>!before.includes(n));assert.equal(created.length,1);assert.match(created[0]!,/^drill-[a-f0-9]{32}$/);
   const file=join(reports,created[0]!,'report.json'),text=await readFile(file,'utf8'),report=JSON.parse(text) as DrillReport;
+  // The downstream offline assessment accepts actual 3B restore evidence,
+  // including populated history/manual review, without rerunning a restore.
+  const now=new Date().toISOString();
+  assert.doesNotThrow(()=>parseVerifiedDrill(report,parseOperationalManifest(manifest,now),now),'Readiness must accept the real 3B DTO');
   for(const secret of privateValues)assert.ok(!text.includes(secret),'Private report cannot contain tokens/hashes/credentials');
   assert.doesNotMatch(text,/token_hash|database_url|company_code|last_dispatch_error|airflow_dag/i);
   if(process.platform!=='win32'){assert.equal((await stat(file)).mode&0o077,0);assert.equal((await stat(dirname(file))).mode&0o777,0o700);}
