@@ -483,3 +483,25 @@ recovery points are assessed separately; Disaster READY additionally requires a
 hash-bound Owner-signed retrieval and actual Drill review under policy-trusted
 keys. The report distinguishes independent local checks from physical provenance
 attestation. No production RPO/RTO, execution recovery or approval is granted.
+
+## Fresh-installation deployment rehearsal
+
+The separate `Fresh installation deployment rehearsal` GitHub workflow runs four
+isolated hosted Linux jobs: complete fresh install/six-domain Workflow, Backend
+startup refusal, Cutover precondition refusal and corrupted-copy Restore refusal.
+It calls existing deployment/recovery tools. Each job has fresh random Compose
+identities, private secrets/volumes and no published Backend/DB port. Effective
+configuration and actual Docker TCP/UDP Web bindings both require loopback-only
+exposure; HTTPS trusts the local test CA and uses no public DNS/ACME.
+
+Happy Path proves first-deployment backup/restore before Cutover, then online
+backup/drill/Local READY before explicit test Web opening. It performs six Domains
+and ten Jobs through the Demo API, closes Web without losing history and repeats
+online recovery verification. Without Off-host evidence Disaster stays NOT_VERIFIED.
+Negative scenarios pass only for expected refusal, preserved state and owned cleanup.
+
+Only strict sanitized acceptance JSON is retained as artifact; backups, credentials,
+private identifiers and full recovery reports are never uploaded. All four jobs
+and aggregate cleanup gates must pass. See [test architecture and evidence](tasks/demo-05d4-deployment-rehearsal.md).
+This task is commit-only: System Owner Push, CI verification and optional PR follow
+separately. No VPS deployment, production recovery or achieved RPO/RTO is claimed.

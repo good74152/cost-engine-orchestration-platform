@@ -241,6 +241,17 @@ No backup/restore/sync/scheduling/activation operation is added. See
 [runbook](RECOVERY_READINESS.md) and [task](tasks/demo-05d3c-recovery-readiness.md).
 Await System Owner Review.
 
+Demo-05D-3C is merged via PR #47 at `a56e63b`.
+
+Demo-05D-4 adds a test-only fresh-installation rehearsal with four independent
+hosted Linux scenarios and strict all-scenario acceptance. Existing deployment,
+migration/seed, Cutover, API Workflow, backup/restore, Drill, Readiness and explicit
+Web controls are coordinated with proven loopback bindings, fail-stop stages and
+owned cleanup. Only allowlisted acceptance metadata can become an artifact.
+See [scope and evidence](tasks/demo-05d4-deployment-rehearsal.md). This task is
+commit-only; Owner Push, new-commit CI verification and optional PR/review remain
+pending. No production deployment/recovery or public DNS/TLS/RPO/RTO claim.
+
 ## Deferred until a concrete requirement
 
 - Real Airflow HTTP adapter and external cancellation.
