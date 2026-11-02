@@ -1,0 +1,74 @@
+name: Fresh installation deployment rehearsal
+on: [push, pull_request, workflow_dispatch]
+permissions: {contents: read}
+jobs:
+  contracts:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with: {ref: '${{ github.event.pull_request.head.sha || github.sha }}'}
+      - uses: actions/setup-node@v6
+        with: {node-version: '24', cache: npm}
+      - run: npm ci
+      - run: npm run build
+      - run: npm run test:demo-05d4:typecheck
+      - run: npm run test:demo-05d4:unit
+      - run: git diff --check
+  rehearsal:
+    needs: contracts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        scenario: [happy-path, backend-startup-failure, cutover-precondition-failure, restore-verification-failure]
+    # Each matrix leg receives its own fresh hosted VM/Docker daemon. No shared
+    # services, production credentials, environment secrets or published DB ports.
+    steps:
+      - uses: actions/checkout@v6
+        with: {ref: '${{ github.event.pull_request.head.sha || github.sha }}'}
+      - uses: actions/setup-node@v6
+        with: {node-version: '24', cache: npm}
+      - run: npm ci
+      - name: Prepare sanitized-summary destination
+        run: mkdir -m 700 "$RUNNER_TEMP/demo05d4-public"
+      - name: Execute actual deployment controls and isolated recovery tools
+        run: npm run test:demo-05d4:rehearsal -- --scenario '${{ matrix.scenario }}' --summary-dir "$RUNNER_TEMP/demo05d4-public"
+      - name: Retain only the strict allowlisted acceptance summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rehearsal-${{ github.run_attempt }}-${{ matrix.scenario }}
+          path: ${{ runner.temp }}/demo05d4-public/${{ matrix.scenario }}.json
+          if-no-files-found: error
+          retention-days: 14
+  acceptance:
+    if: always()
+    needs: [contracts, rehearsal]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with: {ref: '${{ github.event.pull_request.head.sha || github.sha }}'}
+      - uses: actions/setup-node@v6
+        with: {node-version: '24', cache: npm}
+      - run: npm ci
+      - run: mkdir -m 700 "$RUNNER_TEMP/demo05d4-accepted-input"
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: rehearsal-${{ github.run_attempt }}-*
+          path: ${{ runner.temp }}/demo05d4-accepted-input
+          merge-multiple: true
+      - name: Require all four scenarios and every cleanup to pass
+        env:
+          CONTRACT_RESULT: ${{ needs.contracts.result }}
+          REHEARSAL_RESULT: ${{ needs.rehearsal.result }}
+        run: |
+          test "$CONTRACT_RESULT" = success
+          test "$REHEARSAL_RESULT" = success
+          node --import tsx scripts/demo-05d4-aggregate.ts "$RUNNER_TEMP/demo05d4-accepted-input" "$(git rev-parse HEAD)" "$RUNNER_TEMP/demo05d4-acceptance.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: deployment-rehearsal-acceptance-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/demo05d4-acceptance.json
+          if-no-files-found: error
+          retention-days: 14

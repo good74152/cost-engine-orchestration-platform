@@ -4,6 +4,9 @@
   "description": "Backend orchestration platform for versioned cost-engine datasets and Airflow/ETL execution workflows.",
   "main": "index.js",
   "scripts": {
+    "test:demo-05d4:unit": "tsx --test scripts/demo-05d4-contract.test.ts",
+    "test:demo-05d4:rehearsal": "tsx scripts/demo-05d4-rehearsal.ts",
+    "test:demo-05d4:typecheck": "tsc --ignoreConfig --noEmit --strict --types node --skipLibCheck --esModuleInterop --module NodeNext --target ES2022 scripts/demo-05d4-rehearsal.ts scripts/demo-05d4-aggregate.ts scripts/demo-05d4-contract.test.ts",
     "demo:recovery-readiness": "tsx deploy/recovery-readiness.ts",
     "test:demo-05d3c": "tsx --test scripts/demo-05d3c-readiness.test.ts",
     "test:demo-05d3c:typecheck": "tsc --ignoreConfig --noEmit --strict --types node --skipLibCheck --esModuleInterop --module NodeNext --target ES2022 deploy/recovery-readiness.ts scripts/demo-05d3c-readiness.test.ts",
