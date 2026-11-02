@@ -3,9 +3,10 @@ import test from 'node:test';
 import {mkdtemp,mkdir,writeFile,rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
+import {spawn} from 'node:child_process';
 import {scenarios,stages,check,RehearsalReport,parseSummary,aggregateSummaries,assertRehearsalConfig,assertRuntimePorts,assertOwned,type Scenario,type Summary} from './support/demo-05d4-contract.js';
 import {aggregateDirectory} from './demo-05d4-aggregate.js';
-import {runRehearsal} from './demo-05d4-rehearsal.js';
+import {runRehearsal,closeOwnedRehearsalWeb,cleanupWithWebClosure,assertExpectedBackendStartupFailure} from './demo-05d4-rehearsal.js';
 const sha='a'.repeat(40),project='demo05d4_'+'a'.repeat(24),owner='rehearsal-'+'a'.repeat(32);
 async function passing(scenario:Scenario):Promise<Summary>{
  const r=new RehearsalReport(scenario,'rehearsal-'+String(scenarios.indexOf(scenario)+1).repeat(32),sha);
@@ -92,4 +93,74 @@ test('Demo-05D-4 summary rejects arbitrary nested error text and impossible dura
  const s=await passing('happy-path');
  const nested=structuredClone(s);(nested.stages[0]as any).rawError='postgres://secret';assert.throws(()=>parseSummary(nested,sha));
  const duration=structuredClone(s);duration.stages[0]!.durationMs=Number.MAX_SAFE_INTEGER;assert.throws(()=>parseSummary(duration,sha));
+});
+test('Demo-05D-4 effective configuration accepts exactly the four required services',()=>{
+ assert.doesNotThrow(()=>assertRehearsalConfig(config(),project,owner,15443));
+ for(const kind of ['extra','extra-published-port',...['database','backend','web','operator']]){
+  const c:any=structuredClone(config());
+  if(kind.startsWith('extra'))c.services.worker={labels:{'cost-engine.rehearsal.owner':owner},...(kind==='extra-published-port'?{ports:[{published:'12345',target:12345}]}:{})};
+  else delete c.services[kind];
+  assert.throws(()=>assertRehearsalConfig(c,project,owner,15443));
+ }
+});
+const web=()=>({Id:'2'.repeat(64),Name:'/'+project+'-web-1',Config:{Image:'cost-engine-demo-web:'+project,
+ Labels:{...labels,'com.docker.compose.service':'web'}},State:{Running:true,Restarting:false,Paused:false},HostConfig:{RestartPolicy:{Name:'no'}}});
+test('Demo-05D-4 exception after Web opening closes owned Web before generic cleanup and preserves original failure',async()=>{
+ const r=new RehearsalReport('happy-path',owner,sha),w=web(),events:string[]=[];
+ await assert.rejects(()=>r.stage('WORKFLOW_ACCEPTANCE',async()=>{throw Error('original private test failure');}));
+ await r.stage('CLEANUP',()=>cleanupWithWebClosure(()=>closeOwnedRehearsalWeb(async()=>[w],async()=>{events.push('close-web');w.State.Running=false;},project,owner),async()=>{events.push('remove');}));
+ const s=r.finish();assert.deepEqual(events,['close-web','remove']);assert.equal(w.State.Running,false);assert.equal(w.HostConfig.RestartPolicy.Name,'no');
+ assert.equal(s.result,'FAIL');assert.equal(s.cleanupVerification,'PASS');assert.equal(s.stages.find(s=>s.name==='WORKFLOW_ACCEPTANCE')!.code,'WORKFLOW_ACCEPTANCE_FAILED');
+});
+test('Demo-05D-4 failed Web closure still runs generic cleanup, withholds acceptance and keeps original test failure',async()=>{
+ const r=new RehearsalReport('happy-path',owner,sha),w=web(),events:string[]=[];
+ await assert.rejects(()=>r.stage('WEB_ACCEPTANCE',async()=>{throw Error('original private failure');}));
+ await assert.rejects(()=>r.stage('CLEANUP',()=>cleanupWithWebClosure(()=>closeOwnedRehearsalWeb(async()=>[w],async()=>{events.push('close-web');throw Error('private closure diagnostic');},project,owner),async()=>{events.push('remove');})));
+ const s=r.finish();assert.deepEqual(events,['close-web','remove']);assert.equal(s.result,'FAIL');assert.equal(s.cleanupVerification,'FAIL');
+ assert.equal(s.stages.find(s=>s.name==='WEB_ACCEPTANCE')!.code,'WEB_ACCEPTANCE_FAILED');assert.ok(!JSON.stringify(s).includes('private'));
+});
+for(const observation of ['running','restart-policy','read-unavailable'])test('Demo-05D-4 unconfirmed Web closure fails even after close-web exits zero: '+observation,async()=>{
+ const w=web();let reads=0,removed=false;
+ await assert.rejects(()=>cleanupWithWebClosure(()=>closeOwnedRehearsalWeb(async()=>{if(++reads===2&&observation==='read-unavailable')throw Error('inspection failed');return[w];},async()=>{
+  if(observation!=='running')w.State.Running=false;if(observation==='restart-policy')w.HostConfig.RestartPolicy.Name='always';
+ },project,owner),async()=>{removed=true;}));assert.equal(removed,true);
+});
+test('Demo-05D-4 unconfirmed Web ownership cannot call close-web or mutate foreign resources',async()=>{
+ const known=web(),unknown=web();unknown.Config.Labels['cost-engine.rehearsal.owner']='foreign';let closed=false,cleanupAttempted=false;
+ await assert.rejects(()=>cleanupWithWebClosure(()=>closeOwnedRehearsalWeb(async()=>[known,unknown],async()=>{closed=true;},project,owner),async()=>{
+  cleanupAttempted=true;assertOwned(unknown,'container',project,owner); // Generic ownership guard still protects removal.
+ }));assert.equal(closed,false);assert.equal(cleanupAttempted,true);assert.equal(unknown.State.Running,true);
+});
+const backend=()=>({Config:{Env:['DEMO_MAX_EXECUTORS=invalid-fixture']},State:{Status:'exited',Running:false,Restarting:false,Paused:false,
+ OOMKilled:false,ExitCode:1,Error:'',Health:{Status:'unhealthy'}},HostConfig:{RestartPolicy:{Name:'no'}}});
+const environmentDiagnostic='application_environment_invalid: verify APP_MODE and production Demo configuration';
+test('Demo-05D-4 Backend attribution accepts the injected setting and exact environment validation diagnostic',()=>{
+ assert.doesNotThrow(()=>assertExpectedBackendStartupFailure(backend(),environmentDiagnostic+'\n',null));
+});
+for(const kind of ['unrelated','conflicting','missing-injection','duplicate-setting','oom','launch-error','wrong-exit'])test('Demo-05D-4 unrelated Backend startup failure cannot PASS: '+kind,()=>{
+ const b=backend();let logs=environmentDiagnostic;
+ if(kind==='unrelated')logs='application_startup_failed';if(kind==='conflicting')logs+='\napplication_startup_failed';
+ if(kind==='missing-injection')b.Config.Env=['DEMO_MAX_EXECUTORS=100'];if(kind==='duplicate-setting')b.Config.Env.push('DEMO_MAX_EXECUTORS=100');
+ if(kind==='oom')b.State.OOMKilled=true;if(kind==='launch-error')b.State.Error='fixture container launch failed';if(kind==='wrong-exit')b.State.ExitCode=137;
+ assert.throws(()=>assertExpectedBackendStartupFailure(b,logs,null));
+});
+test('Demo-05D-4 real Backend entrypoint produces the existing environment diagnostic without database startup or secret output',async()=>{
+ const directory=await mkdtemp(join(tmpdir(),'demo05d4-env-'));try{
+ const env:NodeJS.ProcessEnv={...process.env,NODE_ENV:'production',APP_MODE:'demo',EXECUTOR_TYPE:'fake',DEMO_PUBLIC_ENABLED:'true',DEMO_PUBLIC_ORIGIN:'https://localhost',
+  DEPLOYMENT_VERSION:'review-fixture',DEMO_MAX_EXECUTORS:'invalid-fixture',DATABASE_URL:'postgres://fixture:private-test-password@127.0.0.1:1/never_connected',DEMO_PROXY_SECRET:'f'.repeat(64),
+  DOTENV_CONFIG_QUIET:'true',DOTENV_CONFIG_DEBUG:'false',DOTENV_CONFIG_OVERRIDE:'false',DOTENV_CONFIG_PATH:join(directory,'absent.env')};
+ delete env.DATABASE_URL_FILE;delete env.DEMO_PROXY_SECRET_FILE;delete env.DOTENV_KEY;
+ const r=await new Promise<{code:number|null;logs:string}>((done,reject)=>{
+  const p=spawn(process.execPath,['--import','tsx','src/server.ts'],{env,stdio:['ignore','pipe','pipe']});let logs='';
+  const timer=setTimeout(()=>{p.kill();reject(Error('Backend fixture deadline exceeded'));},10000);
+  const read=(b:Buffer)=>{logs+=b.toString();if(logs.length>65536){p.kill();reject(Error('Backend fixture output limit exceeded'));}};
+  p.stdout.on('data',read);p.stderr.on('data',read);p.once('error',e=>{clearTimeout(timer);reject(e);});p.once('close',code=>{clearTimeout(timer);done({code,logs});});
+ });
+ assert.equal(r.code,1);assertExpectedBackendStartupFailure(backend(),r.logs,null);
+ for(const value of [env.DATABASE_URL!,env.DEMO_PROXY_SECRET!,'private-test-password'])assert.equal(r.logs.includes(value),false,'Startup fixture must not emit secrets');
+ }finally{await rm(directory,{recursive:true,force:true});}
+});
+test('Demo-05D-4 Backend environment rejection cannot PASS if Web was created or opened',()=>{
+ const w=web();assert.throws(()=>assertExpectedBackendStartupFailure(backend(),environmentDiagnostic,w));
+ w.State.Running=false;assert.throws(()=>assertExpectedBackendStartupFailure(backend(),environmentDiagnostic,w));
 });

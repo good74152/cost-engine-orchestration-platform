@@ -82,6 +82,7 @@ export function aggregateSummaries(inputs:unknown[],sha:string){
  * config checks run too; these additional assertions belong only to CI. */
 export function assertRehearsalConfig(c:any,project:string,owner:string,port:number){
   check(/^demo05d4_[a-f0-9]{24}$/.test(project)&&/^rehearsal-[a-f0-9]{32}$/.test(owner)&&c.name===project);
+  check(exact(c.services,['database','backend','web','operator']));
   check(c.services.backend.container_name===project+'-backend'&&c.services.backend.restart==='no'&&c.services.web.restart==='no');
   check(!c.services.backend.ports?.length&&!c.services.database.ports?.length&&!c.services.operator.ports?.length);
   for(const s of Object.values(c.services)as any[]){check(!s.network_mode&&!s.privileged&&s.labels['cost-engine.rehearsal.owner']===owner);}

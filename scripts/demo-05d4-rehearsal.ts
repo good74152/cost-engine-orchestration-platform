@@ -36,6 +36,31 @@ function requireHostedRunner(){
   &&process.env.RUNNER_OS==='Linux'&&process.env.GITHUB_REPOSITORY==='good74152/cost-engine-orchestration-platform');
 }
 
+// Validate the exact set close-web.sh will operate on before calling it. The
+// same check on fresh observations confirms closure before generic removal.
+export async function closeOwnedRehearsalWeb(read:()=>Promise<any[]>,close:()=>Promise<unknown>,project:string,owner:string){
+ const owned=(containers:any[])=>{for(const c of containers){assertOwned(c,'container',project,owner);
+  check(c.Config.Labels['com.docker.compose.service']==='web'&&c.Config.Image==='cost-engine-demo-web:'+project);}};
+ owned(await read());await close();const after=await read();owned(after);
+ check(after.every(c=>!c.State.Running&&!c.State.Restarting&&!c.State.Paused&&c.HostConfig.RestartPolicy.Name==='no'));
+}
+export async function cleanupWithWebClosure(close:()=>Promise<void>,cleanup:()=>Promise<void>){
+ let failed=false,error:unknown;
+ try{await close();}catch(e){failed=true;error=e;}
+ try{await cleanup();}finally{if(failed)throw error;} // A close failure cannot skip cleanup or become PASS after deletion.
+}
+export function assertExpectedBackendStartupFailure(b:any,logs:string,web:unknown){
+ check(web===null); // This fresh negative fixture must never have created Web.
+ check(b&&b.Config.Env.filter((v:string)=>v.startsWith('DEMO_MAX_EXECUTORS=')).length===1
+  &&b.Config.Env.includes('DEMO_MAX_EXECUTORS=invalid-fixture'));
+ check(b.State.Status==='exited'&&!b.State.Running&&!b.State.Restarting&&!b.State.Paused&&!b.State.OOMKilled
+  &&b.State.ExitCode===1&&b.State.Error===''&&b.State.Health?.Status!=='healthy'&&b.HostConfig.RestartPolicy.Name==='no');
+ // Anchored diagnostic, never a substring in arbitrary Container output. The
+ // bounded tail stays in memory; neither it nor exception text enters reports.
+ check(logs.split(/\r?\n/).some(line=>line==='application_environment_invalid: verify APP_MODE and production Demo configuration'));
+ check(!logs.split(/\r?\n/).some(line=>/application_(?:startup_failed|database_connection_failed|ready|shutdown_failed)/.test(line)));
+}
+
 export async function runRehearsal(scenario:Scenario,summaryRoot:string){
  requireHostedRunner();check(scenarios.includes(scenario));const summaryDirectory=assertPrivateDirectory(summaryRoot);
  const env:NodeJS.ProcessEnv={...process.env,DOCKER_HOST:'unix:///var/run/docker.sock',DOCKER_CONTEXT:'default'};
@@ -45,11 +70,13 @@ export async function runRehearsal(scenario:Scenario,summaryRoot:string){
  const report=new RehearsalReport(scenario,id,sha);let root:string|undefined,rootIdentity:{dev:number;ino:number}|undefined;
  let base:string[]=[],scriptEnv=env,port=0,override='',overrideText='',sourceVolume='',backendId='';
  let initialRestore:{containers:string[];volumes:string[]}|undefined,cutoverCalls=0;
+ let failed=false,webMayHaveOpened=false;
  const target=['--database-url-file','/run/secrets/database_url'],approval=['--confirm-owner-acceptance-05d2-05d3',...target];
  const docker=async(args:string[],ok=true,input?:string,timeout?:number)=>{const r=await command('docker',args,env,input,timeout);if(ok)check(r.code===0);return r;};
  const compose=(...args:string[])=>docker([...base,...args]);
  const script=async(name:string,args:string[]=[],ok=true,extra:NodeJS.ProcessEnv={})=>{
   if(name==='operate'&&args[0]==='cutover')cutoverCalls++;
+  if(name==='open-web')webMayHaveOpened=true; // Include partial/failed opens and negative-scenario attempts.
   const r=await command('sh',[resolve('deploy/scripts/'+name+'.sh'),...args],{...scriptEnv,...extra},undefined,name==='deploy'?900000:180000);
   if(ok)check(r.code===0);else check(r.code!==0);return r;
  };
@@ -161,7 +188,8 @@ export async function runRehearsal(scenario:Scenario,summaryRoot:string){
       // migrations, admission and production failure paths are unchanged.
       await writeFile(override,overrideText.replace(`    container_name: ${project}-backend\n`,`    container_name: ${project}-backend\n    environment:\n      DEMO_MAX_EXECUTORS: invalid-fixture\n`),{mode:0o600});await config();
       const r=await script('start',[],false);check(r.err.includes('Backend not ready'));
-      const b=await inspect('backend');check(b&&!b.State.Running&&b.State.Health?.Status!=='healthy');
+      const b=await inspect('backend');check(b);
+      const logs=await docker(['logs','--tail','20',b.Id]);assertExpectedBackendStartupFailure(b,logs.out+logs.err,await inspect('web'));
       await script('open-web',approval,false);await closed();check(!await inspect('web')&&await stateHash()===before);
      }else{await script('start');backendId=(await health()).Id;await closed();check(await stateHash()===before);}
     },scenario==='backend-startup-failure'?'EXPECTED_BACKEND_STARTUP_REJECTION':'NONE');
@@ -213,9 +241,20 @@ export async function runRehearsal(scenario:Scenario,summaryRoot:string){
     }
    }
   }
- }catch{ /* Stage already records a fixed failure. Stop all subsequent operations. */ }
+ }catch{failed=true; /* Preserve the original stage's fixed failure; stop subsequent operations. */ }
  finally{
-  try{await report.stage('CLEANUP',async()=>{
+  try{await report.stage('CLEANUP',()=>cleanupWithWebClosure(async()=>{
+   if(failed&&webMayHaveOpened){
+    await config(); // close-web.sh must resolve the same validated test project.
+    await closeOwnedRehearsalWeb(async()=>{
+     const ids=(await docker(['ps','--all','--filter','label=com.docker.compose.project='+project,
+      '--filter','label=com.docker.compose.service=web','--format','{{.ID}}'])).out.trim().split(/\s+/).filter(Boolean);
+     if(!ids.length)return[];const containers=JSON.parse((await docker(['inspect',...ids])).out);
+     check(Array.isArray(containers)&&containers.length===ids.length&&ids.every(key=>containers.some(c=>typeof c.Id==='string'&&c.Id.startsWith(key))));
+     return containers;
+    },()=>script('close-web'),project,id);
+   }
+  },async()=>{
    if(base.length){
     const resources:{kind:'container'|'volume'|'network';key:string;value:any}[]=[];
     for(const kind of ['container','volume','network']as const){
@@ -234,7 +273,7 @@ export async function runRehearsal(scenario:Scenario,summaryRoot:string){
    }
    if(root){const now=await lstat(root);check(rootIdentity&&now.dev===rootIdentity.dev&&now.ino===rootIdentity.ino&&!now.isSymbolicLink()&&await realpath(root)===root
      &&basename(root).startsWith('demo05d4-')&&await readFile(join(root,'.owner'),'utf8')===id);await rm(root,{recursive:true});}
-  });}catch{ /* Cleanup failure is never converted into negative-test success. */ }
+  }));}catch{ /* Closure/removal failure cannot hide the original test failure or grant acceptance. */ }
  }
  const summary=report.finish();parseSummary(summary,sha);check(assertPrivateDirectory(summaryDirectory)===summaryDirectory);
  const final=join(summaryDirectory,scenario+'.json'),partial=final+'.'+randomBytes(16).toString('hex')+'.partial';

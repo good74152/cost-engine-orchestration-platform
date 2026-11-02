@@ -3,8 +3,8 @@
 Authority: System Owner's bounded specification, including **commit only, no Push**.
 Baseline: main `a56e63b3ffef2d6bd921c0117d36bf6b3e2eaf01` (PR #47 merged).
 Branch: `codex/demo-05d4-deployment-rehearsal`.
-Status: implemented; available local verification recorded below. GitHub execution
-awaits System Owner's manual Push and decision whether to open a PR.
+Status: implemented in PR #48; local review-fix verification is recorded below.
+New-commit GitHub execution awaits System Owner's manual Push.
 
 ## Test architecture and isolation
 
@@ -172,3 +172,59 @@ off-host storage provenance, real recovery or production RPO/RTO acceptance.
 Database restoration does not restore FakeExecutor memory or users' execution
 ability. No automatic retry/redispatch/rollback/runtime activation or production
 recovery approval is introduced. Existing Owner runbooks and approvals remain.
+
+## PR #48 Code Review Fix — 2026-11-02
+
+Reviewed commit: `1e47dc86cc821ffe320f317d7ce7ae0e1554a5bc`. The existing branch
+and fetched remote head both matched that commit, with no pre-existing worktree
+changes. This is a local reliability fix; four independent CI scenarios, summary
+DTO/allowed failure codes and production tools/engines remain unchanged.
+
+1. **Failure closure before removal:** every attempted Web open is tracked,
+   including partial/failed opens. After an unexpected failure, Cleanup first
+   revalidates the effective fixture configuration and all Web containers matching
+   exactly the project/service filters used by `close-web.sh`. Ownership, service
+   and expected fixture image must match before invoking that unchanged script.
+   Fresh observations confirm stopped/not paused/not restarting and restart=no.
+   Close/inspection/ownership failure withholds acceptance even if generic removal
+   succeeds. Generic owned-resource cleanup is still attempted; original test
+   stage failure codes are retained alongside any Cleanup failure.
+2. **Exact service set:** effective Compose JSON must contain exactly database,
+   backend, web and operator. Extra services are rejected even with correct Owner
+   labels or no published port. Missing services are rejected before dereference;
+   all original security/network/volume/TLS checks remain.
+3. **Backend failure attribution:** inspect the actual owned Backend for exactly
+   one `DEMO_MAX_EXECUTORS=invalid-fixture` entry, an exited/non-healthy process,
+   exit code 1, no Docker launch/OOM failure and restart=no. Privately capture only
+   a bounded 20-line log tail and require the existing anchored
+   `application_environment_invalid` diagnostic; contradictory startup/ready/DB
+   failure diagnostics are rejected. No Web container may exist before the Web
+   refusal probe, and the existing subsequent closure/state-preservation checks
+   remain. Raw logs, credentials and error details never enter CI output or reports.
+
+Added tests exercise exception-after-open ordering, successful close, failed or
+unconfirmed close with mandatory generic cleanup, refusal to operate foreign
+resources, preservation of the original failure, strict service membership,
+unrelated/missing/duplicate-injection startup failures, OOM/launch/exit conflicts,
+and Web remaining absent. A real Backend entrypoint subprocess confirms the
+existing validation diagnostic and secret-free failure before DB pool startup;
+it uses an isolated absent dotenv path and an unused loopback DB address, never
+an inherited deployed target.
+
+| Review verification | Actual result |
+| --- | --- |
+| `npm run build` | PASS |
+| `npm run test:demo-05d4:typecheck` | PASS |
+| `npm run test:demo-05d4:unit` | 37 PASS, 0 FAIL (original 20 retained, 17 added) |
+| `npm run test:demo-05d1:typecheck` | PASS |
+| `npm run test:demo-04:typecheck` | PASS after installing the existing locked frontend dependencies; initial missing Playwright dependency resolved without source/lock changes |
+| `npm run test:demo-05d3c` offline regression | 44 PASS, 0 FAIL |
+| `git diff --check` | PASS |
+| Actual Docker deployment/rehearsal and PostgreSQL/Core integration rerun | NOT RUN: Docker daemon unavailable; `docker info` failed because `npipe:////./pipe/dockerDesktopLinuxEngine` does not exist |
+| New review commit GitHub CI | NOT RUN; System Owner will Push and inspect PR #48 |
+
+Historical local results above belong to the original implementation, not this
+review execution. No new Docker/CI PASS is inferred from them. Only the rehearsal,
+its contract/tests and this task record change. No production script, Core,
+schema, migration, transaction, Cutover, Backup/Restore, Drill or Readiness engine
+is modified. Codex commits locally and stops; no Push, Merge or PR creation.
