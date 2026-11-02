@@ -149,7 +149,8 @@ test('Demo-01B-2: scoped reset and failure recovery on real PostgreSQL', { timeo
     const edges = (await pool.query(`SELECT conrelid::regclass::text AS child, confrelid::regclass::text AS parent
       FROM pg_constraint WHERE contype='f' ORDER BY 1,2`)).rows;
     console.log('DEMO_01B2_REVIEWED_FK_GRAPH', JSON.stringify(edges));
-    assert.deepEqual(edges.map((edge) => `${edge.child}->${edge.parent}`), [
+    // Compare as sets: ORDER BY uses the server's collation, which varies by locale.
+    assert.deepEqual(edges.map((edge) => `${edge.child}->${edge.parent}`).sort(), [
       'calculation_jobs->calculation_types', 'calculation_jobs->dataset_versions',
       'calculation_jobs->execution_dependency_definition_versions',
       'dataset_build_snapshot_dependencies->dataset_build_snapshots',
@@ -161,7 +162,7 @@ test('Demo-01B-2: scoped reset and failure recovery on real PostgreSQL', { timeo
       'execution_dependency_definition_dependencies->execution_dependency_definition_versions',
       'execution_dependency_definition_versions->calculation_types',
       'orchestration_v2_legacy_calculation_type_bridges->calculation_types', 'raw_ingestion_batches->raw_ingestion_series',
-    ]);
+    ].sort());
 
     await t.test('historical DEMO company collision retries through HTTP and Reset preserves the entire historical dataset', async () => {
       const companyCode = `DEMO_${'A'.repeat(15)}`;

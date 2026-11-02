@@ -5,9 +5,13 @@ import type { AuthenticatedDemoSession } from './demo-session.service.js';
 import { DemoResourceUnavailableError } from './demo-session.errors.js';
 import { publicPage, type ReadPage } from './demo-read.pagination.js';
 
+/** One upstream version frozen by first Run (ADR-0020). Deliberately names the
+ * version only: no IDs, company code or execution identity leave this projection. */
+export interface DemoFrozenInputDto { domain: string; fiscalYear: number; period: string; version: number }
 export interface DemoDatasetDto {
   datasetVersionId: string; datasetSeriesId: string; domain: string; fiscalYear: number;
   period: string; version: number; datasetStatus: DatasetVersionStatus; createdAt: string;
+  frozenInputs: DemoFrozenInputDto[];
 }
 export interface DemoDatasetDetailDto extends DemoDatasetDto {
   buildingStartedAt: string | null; validatingAt: string | null; publishedAt: string | null;
@@ -27,7 +31,14 @@ export interface DemoAttemptDto {
 // strings, not a projection of credential, error, DAG/run or fake-memory fields.
 const dataset = `'datasetVersionId',v.id,'datasetSeriesId',ds.id,'domain',ds.domain,
   'fiscalYear',ds.fiscal_year,'period',ds.period,'version',v.version,
-  'datasetStatus',v.status,'createdAt',v.created_at`;
+  'datasetStatus',v.status,'createdAt',v.created_at,
+  'frozenInputs',COALESCE((SELECT jsonb_agg(jsonb_build_object('domain',us.domain,'fiscalYear',us.fiscal_year,
+      'period',us.period,'version',uv.version) ORDER BY us.domain)
+    FROM dataset_build_snapshots b
+    JOIN dataset_build_snapshot_dependencies d ON d.snapshot_id=b.id
+    JOIN dataset_versions uv ON uv.id=d.upstream_dataset_version_id
+    JOIN dataset_series us ON us.id=d.upstream_dataset_series_id
+    WHERE b.dataset_version_id=v.id),'[]'::jsonb)`;
 const job = `'jobId',j.id,'datasetVersionId',j.output_dataset_version_id,
   'calculationTypeCode',ct.code,'jobStatus',j.status,'createdAt',j.created_at,
   'startedAt',j.started_at,'finishedAt',j.finished_at`;
