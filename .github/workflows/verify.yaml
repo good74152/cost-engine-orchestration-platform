@@ -58,6 +58,8 @@ jobs:
       - run: npm run test:demo-05c3a
       - run: npm run test:demo-05c3b:typecheck
       - run: npm run test:demo-05c3b
+      - run: npm run test:demo-06:typecheck
+      - run: npm run test:demo-06
       - run: npm run test:milestone
       - run: npx playwright install --with-deps chromium
         working-directory: frontend
@@ -65,8 +67,7 @@ jobs:
       - run: npm run test:demo-05d1:typecheck
       - run: npm run test:demo-05d1
       - run: npm run ui:smoke
-      - run: npm run ui:smoke:workflow
-      - run: npm run test:demo-05c3c:typecheck
+      - run: npm run test:demo-06:ui-typecheck
       - run: git diff --check
   preflight-backup-restore:
     runs-on: ubuntu-24.04

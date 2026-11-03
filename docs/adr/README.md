@@ -37,6 +37,7 @@ If a decision changes materially, prefer a new ADR that supersedes the old one i
 
 - [ADR-0018 — Atomic Demo Workflow Configuration Cutover](0018-demo-workflow-configuration-cutover.md)
 - [ADR-0019 — Offline Recovery Readiness and Owner-attested Evidence](0019-offline-recovery-readiness-evidence.md)
+- [ADR-0020 — One-Page Demo UI and Scenario Playback](0020-one-page-demo-ui.md)
 
 ## Truth Boundary
 

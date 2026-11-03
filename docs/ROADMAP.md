@@ -252,6 +252,13 @@ See [scope and evidence](tasks/demo-05d4-deployment-rehearsal.md). This task is
 commit-only; Owner Push, new-commit CI verification and optional PR/review remain
 pending. No production deployment/recovery or public DNS/TLS/RPO/RTO claim.
 
+## Demo-06 — One-Page Demo UI
+
+Replaces the multi-page frontend with one page: three playable failure scenarios, a live
+Dataset / Job / Attempt hierarchy and read-only frozen inputs. Backend Guided APIs and Core protocols
+are unchanged. See [ADR-0020](adr/0020-one-page-demo-ui.md) and [the task](tasks/demo-06-one-page-ui.md).
+Await System Owner Review.
+
 ## Deferred until a concrete requirement
 
 - Real Airflow HTTP adapter and external cancellation.

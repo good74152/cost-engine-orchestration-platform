@@ -218,7 +218,7 @@ test('Demo-02A: explicit seed and session-scoped durable reads', { timeout: 240_
         }
         assert.deepEqual((await get('/demo/dataset-versions', s)).json().items.map((r: { datasetVersionId: string }) => r.datasetVersionId), [own.datasetVersionId]);
         const dataset = (await get(`/demo/dataset-versions/${own.datasetVersionId}`, s)).json();
-        assert.deepEqual(Object.keys(dataset).sort(), ['datasetVersionId','datasetSeriesId','domain','fiscalYear','period','version','datasetStatus','createdAt',
+        assert.deepEqual(Object.keys(dataset).sort(), ['datasetVersionId','datasetSeriesId','domain','fiscalYear','period','version','datasetStatus','createdAt','frozenInputs',
           'buildingStartedAt','validatingAt','publishedAt','rejectedAt','abandonedAt'].sort());
         const jobs = (await get(`/demo/dataset-versions/${own.datasetVersionId}/calculation-jobs`, s)).json();
         assert.deepEqual(jobs.items.map((r: { jobId: string }) => r.jobId), [job]);

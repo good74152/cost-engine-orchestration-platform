@@ -12,11 +12,11 @@ describe('same-origin typed API boundary',()=>{
   expect(fetcher.mock.calls[0]![1]).toMatchObject({method:'GET',credentials:'include',headers:{Accept:'application/json'}});expect(fetcher.mock.calls[0]![1]?.body).toBeUndefined();
  });
  it('retains HTTP 202 as a successful pending result',async()=>{
-  const api=new ApiClient(()=>{},async()=>json({stepStatus:'PENDING'},202));expect(await api.request('/demo/scenarios/x/next',{})).toEqual({status:202,data:{stepStatus:'PENDING'}});
+  const api=new ApiClient(()=>{},async()=>json({attemptStatus:'DISPATCHING'},202));expect(await api.request('/demo/calculation-jobs/x/run',{})).toEqual({status:202,data:{attemptStatus:'DISPATCHING'}});
  });
- it.each([[409,'DEMO_SCENARIO_STEP_CONFLICT'],[429,'DEMO_SESSION_QUEUE_FULL'],[503,'DEMO_SCENARIO_STEP_OUTCOME_UNKNOWN']])('preserves expected error %s / %s without automatic retry',async(status,code)=>{
+ it.each([[409,'STATE_CONFLICT'],[429,'DEMO_SESSION_QUEUE_FULL'],[503,'EXECUTOR_STATUS_UNAVAILABLE']])('preserves expected error %s / %s without automatic retry',async(status,code)=>{
   const fetcher=vi.fn<typeof fetch>().mockResolvedValue(fail(String(code),Number(status)));const api=new ApiClient(()=>{},fetcher);
-  await expect(api.request('/demo/scenarios/x/next',{})).rejects.toMatchObject({status,code});expect(fetcher).toHaveBeenCalledTimes(1);
+  await expect(api.request('/demo/calculation-jobs/x/run',{})).rejects.toMatchObject({status,code});expect(fetcher).toHaveBeenCalledTimes(1);
  });
  it('invalidates a 401 once and never stores/reads an authentication token',async()=>{
   const unavailable=vi.fn();const api=new ApiClient(unavailable,async()=>fail('DEMO_SESSION_UNAVAILABLE',401));
@@ -36,6 +36,6 @@ describe('same-origin typed API boundary',()=>{
  });
  it('does not render arbitrary raw server error details or executor internals',async()=>{
   const api=new ApiClient(()=>{},async()=>json({code:'SELECT token_hash FROM credentials',message:'secret'},500));
-  try{await api.get('/demo/sessions/current');}catch(e){expect(errorMessage(e)).toEqual({code:'REQUEST_FAILED',message:'The request could not be completed. Refresh durable state before trying again.'});}
+  try{await api.get('/demo/sessions/current');}catch(e){const shown=errorMessage(e);expect(shown.code).toBe('REQUEST_FAILED');expect(shown.message).not.toMatch(/SELECT|secret/);}
  });
 });

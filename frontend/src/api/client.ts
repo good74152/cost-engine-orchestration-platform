@@ -32,44 +32,35 @@ export class ApiClient {
   return items;
  }
 }
+
+const FALLBACK='The request didn’t finish. Reload the page to see the saved state, then try again.';
+const MESSAGES:Record<string,string>={
+ DEMO_SESSION_UNAVAILABLE:'Your demo session ended. Run a scenario to start a new one.',
+ NETWORK_ERROR:'The reply didn’t arrive, so the result is unknown. Nothing was retried automatically. Reload the page to see the saved state.',
+ DEPENDENCY_NOT_READY:'This job needs an upstream dataset that isn’t published yet. Publish that dataset, then run the job again.',
+ DEPENDENCY_DEFINITION_NOT_READY:'This job has no published dependency definition yet. Run the configuration seed for this environment.',
+ CALCULATION_TYPE_NOT_CONFIGURED:'This domain has no calculation types configured. Run the configuration seed for this environment.',
+ ACTIVE_DATASET_VERSION_EXISTS:'This dataset series already has a version in progress. Finish or abandon it first.',
+ EXECUTOR_DISPATCH_FAILED:'The executor rejected this run, so it never started. You can retry the job.',
+ EXECUTOR_STATUS_UNAVAILABLE:'The executor status isn’t available right now. The saved state wasn’t changed.',
+ DATASET_NOT_READY_FOR_VALIDATION:'Every required job has to succeed before validation.',
+ DATASET_HAS_ACTIVE_EXECUTION:'A job is still running, so this dataset can’t be abandoned yet.',
+ JOB_NOT_RUNNABLE:'This job can’t run from its current state.',
+ STATE_CONFLICT:'Another change got there first. Reload the page to see the current state.',
+ RESET_CONFLICT:'Another operation is still running. Wait for it to finish, then clear your data.',
+ DEMO_RESET_OUTCOME_UNKNOWN:'The result of clearing your data is unknown. Reload the page to check.',
+ DEMO_RESET_FAILED:'Your data wasn’t cleared and nothing was lost. Try again.',
+ DEMO_RATE_LIMITED:'Too many requests in a minute. Wait a moment, then run the scenario again.',
+ DEMO_SESSION_QUEUE_FULL:'Too many requests are in progress. Wait a moment, then try again.',
+ DEMO_SESSION_CAPACITY_REACHED:'The demo is at capacity right now. Try again later.',
+ DEMO_EXECUTOR_CAPACITY_REACHED:'The demo is at capacity right now. Try again later.',
+ DEMO_ADMISSION_UNAVAILABLE:'The demo’s configuration couldn’t be read. Reload the page to try again.',
+ DEMO_ADMISSION_DRAINING:'The demo is being reconfigured. Try again later.',
+ DEMO_NOT_WORKFLOW_OPEN:'This environment isn’t set up for the workflow yet. Complete the Workflow cutover in the deployment guide, then reload.',
+ DEMO_SESSION_CSRF_REJECTED:'The request failed the same-origin check. Open the demo from its public address.',
+ INVALID_RESPONSE:'The server’s reply couldn’t be read. Reload the page to see the saved state.',
+};
 export function errorMessage(error:unknown):{code:string;message:string}{
  const code=error instanceof ApiError?error.code:'REQUEST_FAILED';
- const messages:Record<string,string>={
-  DEMO_SESSION_UNAVAILABLE:'Your demo session has expired. Start a new session to continue.',
-  DEMO_SCENARIO_STEP_OUTCOME_UNKNOWN:'Execution outcome is currently unknown. Retry using the same request.',
-  NETWORK_ERROR:'Outcome unknown: the response could not be confirmed. Refresh durable state before explicitly choosing recovery. No operation was retried automatically.',
-  DEMO_SCENARIO_CREATE_OUTCOME_UNKNOWN:'Scenario creation is unconfirmed. Retry the same scenario type.',
-  DEMO_RESET_OUTCOME_UNKNOWN:'Reset outcome is unknown. Your session has not been cleared. Refresh to check availability.',
-  DEMO_RESET_FAILED:'Reset failed. Your session and data have been retained.',
-  DEMO_SCENARIO_SESSION_NOT_EMPTY:'This session has prior exploration data or fake configuration. Reset and start a new session for a guided scenario.',
-  DEMO_SCENARIO_TYPE_CONFLICT:'This session already belongs to another scenario. Reset to switch scenarios.',
-  DEMO_SCENARIO_MODE_CONFLICT:'Guided Scenario is active. Reset your session to use Free Exploration.',
-  DEMO_SCENARIO_STEP_CONFLICT:'This request conflicts with the saved step. Server progress and the pending request have been refreshed.',
-  DEMO_SCENARIO_STATE_CONFLICT:'The saved resources do not match this guided step. Review the current state or reset the session.',
-  DEMO_SCENARIO_CONFIGURATION_UNAVAILABLE:'Guided configuration is unavailable. Run the explicit Demo guided seed in the local environment.',
-  CALCULATION_TYPE_NOT_CONFIGURED:'No active calculation types are configured for this domain.',
-  DEMO_ADMISSION_UNAVAILABLE:'Workflow availability could not be verified. Refresh to read the backend admission state; mode operations are disabled.',
-  DEMO_ADMISSION_DRAINING:'New sessions and guided scenarios are paused. An existing guided scenario can continue.',
-  DEMO_LEGACY_ADMISSION_CLOSED:'New Legacy Guided scenarios are closed. Open Workflow Explorer after refreshing availability.',
-  DEPENDENCY_DEFINITION_NOT_READY:'A published dependency definition is required before Run.',
-  DEPENDENCY_NOT_READY:'A required published upstream dataset is unavailable.',
-  ACTIVE_DATASET_VERSION_EXISTS:'This dataset series already has an active version.',
-  EXECUTOR_DISPATCH_FAILED:'The executor definitely rejected this execution identity. Inspect the attempt before retrying.',
-  DEMO_RESOURCE_UNAVAILABLE:'This resource is unavailable in your current session.',
-  DATASET_NOT_READY_FOR_VALIDATION:'All required calculations must succeed before validation.',
-  DATASET_HAS_ACTIVE_EXECUTION:'An active execution prevents this operation.',
-  JOB_NOT_RUNNABLE:'This calculation cannot run from its current durable state.',
-  EXECUTOR_STATUS_UNAVAILABLE:'Executor status is unavailable. No failure has been inferred.',
-  EXECUTION_NOT_RECONCILABLE:'This execution is not eligible for reconciliation.',
-  STATE_CONFLICT:'The operation conflicts with the current durable state. Refresh and review.',
-  RESET_CONFLICT:'Another operation is active. Wait before resetting or retrying.',
-  DEMO_SESSION_QUEUE_FULL:'The session queue is full. Wait, then retry explicitly.',
-  DEMO_SESSION_CSRF_REJECTED:'The request failed the same-origin security check. Check the local proxy configuration.',
-  INVALID_REQUEST:'The request is invalid. Check the entered fields.',
-  INVALID_DOMAIN:'Choose one of the supported machine domain identifiers.',
-  INVALID_PERIOD:'Choose Q1, Q2, Q3 or Q4.',
-  STORAGE_UNAVAILABLE:'Browser storage is unavailable. Enable storage before sending a step; a new request has not been sent.',
-  INVALID_RESPONSE:'The server response could not be verified. Refresh before continuing.',
- };
- return {code,message:messages[code]??'The request could not be completed. Refresh durable state before trying again.'};
+ return {code,message:MESSAGES[code]??FALLBACK};
 }

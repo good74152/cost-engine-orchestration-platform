@@ -118,7 +118,7 @@ test('Demo-04 isolated Compose, HTTPS, production UI and PostgreSQL operations',
     const caFile = join(directory, 'root.crt'); await command(['cp', `${webId}:/data/caddy/pki/authorities/local/root.crt`, caFile]); ca = await readFile(caFile);
     await t.test('real locally trusted TLS, readiness, static CSP/assets and SPA history refresh', async () => {
       const health = await readiness(); assert.equal(health.status, 200); assert.equal(health.body.status, 'ready');
-      for (const path of ['/', '/guided', '/datasets', '/exploration', '/about']) {
+      for (const path of ['/', '/old-bookmark']) {
         const r = await https(path); assert.equal(r.status, 200); assert.match(r.body, /<div id="root">/);
         assert.match(String(r.headers['content-security-policy']), /frame-ancestors 'none'/); assert.equal(r.headers['cache-control'], 'no-cache');
       }
@@ -169,22 +169,19 @@ test('Demo-04 isolated Compose, HTTPS, production UI and PostgreSQL operations',
         // Node TLS requests above validate the isolated CA. Chromium trusts only this test context.
         const context = await browser.newContext({ ignoreHTTPSErrors: true }); const page = await context.newPage(); const errors: string[] = [];
         page.on('pageerror', error => errors.push(error.message));
-        await page.goto(origin + '/guided');
+        await page.goto(origin);
+        // A first visit has no session: no error appears and nothing is created until a click.
+        await page.getByRole('heading', { level: 1 }).waitFor(); assert.equal(await page.getByRole('dialog').count(), 0);
         const started = page.waitForResponse(r => new URL(r.url()).pathname === '/demo/sessions' && r.request().method() === 'POST');
-        await page.getByRole('button', { name: 'Start demo session', exact: true }).click();
+        // This fixture is LEGACY_OPEN, so the page must create the session and then explain the missing configuration.
+        await page.getByRole('button', { name: 'Run Lost reply', exact: true }).click();
         const created = await started; assert.equal(created.status(), 201);
-        await page.locator('.session-card').getByText((await created.json()).companyCode, { exact: true }).waitFor();
-        await page.goto(origin + '/guided');
-        await page.getByRole('button', { name: 'Start Happy Path', exact: true }).click();
-        for (const action of ['Create dataset', 'Run calculation', 'Simulate success', 'Reconcile execution', 'Submit validation', 'Publish dataset']) {
-          await page.getByRole('button', { name: action, exact: true }).click();
-        }
-        await page.getByText('Dataset published.', { exact: true }).waitFor();
+        await page.getByRole('dialog', { name: 'The scenario stopped' }).getByText(/Workflow cutover/).waitFor();
         const cookies = await context.cookies(); const cookie = cookies.find(c => c.name === '__Host-ce_demo_session'); assert.ok(cookie?.secure && cookie.httpOnly);
-        await page.reload(); await page.getByText('Dataset published.', { exact: true }).waitFor();
-        await page.getByRole('button', { name: 'Reset session', exact: true }).click();
-        await page.getByRole('dialog').getByRole('button', { name: 'Confirm reset', exact: true }).click();
-        await page.getByRole('button', { name: 'Start demo session', exact: true }).waitFor(); assert.deepEqual(errors, []);
+        await page.reload(); await page.getByRole('heading', { level: 1 }).waitFor();
+        await page.getByRole('button', { name: 'Clear my demo data', exact: true }).click();
+        await page.getByRole('dialog', { name: 'Clear your demo data?' }).getByRole('button', { name: 'Clear data', exact: true }).click();
+        await page.getByRole('button', { name: 'Clear my demo data', exact: true }).waitFor({ state: 'detached' }); assert.deepEqual(errors, []);
       } finally { await browser.close(); }
     });
     await t.test('database volume survives PostgreSQL container recreation', async () => {
