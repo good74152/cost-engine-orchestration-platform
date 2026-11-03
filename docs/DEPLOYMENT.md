@@ -101,8 +101,7 @@ Do not reuse the old root developer Compose data mount. See the
 [official image](https://hub.docker.com/_/postgres) and
 [Docker persistence guide](https://docs.docker.com/guides/postgresql/immediate-setup-and-data-persistence/).
 
-For existing data take and restore-validate a backup BEFORE migrations. Then
-explicitly authorize:
+Then explicitly authorize:
 
 ```sh
 sh deploy/scripts/operate.sh migrate-up
@@ -125,7 +124,7 @@ run with Backend online; --no-deps avoids implicitly starting other services.
 
 ```sh
 sh deploy/scripts/operate.sh admission-status --database-url-file /run/secrets/database_url
-# Only after proving offline/quiescence/backup prerequisites:
+# Only after proving offline and quiescent:
 sh deploy/scripts/operate.sh admission-drain --database-url-file /run/secrets/database_url
 sh deploy/scripts/operate.sh cutover-status --database-url-file /run/secrets/database_url
 # A separate reviewed invocation; never automatically retried:
@@ -170,15 +169,13 @@ Wrong running versions are refused rather than replaced. Never remove volumes.
 
 ```sh
 sh deploy/scripts/start.sh
-# Complete necessary Demo-05D-2 / 05D-3 Owner acceptance before PUBLIC TRAFFIC:
 sh deploy/scripts/open-web.sh --confirm-owner-acceptance-05d2-05d3 --database-url-file /run/secrets/database_url
 # If public HTTPS/ACME/flow acceptance fails, IMMEDIATELY close the entry:
 sh deploy/scripts/close-web.sh
 ```
 
-Approval covers reviewed artifacts/security/host/DNS/firewall/secrets, restore-tested
-backup, quiescence/cutover/readiness/version and immediate closure acceptance. This
-task does not claim production 05D-2/05D-3 acceptance has occurred. Caddy may accept
+Approval covers reviewed artifacts/security/host/DNS/firewall/secrets, quiescence,
+cutover, readiness, version and immediate closure. Caddy may accept
 traffic immediately. Open checks live DB, unique healthy Backend, configured Image
 Tag/container environment/loopback readiness version, then the existing Cutover
 Status Operator. Complete JSON must confirm WORKFLOW_OPEN + WORKFLOW; exit code or
@@ -215,99 +212,25 @@ The retained ceiling bounds total growth and eventually stops new admissions.
 Monitor it and request reviewed retention/archival work before exhaustion; do not
 purge history or increase limits indefinitely. Foreign-FK cleanup fails closed.
 
-## Backup and restore
-
-Demo-05D-2's tools verify the **first public deployment**: migrated, completely
-empty business data, exact six-domain/nine-Type LEGACY configuration and DRAINING.
-They do not replace a separately reviewed operational backup policy for a running
-or already-cut-over service. Existing Session history is intentionally a failure;
-do not delete history to make the check pass.
-
-First keep Web and Backend stopped with restart disabled using the Demo-05D-1
-runbook. The Owner must confirm no other Backend, external writer, concurrent
-deployment or unresolved unknown outcome. Docker/SQL checks cannot prove those
-facts. Then explicitly select the shared Demo database:
-
-```sh
-sh deploy/scripts/operate.sh cutover-preflight --database-url-file /run/secrets/database_url
-# Provision a private existing directory OUTSIDE every Git worktree:
-export DEMO_BACKUP_DIR=/var/backups/cost-engine-demo
-sh deploy/scripts/backup.sh --database-url-file /run/secrets/database_url
-```
-
-Preflight returns deterministic JSON with PASS, Deployment Version, PostgreSQL 18,
-DRAINING/LEGACY, exact migration names, all 21 business-table counts and schema/
-configuration fingerprints. It reuses existing Gate/configuration/quiescence
-validators and never writes, migrates, seeds, cleans, cuts over or opens Web.
-PASS describes the checked instant only; it is neither approval nor durable state.
-
-Backup additionally requires that the mounted target names this Compose database
-service (`database`, `demo_owner`, `cost_engine_demo`, normal port, no URL query
-overrides). It must not validate a different database and then dump this one.
-It creates a fresh private `cost-engine-backup-*` directory, custom pg_dump -Fc,
-600-mode archive/manifest and SHA-256/decimal-byte-size/identity evidence. It checks
-preflight again afterward and compares all evidence. Failure removes only its new
-incomplete bundle; older backups are never replaced or removed. No retry occurs.
-Each pg_dump has its own consistent PostgreSQL snapshot. Before/after checks do
-not fence arbitrary external writers; maintain Owner-proven offline quiescence.
-
-Use the returned identity to explicitly verify the archive:
-
-```sh
-sh deploy/scripts/verify-backup.sh --backup-file /var/backups/cost-engine-demo/cost-engine-backup-IDENTITY/backup.dump
-```
-
-Verify accepts no target URL/database/container/volume. It checks custom format,
-size/checksum/complete manifest before creating a 128-bit random, labelled own
-PostgreSQL 18 container/database/volume. Its network is `none`, no port is published,
-no deployment secret/network/volume is mounted and no real credential is used.
-Only a read-only operator container shares that new namespace to reuse the actual
-configuration/schema/preflight verifier after pg_restore --exit-on-error. The
-corresponding immutable `cost-engine-demo-operator:<Deployment Version>` image must
-already exist. Every restored field must match the recorded backup evidence.
-Ownership, network and mount checks precede startup/restore/cleanup. Only exact
-owned resources are removed; uncertainty refuses cleanup and withholds success.
-
-RESTORE_VERIFIED is emitted only after real restore, validation and cleanup. It
-does not approve Cutover, perform production recovery or prove off-host storage.
-SHA-256 proves file consistency, not authenticity or restorability; retain the
-trusted manifest with the archive. Encrypt/copy successful bundles OFF HOST under
-the Owner's policy and retain restore evidence. Backups may contain secrets/history;
-never log contents or commit them. Monitor disk, backup age and Docker storage.
-
-On failure keep Web closed. WORKFLOW_OPEN + WORKFLOW means use compatible forward
-fixes, not reapplication or reversal. DRAINING + LEGACY requires fresh Preflight
-and separate human approval before an explicit Cutover retry. Conflict/UNKNOWN/
-DB unavailable means stop and use existing durable confirmation; never infer
-rollback, automatically retry, restore, down-migrate, delete Definition v1/v2 or
-open Web. Actual disaster recovery needs separate explicit authorization and a
-reviewed target/data-loss plan. This tool can only restore disposable targets.
-See [full contract, transaction boundary and evidence](tasks/demo-05d2-cutover-preflight-backup-recovery.md).
-
 ## Rollback
 
-For WORKFLOW_OPEN operational backups containing business data, use the separate
-[online backup runbook](#operational-backup-after-workflow-cutover). The existing
-first-deployment backup remains DRAINING/LEGACY/empty/offline only.
-
 Retain previous immutable backend/web/operator images and env files. Stop traffic
-and backend, backup, check previous-image schema compatibility, select that image
+and backend, check previous-image schema compatibility, select that image
 version and start one backend. Exact startup inventory rejects incompatible schema;
 do not bypass it. Demo-04 adds no migrations, so its own image rollback needs no
 schema down. Later schema changes need individual reviewed down guards. Never
 auto-down, drop DB, truncate, remove volume or delete Dataset/Session history.
-Unsafe down is refused; choose a reviewed forward fix or approved restore with
-explicit data-loss implications. Restore-test backups before deciding.
+Unsafe down is refused; choose a reviewed forward fix.
 
 ## Monitoring and release checklist
 
-Monitor internal readiness/DB/container health/version, RAM/disk, backup age/off-host copies,
+Monitor internal readiness/DB/container health/version, RAM/disk,
 active/retained sessions, cleanup backlog, rate/executor limits and reset/startup
 failures. Logs contain event names/durable IDs/counts, not request headers or SQL.
 
 - Review PR and immutable image identity; run all build/regression gates.
 - Confirm one backend, no external writers, no public DB/Node bindings.
-- Verify secrets/permissions, origin, DNS/ACME and off-host restore-tested backup.
+- Verify secrets/permissions, origin and DNS/ACME.
 - Stop admissions/backend before explicit migration/seed; start and check readiness.
 - In WORKFLOW_OPEN run all four scenarios and manual mode; verify reads, Reset and restart.
 - Record actual public VPS/DNS/TLS evidence separately; no automatic deploy on merge.
@@ -333,15 +256,14 @@ cutover is deferred to Demo-05C-3 and cannot be authorized by a SQL count alone.
 
 Demo-05C-3A provides status/cutover only; applying its migration does not cut over.
 Use the [offline operator and failed-deployment runbook](tasks/demo-05c3a-configuration-cutover.md#offline-runbook-and-failed-deployment-recovery).
-Confirm DRAINING, stop Backend/ingress/requests/writers, resolve retained work and
-review backup/restore before explicitly choosing the intended Demo DB. The new
+Confirm DRAINING, stop Backend/ingress/requests/writers and resolve retained work before explicitly choosing the intended Demo DB. The new
 operator accepts DEMO_CUTOVER_DATABASE_URL or FILE only; production commands are
 cutover-status/cutover with the explicitly supplied target. No URL fallback.
 
 WORKFLOW_OPEN is irreversible and requires a compatible new Backend with target
 configuration validation. Do not restart an old image, run legacy seeds, auto-down
 or delete v1 to recover a failed deployment. Keep traffic closed, confirm durable
-state and choose a reviewed forward fix/restore. SQL counts do not prove process
+state and choose a reviewed forward fix. SQL counts do not prove process
 quiescence. No actual public cutover is performed by this implementation.
 
 ## Page deployment and recovery
@@ -350,141 +272,13 @@ The [page](adr/0020-one-page-demo-ui.md) reads Workflow availability from the Ba
 
 Browser refresh rereads durable state on the current running Backend. Backend restart still loses process-local Fake state and invalidates old Sessions; it is not browser recovery. Keep traffic closed if deployment or cutover fails, follow the reviewed forward-fix or restore plan, and never reopen an old binary. `npm run ui:smoke` must not target live Demo data.
 
-## Operational backup after Workflow cutover
-
-This capability operates only against the explicitly selected existing Compose
-Demo database with WORKFLOW_OPEN and the complete WORKFLOW catalog. It does not
-authorize any production operation. One System Owner coordinates the operation;
-exclude deployments, migration/seed/configuration/Cutover commands and other DBA
-changes for its duration. Keep immutable images, Compose files and secrets fixed.
-Normal user API traffic continues; do not stop/restart Backend for this backup.
-If Backend is running its actual health/image/version must match the selected
-Deployment Version; a stopped/absent Backend is also permitted without starting it.
-
-Provision a private outside-Git directory owned by the trusted operator, mode
-0700 on POSIX (equivalent private Windows ACLs). Ensure free space for the dump,
-SQL sorts and restored Docker volume. Retain the matching immutable local
-`cost-engine-demo-operator:<Deployment Version>` image and trusted manifest.
-
-```sh
-export DEMO_DEPLOY_ENV=/opt/cost-engine-demo/compose.env
-export DEMO_BACKUP_DIR=/var/backups/cost-engine-demo
-sh deploy/scripts/backup-live.sh --database-url-file /run/secrets/database_url
-
-# Only the archive is supplied. No production URL/volume/target is accepted.
-sh deploy/scripts/verify-backup-live.sh --backup-file /var/backups/cost-engine-demo/cost-engine-live-backup-IDENTITY/backup.dump
-```
-
-The target file must name `database:5432/cost_engine_demo` as `demo_owner`, without
-connection query overrides. No implicit DATABASE_URL fallback. Each backup uses
-a fresh private bundle, pg_dump custom format, SHA-256 and byte size. Output
-records Deployment Version, timestamps and validated snapshot evidence. Do not
-log, publish or commit archives/manifests; they include retained private data.
-SHA-256 is corruption detection, not authentication: protect/encrypt the bundle
-and verify the trusted off-host copy after transfer. Never replace a manifest to
-make a failed archive appear trusted.
-
-REPEATABLE READ establishes the data view before export; the holder remains alive
-until pg_dump finishes with that exact snapshot. Concurrent committed Session,
-Dataset, Job/Attempt and Publish changes after the snapshot are intentionally
-excluded. Snapshot counts need not equal live counts after backup. Nontransactional
-sequence counters can advance; gaps are normal. This is a logical single-database
-backup, not cluster roles/tablespaces, external executor state or PITR/WAL backup.
-See PostgreSQL's [pg_dump snapshot option](https://www.postgresql.org/docs/18/app-pgdump.html)
-and [exported snapshot semantics](https://www.postgresql.org/docs/18/functions-admin.html#FUNCTIONS-SNAPSHOT-SYNCHRONIZATION).
-
-Database/connection/dump/validation/checksum/holder failure returns nonzero and
-removes only the newly created incomplete bundle; earlier backups remain. The
-transaction releases locks on exit/disconnection. Inspect any reported unresolved
-owned-resource cleanup privately; never prune arbitrary resources. No automatic
-retry follows an outage. Investigate, confirm source health, then explicitly
-start a new backup. Limits: lock wait 3 seconds, individual SQL 60 seconds,
-snapshot readiness 120 seconds and holder lifetime 60 minutes. A large database
-may exceed these bounds; do not claim a backup succeeded or loosen verification
-to bypass them. Review capacity/retention and a separate scale plan if necessary.
-
-Verification restores into a fresh isolated PostgreSQL 18 Container/Volume, with
-no published ports, no source volume/secrets and network none. It reuses existing
-ownership checks/cleanup and shared Configuration/Schema validators. It verifies
-actual FK/CHECK data and complete row hashes as well as schema/configuration,
-migrations and counts. Only successful real restore, evidence match and cleanup
-produce RESTORE_VERIFIED. Run it with the source offline as an independence drill;
-it must not start Backend. Any failure means no recovery capability is confirmed.
-
-### Backup policy to be set by System Owner
-
-Record the approved values, owners, alerts and executed evidence; none is an
-achieved RPO/RTO claim. No scheduler or automatic historical-backup deletion is
-implemented by this task.
-
-| Control | Owner sets / measures |
-| --- | --- |
-| Backup frequency | Maximum interval, operating window, explicit operator/scheduling ownership; account for write rate and failed backups. |
-| Retention | Required daily/weekly/monthly history and legal/privacy constraints; review copies before any separately authorized manual deletion. |
-| Off-host backup | Independent host/storage, encryption/access/key handling, verified hash after transfer and restore drill from that copy. |
-| Backup age monitoring | Alert threshold from snapshot/start time, latest successful bundle and latest independent restore evidence; failure must not reset age. |
-| Restore verification frequency | Every release/schema change and Owner-selected periodic interval/sample; retain exact archive/image/version evidence. |
-| Disk usage monitoring | Host backup storage, PostgreSQL temporary space/MVCC growth, Docker data/verification volume and retention headroom; alert thresholds. |
-| RPO | Desired acceptable data-loss window versus age of the newest trusted restore-verified snapshot and write-volume evidence. |
-| RTO | Desired service recovery window; measure retrieval, restore, validation, secrets/images, reviewed runtime/executor recovery and authorized reopening separately. |
-
-### Production recovery limitation
-
-**Database Restore and restoring users' calculation execution capability are
-different operations.** This tool verifies only disposable database restoration.
-Actual production recovery requires separate System Owner authorization, explicit
-target/data-loss review and a reviewed recovery plan. There is no production
-restore command, automatic Backend restart, Job rerun or Attempt redispatch.
-Restored accepted/dispatching/unknown Attempts are stored evidence; they do not
-prove a corresponding running executor exists.
-
-FakeExecutor execution/rejection memory is not in pg_dump. Restart loses it, and
-normal Backend startup invalidates prior Sessions before listening. Do not bypass
-that invalidation, reconstruct fake outcomes from stored rows, replay unknown
-dispatches automatically or alter existing Unknown Outcome/Reset recovery.
-RESTORE_VERIFIED cannot approve public activation or claim end-to-end recovery.
-See [scope, evidence and failure handling](tasks/demo-05d3a-operational-backup.md).
-
-## Disaster Recovery Drill
-
-After an operational backup exists, use the separate
-[read-only DR Drill runbook](RECOVERY_DRILL.md) to restore and assess only an
-isolated PostgreSQL target and publish a private JSON report. It reuses the
-existing verification engine. Existing `verify-backup-live.sh` remains available
-with its unchanged RESTORE_VERIFIED contract. The drill starts no Backend and
-provides no production restore target or automatic runtime/executor recovery.
-Report duration measures database-drill stages, not achieved service RTO; Owner
-recovery approval and measured production RPO/RTO remain separate obligations.
-
-## Offline Recovery Readiness
-
-After retaining trusted Operational Backup and actual 3B Drill evidence, run the
-separate [Recovery Readiness CLI](RECOVERY_READINESS.md) with explicit private
-source/output directories and Owner policy. It performs no backup, restore,
-database connection, storage sync or automatic scheduling. Local and Off-host
-recovery points are assessed separately; Disaster READY additionally requires a
-hash-bound Owner-signed retrieval and actual Drill review under policy-trusted
-keys. The report distinguishes independent local checks from physical provenance
-attestation. No production RPO/RTO, execution recovery or approval is granted.
-
 ## Fresh-installation deployment rehearsal
 
-The separate `Fresh installation deployment rehearsal` GitHub workflow runs four
-isolated hosted Linux jobs: complete fresh install/six-domain Workflow, Backend
-startup refusal, Cutover precondition refusal and corrupted-copy Restore refusal.
-It calls existing deployment/recovery tools. Each job has fresh random Compose
-identities, private secrets/volumes and no published Backend/DB port. Effective
-configuration and actual Docker TCP/UDP Web bindings both require loopback-only
-exposure; HTTPS trusts the local test CA and uses no public DNS/ACME.
+The `Fresh installation deployment rehearsal` workflow runs the real deployment scripts on a
+fresh GitHub-hosted machine, once per scenario: full install through the six-domain workflow over
+HTTPS, refused Backend startup, and refused cutover without drain. Secrets are random and
+disposable. Web binds to loopback only, with a local test CA and no public DNS or ACME. Nothing is
+kept afterward, because the machine is discarded.
 
-Happy Path proves first-deployment backup/restore before Cutover, then online
-backup/drill/Local READY before explicit test Web opening. It performs six Domains
-and ten Jobs through the Demo API, closes Web without losing history and repeats
-online recovery verification. Without Off-host evidence Disaster stays NOT_VERIFIED.
-Negative scenarios pass only for expected refusal, preserved state and owned cleanup.
-
-Only strict sanitized acceptance JSON is retained as artifact; backups, credentials,
-private identifiers and full recovery reports are never uploaded. All four jobs
-and aggregate cleanup gates must pass. See [test architecture and evidence](tasks/demo-05d4-deployment-rehearsal.md).
-This task is commit-only: System Owner Push, CI verification and optional PR follow
-separately. No VPS deployment, production recovery or achieved RPO/RTO is claimed.
+The demo keeps no backup. Its data is disposable anonymous sessions, and a lost database is rebuilt
+from migrations and the seed. See [ADR-0021](adr/0021-remove-recovery-tooling.md).

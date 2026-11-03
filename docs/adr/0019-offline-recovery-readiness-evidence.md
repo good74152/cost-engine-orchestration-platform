@@ -1,6 +1,6 @@
 # ADR-0019 — Offline Recovery Readiness and Owner-attested Evidence
 
-- Status: Accepted bounded System Owner specification; implementation awaits review.
+- Status: Superseded by [ADR-0021](0021-remove-recovery-tooling.md). The code was removed.
 - Baseline: PR #46 merged at `cdfa5670352d4feff268db25911739307f188bda`.
 - Scope: Demo-05D-3C only; supplements 3A/3B without changing their success predicates.
 

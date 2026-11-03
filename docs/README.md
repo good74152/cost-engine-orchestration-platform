@@ -16,8 +16,6 @@
 | Document | Purpose |
 |---|---|
 | [Deployment](DEPLOYMENT.md) | Full deployment and safety contract |
-| [Recovery drill](RECOVERY_DRILL.md) | Restore a backup into an isolated database and assess it |
-| [Recovery readiness](RECOVERY_READINESS.md) | Evaluate retained backup and drill evidence offline |
 
 ## Project history
 

@@ -36,8 +36,9 @@ If a decision changes materially, prefer a new ADR that supersedes the old one i
 - [ADR-0017 — PostgreSQL Demo Admission Drain](0017-demo-admission-drain.md)
 
 - [ADR-0018 — Atomic Demo Workflow Configuration Cutover](0018-demo-workflow-configuration-cutover.md)
-- [ADR-0019 — Offline Recovery Readiness and Owner-attested Evidence](0019-offline-recovery-readiness-evidence.md)
+- [ADR-0019 — Offline Recovery Readiness and Owner-attested Evidence](0019-offline-recovery-readiness-evidence.md) (superseded by ADR-0021)
 - [ADR-0020 — One-Page Demo UI and Scenario Playback](0020-one-page-demo-ui.md)
+- [ADR-0021 — Remove Recovery Tooling](0021-remove-recovery-tooling.md)
 
 ## Truth Boundary
 
