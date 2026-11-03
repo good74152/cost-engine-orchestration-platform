@@ -254,15 +254,19 @@ pending. No production deployment/recovery or public DNS/TLS/RPO/RTO claim.
 
 ## Demo-06 — One-Page Demo UI
 
-Replaces the multi-page frontend with one page: three playable failure scenarios, a live
+Replaces the multi-page frontend with one page: four playable scenarios, a live
 Dataset / Job / Attempt hierarchy and read-only frozen inputs. Backend Guided APIs and Core protocols
 are unchanged. See [ADR-0020](adr/0020-one-page-demo-ui.md) and [the task](tasks/demo-06-one-page-ui.md).
-Await System Owner Review.
+Merged after System Owner review.
 
 ## Demo-09 — Manual Mode
 
 Adds a [manual mode](tasks/demo-09-manual-mode.md): dropdowns and three tables for versions, jobs and tries. The backend
-decides what is allowed, and a dialog shows each refusal. There are no backend changes. Awaiting System Owner review.
+decides what is allowed, and a dialog shows each refusal. There are no backend changes. Merged after System Owner review.
+
+## Demo-10 — Documentation Cleanup
+
+Shortens the README and Architecture to current behavior and adds a [documentation guide](README.md). ADRs, task specifications and verification reports stay as history.
 
 ## Deferred until a concrete requirement
 
