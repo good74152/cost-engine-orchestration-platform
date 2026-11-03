@@ -108,10 +108,10 @@ test('One-page demo: real Chromium, production bundle, CSP and PostgreSQL',{time
    const links=Object.fromEntries(template.steps.filter(s=>s.operation==='CREATE_DATASET').map(s=>[s.domain,domainOf.get(s.prerequisites[0]??'')??null]));
    assert.deepEqual(links,DEFAULT_LINKS,'the map shown before a session must match the backend template');
   });
-  await t.test('Lost reply pauses on the unknown outcome, then recovers without a second attempt or run',async()=>{
+  await t.test('Lost response pauses on the unknown outcome, then recovers without a second attempt or run',async()=>{
    await page.setViewportSize({width:1440,height:600});await page.evaluate(()=>window.scrollTo(0,180));
-   await page.getByRole('button',{name:'Run Lost reply'}).click();
-   const paused=dialog('The reply never arrived');await paused.waitFor();await shot('02-lost-reply-dialog');
+   await page.getByRole('button',{name:'Run Lost response'}).click();
+   const paused=dialog('The response never arrived');await paused.waitFor();await shot('02-lost-response-dialog');
    const before=await attempts(company,'CAPEX','Q2');assert.equal(before.length,1);assert.equal(before[0]!.status,'DISPATCHING');
    const job=before[0]!.job;const runId=before[0]!.airflow_dag_run_id;
    await page.keyboard.press('Escape');await paused.waitFor();// The viewer has to decide; Escape doesn't skip it.
@@ -121,11 +121,11 @@ test('One-page demo: real Chromium, production bundle, CSP and PostgreSQL',{time
    assert.equal(same.length,1);assert.equal(same[0]!.airflow_dag_run_id,runId);assert.equal(same[0]!.status,'SUCCEEDED');
    assert.equal(new Set(after.map(a=>a.job)).size,2);assert.deepEqual(await versions(company,'CAPEX','Q2'),[{version:1,status:'PUBLISHED'}]);
    assert.match(await done.innerText(),new RegExp(runId));assert.match(await done.innerText(),/1 try\./);
-   await shot('03-lost-reply-recovered');await closeDialog('No duplicate run');
+   await shot('03-lost-response-recovered');await closeDialog('No duplicate run');
    assert.ok((await page.evaluate(()=>window.scrollY))>0,'the page must not jump back to the top after a run');await page.setViewportSize({width:1440,height:1000});
    await page.getByRole('button',{name:/^Show Capital expenditure/}).waitFor();
    await page.getByRole('group',{name:/Saved records for Capital expenditure/}).getByText('Input locked: Fab cost v1').waitFor();
-   await shot('04-lost-reply-tree');
+   await shot('04-lost-response-tree');
   });
   await t.test('blocks open their explanation without sending a command',async()=>{
    const count=posts.length;
@@ -149,8 +149,8 @@ test('One-page demo: real Chromium, production bundle, CSP and PostgreSQL',{time
    await page.getByRole('group',{name:/Saved records for/}).waitFor();await page.waitForLoadState('networkidle');
    assert.equal(posts.length,count);assert.equal(await page.getByRole('dialog').count(),0);
   });
-  await t.test('Failed job and retry, stepped by hand, keeps history and frozen inputs when upstream moves on',async()=>{
-   await page.getByRole('button',{name:'Step through Failed job and retry'}).click();
+  await t.test('Failure recovery, stepped by hand, keeps history and frozen inputs when upstream moves on',async()=>{
+   await page.getByRole('button',{name:'Step through Failure recovery'}).click();
    for(let clicks=0;clicks<6;clicks++){const next=page.getByRole('button',{name:/^Next: /});await next.waitFor();if(clicks===3)await shot('05-step-through');await next.click();}
    const done=dialog('Retried, with the failure on record');await done.waitFor();
    assert.match(await done.innerText(),/try 1 FAILED, try 2 SUCCEEDED/);assert.match(await done.innerText(),/version 1\. The newest is version 2/);
@@ -173,7 +173,7 @@ test('One-page demo: real Chromium, production bundle, CSP and PostgreSQL',{time
   });
   await t.test('a lost browser response is reported as unknown and never retried',async()=>{
    let lost=0;await page.route('**/demo/calculation-jobs/*/run',async route=>{lost++;await route.fetch();await route.abort('failed');});
-   await page.getByRole('button',{name:'Run Lost reply'}).click();
+   await page.getByRole('button',{name:'Run Lost response'}).click();
    const stopped=dialog('The scenario stopped');await stopped.waitFor();assert.match(await stopped.innerText(),/the result is unknown/);
    await page.unroute('**/demo/calculation-jobs/*/run');assert.equal(lost,1);await closeDialog('The scenario stopped');
    problems.splice(0,problems.length,...problems.filter(p=>!/ERR_FAILED/.test(p)));
@@ -197,7 +197,7 @@ test('One-page demo: real Chromium, production bundle, CSP and PostgreSQL',{time
    await dialog('Clear your demo data?').getByRole('button',{name:'Clear data'}).click();
    await page.getByRole('group',{name:'Example of saved records'}).waitFor();
    assert.equal((await pool.query('SELECT 1 FROM dataset_series WHERE company_code=$1',[owner.companyCode])).rowCount,0);
-   await page.reload();await page.getByRole('button',{name:'Run Lost reply'}).waitFor();assert.equal(await page.getByRole('dialog').count(),0);
+   await page.reload();await page.getByRole('button',{name:'Run Lost response'}).waitFor();assert.equal(await page.getByRole('dialog').count(),0);
   });
   assert.deepEqual(problems,[],'no CSP violation, console error or uncaught error across the whole run');
   assert.deepEqual(await page.evaluate(()=>Object.keys(localStorage)),['ce-demo-language'],'the language is the only thing kept in the browser');

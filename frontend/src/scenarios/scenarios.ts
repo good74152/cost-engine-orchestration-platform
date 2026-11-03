@@ -29,7 +29,7 @@ function happyPath({flow:t}:Messages):ScenarioPlan{
  }};
 }
 
-function lostReply({flow:t}:Messages):ScenarioPlan{
+function lostResponse({flow:t}:Messages):ScenarioPlan{
  let dataset:CreatedDataset;let first:RunResult;let recovered:RunResult;
  const jobIds=()=>dataset.calculationJobs.map(j=>j.jobId);const attemptIds=new Map<string,string>();
  return {steps:[
@@ -72,7 +72,7 @@ function lostReply({flow:t}:Messages):ScenarioPlan{
  }};
 }
 
-function failedJob({flow:t}:Messages):ScenarioPlan{
+function failureRecovery({flow:t}:Messages):ScenarioPlan{
  let dataset:CreatedDataset;let failed='';let newest=0;const current=new Map<string,string>();
  const jobIds=()=>dataset.calculationJobs.map(j=>j.jobId);
  return {steps:[
@@ -149,8 +149,8 @@ function conflictingRequests({flow:t}:Messages):ScenarioPlan{
 
 export const scenarios:ScenarioDefinition[]=[
  {id:'happy-path',title:'Happy path',build:happyPath},
- {id:'lost-reply',title:'Lost reply',build:lostReply},
- {id:'failed-job',title:'Failed job and retry',build:failedJob},
+ {id:'lost-response',title:'Lost response',build:lostResponse},
+ {id:'failure-recovery',title:'Failure recovery',build:failureRecovery},
  {id:'conflicting-requests',title:'Conflicting requests',build:conflictingRequests},
 ];
 

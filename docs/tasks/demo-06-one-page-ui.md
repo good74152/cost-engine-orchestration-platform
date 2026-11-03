@@ -6,7 +6,7 @@ Baseline: main `6ddf3d0`. Status: awaiting System Owner review. No deployment or
 ## Scope
 
 - One page: a short header, the data hierarchy, four scenarios, the live workflow map and records, then blocks that open then-and-now and limits in a Dialog.
-- `Happy path`, `Lost reply`, `Failed job and retry` and `Conflicting requests`, each with Run and Step through.
+- `Happy path`, `Lost response`, `Failure recovery` and `Conflicting requests`, each with Run and Step through.
 - DataView of scenarios. OrganizationChart of the six reports, and of `dataset_series → dataset_version → calculation_job → execution_attempt`.
 - Read-only `frozenInputs` on Demo dataset list and detail reads.
 - Removal of the old frontend pages, routing and Tailwind. Backend Guided APIs are untouched.
@@ -42,8 +42,8 @@ Each run takes a reporting period the session hasn't used, so scenarios can be r
 | Scenario | Demonstrates |
 |---|---|
 | Happy path | Six reports published in dependency order; 10 jobs; each report locks its input |
-| Lost reply | HTTP 202 and DISPATCHING; a pause for the viewer's decision; recovery on the same attempt and run ID; reconcile; publish |
-| Failed job and retry | Confirmed failure; a newer upstream version; retry as a new attempt on the frozen input; publish |
+| Lost response | HTTP 202 and DISPATCHING; a pause for the viewer's decision; recovery on the same attempt and run ID; reconcile; publish |
+| Failure recovery | Confirmed failure; a newer upstream version; retry as a new attempt on the frozen input; publish |
 | Conflicting requests | Four creates (one 201, three 409); Run before upstream is published (409, no attempt); Run after it is |
 
 ## Verification

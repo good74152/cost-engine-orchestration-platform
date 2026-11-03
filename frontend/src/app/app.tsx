@@ -8,7 +8,7 @@ import {conceptBlocks,infoBlocks} from '../ui/content';
 import {DemoDialog} from '../ui/demo-dialog';
 import {Workspace} from '../ui/workspace';
 
-const KEY_SCENARIO='lost-reply';
+const KEY_SCENARIO='lost-response';
 
 function Player(){
  const {model,playback}=useDemo();if(!playback)return null;

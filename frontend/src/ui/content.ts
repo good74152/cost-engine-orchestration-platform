@@ -15,8 +15,8 @@ export function conceptBlocks({concepts:c}:Messages):ConceptBlock[]{
 export interface InfoBlock {title:string;line:string;dialog?:DialogContent;href?:string}
 export function infoBlocks({more:m}:Messages):InfoBlock[]{
  return [
-  {title:m.stuckTitle,line:m.thenNow,dialog:{title:m.stuckShort,rows:[[m.then,m.stuckThen],[m.now,m.stuckNow]],note:m.note,action:{label:m.try('Lost reply'),scenarioId:'lost-reply'}}},
-  {title:m.failedTitle,line:m.thenNow,dialog:{title:m.failedTitle,rows:[[m.then,m.failedThen],[m.now,m.failedNow]],note:m.note+' '+m.orderNote,action:{label:m.try('Failed job and retry'),scenarioId:'failed-job'}}},
+  {title:m.stuckTitle,line:m.thenNow,dialog:{title:m.stuckShort,rows:[[m.then,m.stuckThen],[m.now,m.stuckNow]],note:m.note,action:{label:m.try('Lost response'),scenarioId:'lost-response'}}},
+  {title:m.failedTitle,line:m.thenNow,dialog:{title:m.failedTitle,rows:[[m.then,m.failedThen],[m.now,m.failedNow]],note:m.note+' '+m.orderNote,action:{label:m.try('Failure recovery'),scenarioId:'failure-recovery'}}},
   {title:m.limitsTitle,line:m.limitsLine,dialog:{title:m.limitsTitle,bullets:m.limits,note:m.next}},
   {title:m.diagrams,line:m.diagramsLine,href:REPOSITORY+'#readme'},
   {title:m.decisions,line:m.decisionsLine,href:REPOSITORY+'/tree/main/docs/adr'},

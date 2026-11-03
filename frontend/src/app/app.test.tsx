@@ -52,8 +52,8 @@ describe('one-page demo',()=>{
   await user.click(screen.getByRole('button',{name:/^A job looked stuck/}));
   const stuck=await dialog('A job looked stuck');
   expect(stuck).toHaveTextContent('production work I did');
-  await user.click(within(stuck).getByRole('button',{name:'Try Lost reply'}));
-  await dialog('The reply never arrived');
+  await user.click(within(stuck).getByRole('button',{name:'Try Lost response'}));
+  await dialog('The response never arrived');
   expect(api.posts().length).toBeGreaterThan(0);
  });
  it('switches language, keeps technical terms in English and remembers the choice',async()=>{
@@ -64,9 +64,9 @@ describe('one-page demo',()=>{
   expect(screen.getByRole('heading',{level:1})).toHaveTextContent('財務報表計算的 Async Workflow');
   expect(screen.getByRole('heading',{name:'選擇 Scenario'})).toBeInTheDocument();
   expect(document.body.textContent).toContain('execution_attempt');
-  expect(document.body.textContent).toContain('Lost reply');
+  expect(document.body.textContent).toContain('Lost response');
   expect(api.posts()).toEqual([]);
-  await user.click(screen.getByRole('button',{name:'Run Lost reply'}));
+  await user.click(screen.getByRole('button',{name:'Run Lost response'}));
   const paused=await dialog('外部 job 回應沒有回傳');
   await user.click(within(paused).getByRole('button',{name:'確認同一個 run'}));
   expect(await dialog('沒有重複 run')).toHaveTextContent('這個 job 有 1 個 try');
@@ -84,8 +84,8 @@ describe('one-page demo',()=>{
  });
  it('pauses a lost response until the viewer recovers it, then proves there is no duplicate',async()=>{
   const {api,user}=mount();
-  await user.click(screen.getByRole('button',{name:'Run Lost reply'}));
-  const paused=await dialog('The reply never arrived');
+  await user.click(screen.getByRole('button',{name:'Run Lost response'}));
+  const paused=await dialog('The response never arrived');
   expect(api.attempts).toHaveLength(2);// FAB_COST plus the lost CAPEX attempt.
   expect(api.attempts.at(-1)!.attemptStatus).toBe('DISPATCHING');
   await waitFor(()=>expect(nodes('Unknown').length).toBe(1));
@@ -99,7 +99,7 @@ describe('one-page demo',()=>{
  });
  it('keeps failed history and the frozen input when a retry follows a newer upstream',async()=>{
   const {user}=mount();
-  await user.click(screen.getByRole('button',{name:'Run Failed job and retry'}));
+  await user.click(screen.getByRole('button',{name:'Run Failure recovery'}));
   const done=await dialog('Retried, with the failure on record');
   expect(done).toHaveTextContent('try 1 FAILED, try 2 SUCCEEDED');
   expect(done).toHaveTextContent('Input used: version 1');
@@ -116,15 +116,15 @@ describe('one-page demo',()=>{
  });
  it('steps one command group per click and can be stopped',async()=>{
   const {api,user}=mount();
-  await user.click(screen.getByRole('button',{name:'Step through Lost reply'}));
+  await user.click(screen.getByRole('button',{name:'Step through Lost response'}));
   const next=await screen.findByRole('button',{name:'Next: Create the report'});
   expect(api.datasets.map(d=>d.domain)).toEqual(['FAB_COST']);
   await user.click(next);
-  await screen.findByRole('button',{name:'Next: Start a job and lose the reply'});
+  await screen.findByRole('button',{name:'Next: Start a job and lose the response'});
   expect(api.datasets.map(d=>d.domain)).toEqual(['FAB_COST','CAPEX']);
   await user.click(screen.getByRole('button',{name:'Stop'}));
   expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
-  expect(screen.getByRole('button',{name:'Run Lost reply'})).toBeEnabled();
+  expect(screen.getByRole('button',{name:'Run Lost response'})).toBeEnabled();
  });
  it('uses a new reporting period on replay instead of colliding with saved data',async()=>{
   const {api,user}=mount();
@@ -145,7 +145,7 @@ describe('one-page demo',()=>{
  });
  it('opens plain-language details when a box is selected',async()=>{
   const {user}=mount();
-  await user.click(screen.getByRole('button',{name:'Run Failed job and retry'}));
+  await user.click(screen.getByRole('button',{name:'Run Failure recovery'}));
   await user.click(closeButton(await dialog('Retried, with the failure on record')));
   await user.click(screen.getAllByRole('button',{name:'Details for Try 1, Failed'})[0]!);
   const details=await dialog('Try 1 (execution_attempt)');
@@ -155,7 +155,7 @@ describe('one-page demo',()=>{
  it('explains an unexpected failure in a dialog and tells the viewer what to do',async()=>{
   const api=new MockApi();api.override=(method,path)=>method==='POST'&&path.endsWith('/reconcile')?fail('EXECUTOR_STATUS_UNAVAILABLE',503):undefined;
   const {user}=mount(api);
-  await user.click(screen.getByRole('button',{name:'Run Lost reply'}));
+  await user.click(screen.getByRole('button',{name:'Run Lost response'}));
   const stopped=await dialog('The scenario stopped');
   expect(stopped).toHaveTextContent('The executor status isn’t available');
   expect(stopped).toHaveTextContent('EXECUTOR_STATUS_UNAVAILABLE');
@@ -164,7 +164,7 @@ describe('one-page demo',()=>{
   const api=new MockApi();let aborted=0;const real=api.fetch;
   api.fetch=async(input,init)=>{if(String(input).endsWith('/run')){aborted++;throw new Error('network down');}return real(input,init);};
   const {user}=mount(api);
-  await user.click(screen.getByRole('button',{name:'Run Lost reply'}));
+  await user.click(screen.getByRole('button',{name:'Run Lost response'}));
   const stopped=await dialog('The scenario stopped');
   expect(stopped).toHaveTextContent('the result is unknown');
   expect(aborted).toBe(1);
@@ -172,7 +172,7 @@ describe('one-page demo',()=>{
  it('refuses to run on an environment without the Workflow configuration',async()=>{
   const api=new MockApi();api.admissionState='LEGACY_OPEN';
   const {user}=mount(api);
-  await user.click(screen.getByRole('button',{name:'Run Lost reply'}));
+  await user.click(screen.getByRole('button',{name:'Run Lost response'}));
   expect(await dialog('The scenario stopped')).toHaveTextContent('Workflow cutover');
   expect(api.datasets).toEqual([]);
  });
