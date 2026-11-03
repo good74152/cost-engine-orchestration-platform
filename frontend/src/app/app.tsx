@@ -6,6 +6,7 @@ import type {ScenarioDefinition} from '../scenarios/engine';
 import {REPOSITORY,scenarios} from '../scenarios/scenarios';
 import {conceptBlocks,infoBlocks} from '../ui/content';
 import {DemoDialog} from '../ui/demo-dialog';
+import {ManualPanel} from '../ui/manual';
 import {Workspace} from '../ui/workspace';
 
 const KEY_SCENARIO='lost-response';
@@ -25,7 +26,7 @@ function Player(){
 }
 
 export function App(){
- const {model,playback,clearing,lang}=useDemo();const results=useRef<HTMLDivElement>(null);
+ const {model,playback,clearing,lang,manual}=useDemo();const results=useRef<HTMLDivElement>(null);
  const m=model.messages();
  const active=!!playback&&['running','waiting','paused'].includes(playback.status);
  const start=(id:string,mode:'auto'|'step')=>{
@@ -35,8 +36,8 @@ export function App(){
  };
  const scenarioBlock=(s:ScenarioDefinition)=><div className={'scenario'+(s.id===KEY_SCENARIO?' key':'')+(playback?.scenarioId===s.id?' current':'')}>
   <h3><span translate="no">{s.title}</span>{s.id===KEY_SCENARIO&&<span className="tag">{m.scenario.key}</span>}</h3><p>{m.scenario.descriptions[s.id]}</p>
-  <div className="actions"><button type="button" className="button" disabled={active||clearing} aria-label={m.scenario.runLabel(s.title)} onClick={()=>start(s.id,'auto')}>{m.scenario.run}</button>
-   <button type="button" className="button quiet" disabled={active||clearing} aria-label={m.scenario.stepLabel(s.title)} onClick={()=>start(s.id,'step')}>{m.scenario.step}</button></div>
+  <div className="actions"><button type="button" className="button" disabled={active||clearing||!!manual?.busy} aria-label={m.scenario.runLabel(s.title)} onClick={()=>start(s.id,'auto')}>{m.scenario.run}</button>
+   <button type="button" className="button quiet" disabled={active||clearing||!!manual?.busy} aria-label={m.scenario.stepLabel(s.title)} onClick={()=>start(s.id,'step')}>{m.scenario.step}</button></div>
  </div>;
  return <>
   <a className="skip-link" href="#main">{m.skip}</a>
@@ -62,8 +63,13 @@ export function App(){
     <aside className="scenarios" aria-labelledby="scenarios-title">
      <h2 id="scenarios-title">{m.sections.pick}</h2>
      <DataView value={scenarios} dataKey="id" itemTemplate={scenarioBlock}/>
+     <div className={'scenario'+(manual?' current':'')}>
+      <h3 translate="no">{m.manual.card}</h3><p>{m.manual.cardLine}</p>
+      <div className="actions"><button type="button" className="button quiet" disabled={active||clearing||!!manual?.busy} aria-label={manual?m.manual.closeLabel:m.manual.openLabel} aria-pressed={!!manual}
+       onClick={()=>{if(manual)model.closeManual();else{model.openManual();results.current?.scrollIntoView?.({behavior:'auto',block:'nearest'});}}}>{manual?m.manual.close:m.manual.open}</button></div>
+     </div>
     </aside>
-    <div ref={results} className="results"><Player/><Workspace/></div>
+    <div ref={results} className="results">{manual?<ManualPanel/>:<><Player/><Workspace/></>}</div>
    </section>
    <section className="more" aria-labelledby="more-title">
     <h2 id="more-title">{m.sections.more}</h2>

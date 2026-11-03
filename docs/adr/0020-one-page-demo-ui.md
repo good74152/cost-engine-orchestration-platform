@@ -52,19 +52,19 @@ HTTP 409 in the conflict scenario is the expected result, so it is reported as a
 |---|---|
 | PrimeReact 11 | Not MIT. Needs a license key, and a missing key can show a notice on a public page. |
 | PrimeReact 10 with a bundled theme | Its injected styles need `unsafe-inline`, and it looks like an admin back office. |
-| `style-src 'unsafe-inline'` | Weakens ADR-0013 to save two hashes. |
+| `style-src 'unsafe-inline'` | Weakens ADR-0013 to save three hashes. |
 | Hand-written chart and dialog | Workable, but the System Owner prefers PrimeReact and this costs little. |
 | A backend scenario endpoint | Adds server state to demonstrate behavior the existing APIs already have. |
 | Automatic downstream triggers | A new subsystem (workers, duplicate triggers, retries). Listed as future work. |
 
 ## Consequences
 
-- The bundle grows to about 153 KB of gzipped JavaScript.
+- The bundle is about 212 KB of gzipped JavaScript, after Demo-09 added DataTable and Dropdown.
 - A browser cannot prove requests overlapped. The conflict scenario says so and links to the PostgreSQL test.
 - The session gate admits four Parallel requests, so that scenario sends four, not the test's twenty.
 - Reloading during playback keeps saved data but ends the run. An open attempt stays visible as DISPATCHING.
 - The page needs `WORKFLOW_OPEN`. Other admission states get a dialog explaining the missing configuration.
-- Viewers can no longer send arbitrary commands from the UI; the API remains documented for that.
+- Scenarios stay scripted. [Demo-09](../tasks/demo-09-manual-mode.md) adds a manual mode for sending commands by hand, using the same APIs and holding no lifecycle rule in the page.
 - Updating PrimeReact means re-checking the CSP hashes. The browser test reports any mismatch.
 
 ## Truth boundary

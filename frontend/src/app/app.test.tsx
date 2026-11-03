@@ -17,6 +17,45 @@ const dialog=(name:string)=>screen.findByRole('dialog',{name},{timeout:4000});
 const closeButton=(d:HTMLElement)=>within(d).getAllByRole('button',{name:'Close'}).at(-1)!;
 const nodes=(status:string)=>screen.queryAllByRole('button',{name:new RegExp(', '+status+'$')});
 
+async function openManual(){
+ const {api,model,user}=mount();
+ await user.click(screen.getByRole('button',{name:'Open manual mode'}));
+ await screen.findByRole('heading',{name:/^Dataset versions/});
+ return {mock:api,model,user};
+}
+describe('manual mode',()=>{
+ it('leaves the rules to the backend and shows its refusal with the HTTP code',async()=>{
+  const {mock,user}=await openManual();
+  await user.click(screen.getByRole('button',{name:'Create version'}));
+  await screen.findByText('Version 1 created. Run its jobs next.');
+  await user.click(screen.getByRole('button',{name:'Publish'}));
+  const box=await dialog('The backend refused this');
+  expect(box.textContent).toContain('HTTP 409 STATE_CONFLICT');expect(box.textContent).toContain('submit it first');
+  expect(mock.posts().some(c=>c.path.endsWith('/publish'))).toBe(true);
+ });
+ it('takes a run through unknown, recovery on the same try, and publish',async()=>{
+  const {mock,user}=await openManual();
+  await user.click(screen.getByRole('button',{name:'Create version'}));await screen.findByText(/Version 1 created/);
+  await user.click(screen.getByRole('button',{name:'Check result of Summary'}));
+  const refused=await dialog('The backend refused this');
+  expect(refused.textContent).toContain('EXECUTION_NOT_RECONCILABLE');
+  await user.click(closeButton(refused));
+  await user.click(screen.getByRole('button',{name:'Run Summary'}));
+  await user.click(within(await dialog('Run Summary')).getByRole('button',{name:/^Unknown/}));
+  await screen.findByText(/no response came back/);
+  await user.click(screen.getByRole('button',{name:'Run Summary'}));
+  const recover=await dialog('Run Summary');
+  expect(within(recover).queryByRole('button',{name:/^Unknown/})).toBeNull();
+  await user.click(within(recover).getByRole('button',{name:/^Success/}));
+  await screen.findByText(/database still says running/);
+  expect(mock.attempts).toHaveLength(1);
+  await user.click(screen.getByRole('button',{name:'Check result of Summary'}));await screen.findByText(/saved it as SUCCEEDED/);
+  await user.click(screen.getByRole('button',{name:'Submit'}));await screen.findByText('Submitted for approval.');
+  await user.click(screen.getByRole('button',{name:'Publish'}));await screen.findByText('Version published.');
+  expect(mock.datasets[0]!.datasetStatus).toBe('PUBLISHED');
+ });
+});
+
 describe('one-page demo',()=>{
  it('shows a first-time visitor no error, sends no command and explains the hierarchy',async()=>{
   const {api}=mount();

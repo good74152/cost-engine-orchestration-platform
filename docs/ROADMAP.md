@@ -259,6 +259,11 @@ Dataset / Job / Attempt hierarchy and read-only frozen inputs. Backend Guided AP
 are unchanged. See [ADR-0020](adr/0020-one-page-demo-ui.md) and [the task](tasks/demo-06-one-page-ui.md).
 Await System Owner Review.
 
+## Demo-09 — Manual Mode
+
+Adds a [manual mode](tasks/demo-09-manual-mode.md): dropdowns and three tables for versions, jobs and tries. The backend
+decides what is allowed, and a dialog shows each refusal. There are no backend changes. Awaiting System Owner review.
+
 ## Deferred until a concrete requirement
 
 - Real Airflow HTTP adapter and external cancellation.

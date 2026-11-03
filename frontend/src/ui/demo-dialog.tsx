@@ -1,5 +1,6 @@
 import {Dialog} from 'primereact/dialog';
 import type {ReactNode} from 'react';
+import type {RunOutcome} from '../app/controller';
 import {useDemo} from '../app/demo-context';
 
 export function DemoDialog(){
@@ -19,8 +20,16 @@ export function DemoDialog(){
    header=dialog.pause.title;body=<p>{dialog.pause.body}</p>;
    footer=<button type="button" className="button" autoFocus onClick={model.proceed}>{dialog.pause.action}</button>;break;
   case 'error':
-   header=dialog.title;body=<><p>{dialog.message}</p>{dialog.code&&<p className="dialog-note">{t.errorCode} <code translate="no">{dialog.code}</code></p>}</>;
+   header=dialog.title;body=<><p>{dialog.message}</p>{dialog.code&&<p className="dialog-note">{t.errorCode} <code translate="no">{dialog.status?'HTTP '+dialog.status+' ':''}{dialog.code}</code></p>}</>;
    footer=close;break;
+  case 'run':{
+   const {jobId,title,recovering}=dialog;const manual=model.messages().manual;
+   const choices:RunOutcome[]=recovering?['SUCCEEDED','FAILED']:['SUCCEEDED','FAILED','UNKNOWN'];
+   header=manual.runTitle(title);
+   body=<><p>{recovering?manual.recoverLead:manual.runLead}</p>
+    <div className="outcomes">{choices.map(c=><button type="button" key={c} className="block" onClick={()=>void model.runJob(jobId,title,c)}><strong translate="no">{manual.outcomes[c].label}</strong><span>{manual.outcomes[c].line}</span></button>)}</div></>;
+   break;
+  }
   case 'info':{
    const {content}=dialog;header=content.title;
    body=<>{content.paragraphs?.map(p=><p key={p}>{p}</p>)}
