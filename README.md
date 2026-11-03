@@ -93,15 +93,13 @@ Requires Node.js 24+, npm and Docker Compose. Create `.env` from [.env.example](
 npm ci && npm --prefix frontend ci
 docker compose up -d postgres_db
 
-# Use your .env values. Keep this database for the demo only: the cutover can't be undone.
+# Use your .env values.
 export DATABASE_URL=postgresql://USER:PASSWORD@localhost:5432/DATABASE
-export DEMO_SEED_DATABASE_URL=$DATABASE_URL DEMO_ADMISSION_DATABASE_URL=$DATABASE_URL DEMO_CUTOVER_DATABASE_URL=$DATABASE_URL
+export DEMO_SEED_DATABASE_URL=$DATABASE_URL
 export APP_MODE=demo NODE_ENV=development EXECUTOR_TYPE=fake
 
 npm run migrate -- up
 npm run seed:demo-six-domain
-npm run demo:admission -- drain
-npm run demo:cutover -- cutover
 npm run dev
 ```
 

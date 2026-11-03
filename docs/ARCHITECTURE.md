@@ -191,10 +191,8 @@ Raw ingestion remains a separate supported workflow. Its business key isn't seri
 | Concurrency gate | Four parallel operations per session; the fifth gets `429`. Exclusive operations wait in FIFO order. Local to one instance. | [ADR-0015](adr/0015-demo-session-concurrency-gate.md) |
 | Reset and restart | Reset deletes the owner's graph in one transaction when the session is idle. Startup invalidates old sessions, because fake memory didn't survive. | [ADR-0010](adr/0010-demo-session-reset-and-recovery.md) |
 | Run simulation | A Run can choose its simulated outcome. It binds once per identity; existing runs keep theirs. | [ADR-0016](adr/0016-request-scoped-demo-simulation.md) |
-| Admission and cutover | `LEGACY_OPEN → DRAINING → WORKFLOW_OPEN`, irreversible and enforced in PostgreSQL. Cutover is an offline, atomic operator action. | [ADR-0017](adr/0017-demo-admission-drain.md), [ADR-0018](adr/0018-demo-workflow-configuration-cutover.md) |
 | Workflow catalog | A static read-only description of the six-domain order. It starts nothing and stores no progress. | [Demo-05C-1](tasks/demo-05c1-workflow-template-catalog.md) |
-| Guided scenarios | Backend APIs with a durable step ledger remain and are tested. The page no longer uses them. | [ADR-0011](adr/0011-demo-scenario-persistence-and-mode-isolation.md), [ADR-0012](adr/0012-demo-scenario-step-idempotency.md) |
-| Page | One page plays scripted scenarios and offers a manual mode through the same `/demo/*` APIs. It holds no lifecycle rule. Requires `WORKFLOW_OPEN`. | [ADR-0020](adr/0020-one-page-demo-ui.md), [Demo-09](tasks/demo-09-manual-mode.md) |
+| Page | One page plays scripted scenarios and offers a manual mode through the same `/demo/*` APIs. It holds no lifecycle rule. | [ADR-0020](adr/0020-one-page-demo-ui.md), [Demo-09](tasks/demo-09-manual-mode.md) |
 | Public deployment | Caddy is the only public entry; Node and PostgreSQL stay on private networks. An explicit profile validates origin, secrets and limits. Web opens only by explicit command. | [ADR-0013](adr/0013-restricted-public-demo-deployment.md), [Deployment](DEPLOYMENT.md) |
 
 The demo keeps no backup: its data is disposable, and a lost database is rebuilt from migrations and the seed ([ADR-0021](adr/0021-remove-recovery-tooling.md)).

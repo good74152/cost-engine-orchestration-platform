@@ -1,4 +1,3 @@
-import { admissionMigrationPattern, installHistoricalAdmissionFixture } from './support/demo-admission-historical-fixture.js';
 import 'dotenv/config';
 import assert from 'node:assert/strict';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
@@ -18,6 +17,8 @@ import { DemoResourceUnavailableError, DemoSessionQueueFullError,
   DemoSessionUnavailableError } from '../src/modules/demo-session/demo-session.errors.js';
 import { demoSessionRoutes } from '../src/modules/demo-session/demo-session.route.js';
 import { FakeExecutor } from '../src/executors/fake-executor.js';
+
+const laterMigrations = '1793[345]00000000_.*'; // Migrations after the ones this suite exercises.
 
 const source = process.env.TEST_DATABASE_URL ?? process.env.DATABASE_URL;
 if (!source) throw new Error('Disposable PostgreSQL tests require a configured database service');
@@ -55,10 +56,9 @@ test('Demo 01A: real PostgreSQL session foundation, not protected Domain APIs',
       created = true;
       const migrate = (direction: 'up' | 'down', count?: number) => runner({
         databaseUrl: urlFor(name), dir: migrationDirectory, migrationsTable: 'pgmigrations',
-        direction, count, ignorePattern: admissionMigrationPattern, singleTransaction: true, checkOrder: true, logger: migrationLogger,
+        direction, count, ignorePattern: laterMigrations, singleTransaction: true, checkOrder: true, logger: migrationLogger,
       });
       await migrate('up');
-      await installHistoricalAdmissionFixture(urlFor(name));
       process.env.DATABASE_URL = urlFor(name);
       process.env.NODE_ENV = 'test';
       const [{ pool }, { buildApp }, { prepareCalculationJobRunService }] = await Promise.all([

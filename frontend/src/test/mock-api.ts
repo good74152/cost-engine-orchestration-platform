@@ -4,7 +4,7 @@ export const json=(data:unknown,status=200)=>new Response(JSON.stringify(data),{
 export const fail=(code:string,status:number)=>json({code,message:'Safe backend message'},status);
 const uuid=(n:number)=>'10000000-0000-4000-8000-'+String(n).padStart(12,'0');
 const TIME='2026-11-02T01:00:00.000Z';
-const JOBS:Record<string,string[]>={FAB_COST:['DEMO_FAB_COST_SUMMARY'],CAPEX:['DEMO_CAPEX_TABLE_Y','DEMO_GUIDED_SUMMARY'],DPR:['DEMO_DPR_TABLE_X','DEMO_DPR_TABLE_Y'],
+const JOBS:Record<string,string[]>={FAB_COST:['DEMO_FAB_COST_SUMMARY'],CAPEX:['DEMO_CAPEX_TABLE_Y','DEMO_CAPEX_SUMMARY'],DPR:['DEMO_DPR_TABLE_X','DEMO_DPR_TABLE_Y'],
  INSURANCE:['DEMO_INSURANCE_SUMMARY'],ONE_STD_COST:['DEMO_ONE_STD_COST_TABLE_X','DEMO_ONE_STD_COST_TABLE_Y'],E2E_COST:['DEMO_E2E_COST_TABLE_X','DEMO_E2E_COST_TABLE_Y']};
 const NEEDS:Record<string,string>={CAPEX:'FAB_COST',DPR:'CAPEX',INSURANCE:'FAB_COST',ONE_STD_COST:'FAB_COST',E2E_COST:'ONE_STD_COST'};
 const TEMPLATE={steps:Object.keys(JOBS).flatMap(domain=>{const need=NEEDS[domain];return [
@@ -12,7 +12,7 @@ const TEMPLATE={steps:Object.keys(JOBS).flatMap(domain=>{const need=NEEDS[domain
 
 /** In-memory stand-in for the Demo API. Real behavior is proven by the PostgreSQL and browser tests. */
 export class MockApi {
- session:Session|null=null;admissionState='WORKFLOW_OPEN';
+ session:Session|null=null;
  datasets:Dataset[]=[];jobs:Job[]=[];attempts:(Attempt&{jobId:string;runId:string;external:string})[]=[];
  calls:{method:string;path:string;body:unknown}[]=[];
  override:((method:string,path:string)=>Response|undefined)|null=null;
@@ -30,7 +30,7 @@ export class MockApi {
   if(!this.session)return fail('DEMO_SESSION_UNAVAILABLE',401);
   if(path==='/demo/sessions/current')return json(this.session);
   if(path==='/demo/sessions/reset'){this.session=null;this.datasets=[];this.jobs=[];this.attempts=[];return new Response(null,{status:204});}
-  if(path==='/demo/workflow-templates')return json({admissionState:this.admissionState,templates:[]});
+  if(path==='/demo/workflow-templates')return json({templates:[]});
   if(path==='/demo/workflow-templates/SIX_DOMAIN_WORKFLOW')return json(TEMPLATE);
   const page=(items:unknown[])=>json({items,nextCursor:null});
   let m:RegExpExecArray|null;

@@ -7,6 +7,4 @@ export interface CreatedDataset {datasetVersionId:string;datasetSeriesId:string;
 export interface Job {jobId:string;datasetVersionId:string;calculationTypeCode:string;jobStatus:string;createdAt:string;startedAt:string|null;finishedAt:string|null}
 export interface Attempt {executionAttemptId:string;attemptNumber:number;attemptStatus:string;createdAt:string;dispatchStartedAt:string|null;acceptedAt:string|null;finishedAt:string|null}
 export interface RunResult {jobId:string;jobStatus:string;executionAttemptId:string;attemptNumber:number;attemptStatus:string;airflowDagRunId:string}
-export type AdmissionState='LEGACY_OPEN'|'DRAINING'|'WORKFLOW_OPEN';
-export interface WorkflowCatalog {admissionState:AdmissionState}
 export interface WorkflowTemplate {steps:{id:string;domain:string;operation:string;prerequisites:string[]}[]}

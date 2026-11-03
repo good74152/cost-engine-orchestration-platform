@@ -1,4 +1,4 @@
-export const scenarios = ['happy-path','backend-startup-failure','cutover-precondition-failure'] as const;
+export const scenarios = ['happy-path','backend-startup-failure'] as const;
 export type Scenario = typeof scenarios[number];
 export function check(v:unknown): asserts v { if(!v)throw Error('Rehearsal assertion failed'); }
 const exact=(v:unknown,keys:string[])=>!!v&&typeof v==='object'&&!Array.isArray(v)&&Object.keys(v).sort().join(',')===keys.sort().join(',');

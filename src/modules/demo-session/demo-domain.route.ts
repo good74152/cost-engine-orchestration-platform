@@ -24,10 +24,7 @@ export function demoDomainRoutes(runtime: DemoRuntime, options: DemoSessionRoute
     });
     const operate = <T>(request: FastifyRequest, command: (session: AuthenticatedDemoSession) => Promise<T>, parallel = false) => {
       const session = authenticated.get(request)!;
-      const body = async () => {
-        await runtime.scenarios.assertFreeExploration(session);
-        return command(session);
-      };
+      const body = () => command(session);
       return parallel ? runtime.coordinator.runParallel(session, body) : runtime.coordinator.run(session, body);
     };
 

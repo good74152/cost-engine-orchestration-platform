@@ -134,7 +134,7 @@ anonymous Domain/raw/callback/internal controls are absent. All mutations requir
 the cookie and shared CSRF policy. Ownership and unchanged Domain commands run in
 one per-session coordinator operation; different sessions have independent fakes/gates.
 Demo-05B-1/2 admit up to four Parallel Dataset mutations/reads, explicit simulated
-Runs and Reconcile. Scenario Create, Guided Next, legacy {} Run and Fake controls
+Runs and Reconcile. Legacy {} Run and Fake controls
 remain Exclusive FIFO. Parallel
 slots include waiting/revalidation; the fifth returns 429 DEMO_SESSION_QUEUE_FULL.
 Exclusive admission waits for earlier operations and blocks later ones. Reset
@@ -190,15 +190,7 @@ Only with an injected FakeExecutor and an explicitly approved development/test e
 
 These controls do not reconcile DB state automatically and are not production APIs. No core dataset/job read/list API is implemented; Demo-only reads are documented below. Legacy POST /calculation-jobs and job-level start/submit-validation/publish/reject/fail routes are not registered.
 
-### Demo-02A shared seed and reads
-
-Run `npm run seed:demo-guided` explicitly with APP_MODE=demo,
-NODE_ENV=development/test and a privately supplied DEMO_SEED_DATABASE_URL.
-No DATABASE_URL fallback or automatic startup/session/reset seed exists.
-One transaction creates or verifies active CAPEX/DEMO_GUIDED_SUMMARY with DAG
-demo_capex_guided and PUBLISHED zero-dependency definition 1/counter 1. Other
-active CAPEX types or incompatible existing configuration fail closed, without
-overwriting published history or changing session-owned data.
+### Demo-02A shared reads
 
 Protected GET routes in Demo mode only:
 
@@ -223,132 +215,21 @@ Pass returned cursors unchanged. Invalid/unsupported query fields return
 400 INVALID_REQUEST; detail endpoints accept no query fields. Parent ownership
 and a bounded page use one SQL statement, not separate inconsistent reads.
 Read admission shares Reset's existing coordinator; no second session lock.
-Full DTOs, pagination limits, seed compatibility, index review, environment
+Full DTOs, pagination limits, index review, environment
 instructions and PostgreSQL evidence: [Demo-02A](tasks/demo-02a-shared-seed-read-apis.md).
 Focused suite: `npm run test:demo-02a`; existing regression commands remain.
 
-### Demo-05A optional six-domain configuration
+### Demo-05A six-domain configuration
 
-`npm run seed:demo-six-domain` explicitly creates or verifies nine active Demo
-types across CAPEX, FAB_COST, DPR, INSURANCE, ONE_STD_COST and E2E_COST.
-It uses the same approved Demo environment and mandatory separate
-DEMO_SEED_DATABASE_URL, with no DATABASE_URL fallback. One transaction covers
-the complete seed, including the unchanged guided CAPEX contract. There is no
-startup seed or user Dataset creation. Existing compatible rows are only read;
-incompatible configuration fails with DEMO_CONFIGURATION_CONFLICT and rolls back.
+`npm run seed:demo-six-domain` explicitly creates or verifies ten active Demo types across
+CAPEX, FAB_COST, DPR, INSURANCE, ONE_STD_COST and E2E_COST ([list](../src/deployment/demo-configuration.ts)).
+It needs the approved Demo environment and a separate DEMO_SEED_DATABASE_URL, with no DATABASE_URL
+fallback. One transaction covers the seed. Existing rows are only read, and anything other than the
+exact configuration fails with DEMO_CONFIGURATION_CONFLICT and rolls back. Backend startup runs the same check.
 
-The original seed and Guided Scenarios remain supported. New dependencies are
-data in the existing definition tables, not a global pipeline in Core code.
-Only published direct inputs for the authenticated company/year/period satisfy
-Run. The existing snapshot, all-jobs validation and Retry rules apply unchanged.
-See [type codes, commands, safety and tests](tasks/demo-05a-six-domain-configuration.md).
+Dependencies are data in the definition tables, not a global pipeline in Core code. Only published
+direct inputs for the authenticated company/year/period satisfy Run.
 Focused PostgreSQL suite: `npm run test:demo-05a`.
-
-### Demo-02B Scenario APIs
-
-Demo-only POST /demo/scenarios accepts exactly {"scenarioType":"HAPPY_PATH"}
-with the existing cookie/CSRF policy. New creation returns 201 READY/0; same-type
-retry returns 200 and the unchanged original ID/progress/timestamps. Initial
-creation requires compatible Demo-02A config and no owner domain data. No auto
-seed or cleanup occurs on conflict. PostgreSQL UNIQUE(session_id) enforces one
-Scenario for the session lifetime. GET /demo/scenarios/current and
-GET /demo/scenarios/:id return only owned durable Scenario DTOs. Invalid/missing/
-foreign IDs share generic 404. DTO: scenarioId, scenarioType, status,
-completedStep, createdAt, updatedAt. No query fields or mutation header for GET.
-
-Create/Get use the existing coordinator. Guided sessions cannot use any manual
-Demo domain/fake mutation (409 DEMO_SCENARIO_MODE_CONFLICT); reads and Reset are
-still available, and other sessions/core behavior are unchanged. Reset includes
-Scenario deletion in its domain cleanup/revocation transaction. Unknown recovery
-checks Scenario presence as well as domain graph; inactive maintenance discovers
-Scenario-only owners. Old cookies still expire/revoke on restart, not recover
-fake execution from persisted progress.
-
-New conflicts: 409 DEMO_SCENARIO_CONFIGURATION_UNAVAILABLE,
-DEMO_SCENARIO_SESSION_NOT_EMPTY and DEMO_SCENARIO_TYPE_CONFLICT.
-503 DEMO_SCENARIO_CREATE_OUTCOME_UNKNOWN means retry Create; durable locking and
-lookup resolve same-row success or confirmed absence. Existing session/CSRF/
-resource/reset/queue errors and sanitized internal errors remain.
-Demo-02B alone adds no step execution; Demo-02C below supplies Next. Full transaction/error/model
-contracts and PostgreSQL evidence: [Demo-02B](tasks/demo-02b-scenario-persistence.md).
-Focused command: `npm run test:demo-02b`, alongside all Demo/milestone regressions.
-
-### Demo-02C Happy Path Next
-
-Demo-only POST /demo/scenarios/:id/next accepts exactly expectedStep (integer
-1–6) and requestId (UUID), using the same cookie/CSRF/Origin/coordinator. It runs
-one explicit HAPPY_PATH step. 200 returns the original stored COMPLETED response;
-unconfirmed dispatch is 202 PENDING with the same attempt. No caller resource or
-executor selectors. GET /demo/scenarios/:id/pending-step returns only the pending
-stepNumber/requestId or null, from PostgreSQL without writes/fake access. Existing
-Scenario GET DTOs and guided manual-write blocking are unchanged.
-
-Same request replays its original result even after later steps. Different request
-or wrong order: 409 DEMO_SCENARIO_STEP_CONFLICT. Inconsistent resources/progress:
-409 DEMO_SCENARIO_STATE_CONFLICT. Unconfirmed commit/executor truth:
-503 DEMO_SCENARIO_STEP_OUTCOME_UNKNOWN, retry the same request. Existing 400/401/
-403/404/reset/queue contracts remain, including cookie clearing and no-store.
-Reset removes ledger/Scenario/domain and revokes atomically. Startup still
-invalidates old cookies; fake memory is not recreated. A populated ledger down
-is deliberately unsupported. Focused command: npm run test:demo-02c. Full DTO,
-six-step recovery, failure evidence and limits: [Demo-02C](tasks/demo-02c-happy-path-step-execution.md).
-
-### Demo-02D Failure Retry
-
-POST /demo/scenarios now accepts FAILURE_RETRY as well as HAPPY_PATH. Same-type
-creation is idempotent; cross-type is 409 DEMO_SCENARIO_TYPE_CONFLICT. Demo-02E below
-also enables Lost Response Recovery. Next keeps exactly
-expectedStep/requestId; type-specific bounds are 1–6 and 1–9 respectively.
-
-Failure Retry explicitly simulates/reconciles Attempt 1 FAILED, then uses core
-Run to create only Attempt 2 against the same Job and frozen inputs. Steps 3–9
-can recover progress independently of committed Domain facts. Failure result
-DTOs identify the actual attemptNumber/UUID; historical responses never change.
-UNKNOWN Retry is PENDING/202 with the same Attempt 2 and FAILED logical Job.
-Definite dispatch rejection is 409 DEMO_SCENARIO_STATE_CONFLICT and requires Reset
-in this bounded flow, never Attempt 3. Existing auth/CSRF/ownership/queue/Reset,
-503 unknown-outcome and PostgreSQL-only pending-read contracts remain unchanged.
-No client execution selector or new public fake-control API is added.
-
-New forward migration validates both flow bounds/bindings and preserves original
-Happy Path safety. Its down explicitly refuses retained FAILURE_RETRY Scenarios;
-supported down preserves Happy Path data and restores the original validator.
-Focused suite: npm run test:demo-02d. Full nine steps, private Retry intent,
-history protection, migration and test evidence: [Demo-02D](tasks/demo-02d-failure-retry-scenario.md).
-
-### Demo-02E Lost Response Recovery
-
-POST /demo/scenarios also accepts LOST_RESPONSE_RECOVERY. It uses six steps and
-only Attempt 1. First Step 2 really creates one session-owned fake execution,
-then a Demo-only stateless decorator converts ACCEPTED to UNKNOWN. HTTP 202
-returns PENDING with progress 1, Job PENDING and Attempt DISPATCHING. Same-request
-retry preserves the full stable DAG/run identity; ALREADY_EXISTS passes through
-to Core, which confirms ACCEPTED/RUNNING. Only then is Step 2 COMPLETED/200.
-Steps 3–6 reuse fake success, reconciliation, validation and publication.
-
-Ledger request ownership/replay, pending reads, A/B unknown-COMMIT confirmation,
-security, per-session fakes and Reset are unchanged. No public behavior control,
-new identity store or Core Run/executor contract change. A forward migration
-enforces E's six-step/one-attempt bindings without relaxing Happy/Failure rules;
-down refuses retained E Scenarios and otherwise restores the exact 02D validator.
-Focused command: npm run test:demo-02e. Full contracts, identity persistence,
-recovery boundaries and executed evidence: [Demo-02E](tasks/demo-02e-lost-response-recovery.md).
-
-First Guided Scenario creation also requires an unallocated session FakeExecutor.
-Prior manual fake behavior (even without Dataset rows) returns 409
-DEMO_SCENARIO_SESSION_NOT_EMPTY with a reset instruction. Use Reset and a new
-Session; Create never clears fake execution/rejection/script history. This
-conservative check applies to all three types only on first insertion. Existing
-same-type Scenario Create remains 200 at any progress, retaining the same fake
-and executions; different-type remains 409 DEMO_SCENARIO_TYPE_CONFLICT.
-
-Handled API errors use the flat envelope:
-
-```json
-{ "message": "...", "code": "..." }
-```
-
-Representative contracts: 400 INVALID_REQUEST/INVALID_DOMAIN/INVALID_PERIOD; 404 CALCULATION_JOB_NOT_FOUND/DATASET_VERSION_NOT_FOUND/EXECUTION_ATTEMPT_NOT_FOUND; 409 lifecycle/readiness/active-version conflicts; 502 EXECUTOR_DISPATCH_FAILED; 503 EXECUTOR_STATUS_UNAVAILABLE. Parser body-size/media errors use 413/415 with INVALID_REQUEST. Unexpected failures are logged and return 500 INTERNAL_SERVER_ERROR without PostgreSQL details. Unregistered routes retain Fastify's normal 404 response. See [API coverage inventory](tasks/007c-api-error-contract-coverage.md) and the executed verification reports for the full contracts.
 
 ### Demo-05C-1 Workflow Template Catalog
 
@@ -356,19 +237,12 @@ Registered only with `APP_MODE=demo`:
 
 | Method | Route | Successful JSON (200) |
 |---|---|---|
-| GET | /demo/workflow-templates | `{ "admissionState": "LEGACY_OPEN\|DRAINING\|WORKFLOW_OPEN", "templates": [WorkflowTemplateSummary, ...] }` |
+| GET | /demo/workflow-templates | `{ "templates": [WorkflowTemplateSummary, ...] }` |
 | GET | /demo/workflow-templates/:id | `WorkflowTemplate`, including `steps` |
 
-Summaries contain exactly `id`, `version`, `title`, `description`, `availability`.
-Details add only `steps`. Each Step contains exactly `id`, `title`, `description`,
-`operation`, `prerequisites`, `expectedResult`, plus `domain` where applicable
-(all current steps include it). Prerequisites are Step IDs within that Template.
-IDs are case-sensitive; current version is 2 for all four Templates. List order is HAPPY_PATH,
-FAILURE_RETRY, LOST_RESPONSE_RECOVERY, SIX_DOMAIN_WORKFLOW. Static availability is
-PREVIEW; both APIs now project PREVIEW in LEGACY_OPEN/DRAINING and AVAILABLE in
-WORKFLOW_OPEN from one PostgreSQL Gate observation per response. This projection
-does not change the static Template or Gate. Missing/invalid/unreadable Gate yields
-503 DEMO_ADMISSION_UNAVAILABLE without internal details.
+Summaries contain exactly `id`, `version`, `title`, `description`. Details add only `steps`. Each Step
+contains exactly `id`, `title`, `description`, `operation`, `domain`, `prerequisites`, `expectedResult`.
+Prerequisites are Step IDs within that Template. There is one Template, SIX_DOMAIN_WORKFLOW.
 
 Operations describe these existing protected APIs. Job/Attempt operations must
 be explicitly repeated for every relevant Job/Attempt, using actual returned
@@ -393,133 +267,35 @@ Cross-site/foreign Origin yields 403 `DEMO_SESSION_CSRF_REJECTED`. Existing 429
 `DEMO_SESSION_QUEUE_FULL`, 409 `RESET_CONFLICT` and 503
 `DEMO_RESET_OUTCOME_UNKNOWN` remain applicable. Errors use `{ "message", "code" }`.
 
-Template definitions are independent of PostgreSQL configuration and Domain state;
-authentication/revalidation reads Session and availability reads the Gate.
-It creates no fake, execution, progress, Scenario or ledger. The v2 guides describe
-Workflow configuration after cutover: FAB_COST → CAPEX → DPR, FAB_COST → INSURANCE,
-FAB_COST → ONE_STD_COST → E2E_COST. The first three publish FAB_COST before CAPEX,
-use complete paginated Job lists, and finish all Jobs before validation/publication.
-Failure Retry runs only the failed Job again; Lost Response Recovery reuses the
-original Attempt and DAG/run identity, then explicitly processes every other Job.
-The unchanged Legacy seed/Guided ledger remains a separate configuration fixture.
-Version 2 replaces the static current descriptions without a version-history API.
-See [original read contract](tasks/demo-05c1-workflow-template-catalog.md) and
-[v2 verification](tasks/demo-05c3b-six-domain-workflow-verification.md).
+Template definitions are static and independent of PostgreSQL configuration and Domain state. They create no
+fake, execution or progress. The order is FAB_COST → CAPEX → DPR, FAB_COST → INSURANCE, FAB_COST → ONE_STD_COST → E2E_COST.
 Focused checks: `npm run test:demo-05c1:unit` (no PostgreSQL),
 `npm run test:demo-05c1:typecheck`, `npm run test:demo-05c1` (owned disposable DB).
-
-### Demo-05C-3C Workflow browser
-
-`/workflows` lists Backend v2 Templates; `/workflows/:id` shows their timeline,
-prerequisites, expected results and explicit operation controls. Select the fiscal
-year/period and each Session-owned Dataset version explicitly, then choose a Step
-and operate each required Job individually. Read all Job/Attempt pages; no batch
-Run or automatic workflow execution exists. Failure/lost-response simulation uses
-explicit controls. Retry affects only the chosen Job; Recover calls existing Run
-on a DISPATCHING Job. Fake-state acknowledgement is distinct from durable progress.
-
-UI modes follow Backend Gate, never an environment flag: neutral Session start;
-LEGACY_OPEN Guided; DRAINING existing Guided only; WORKFLOW_OPEN Workflow Explorer
-with safe old Guided URL redirection and no Scenario Create. Free Exploration is
-retained. Availability errors disable mode mutations. Dataset bindings in URL are
-validated navigation hints, not business state. Reload/return from exploration
-reads Session, Template and complete resources without POST. Network error means
-Outcome Unknown; use Refresh then explicitly choose recovery. Multi-page reads
-are not an atomic snapshot. Reset and 401 clear old resource/template state.
-
-Verification: `ui:typecheck`, `ui:test`, `ui:build`, `ui:smoke` (Legacy fixture),
-`ui:smoke:workflow` (real Chromium/Backend/migrated and cutover PostgreSQL fixture).
-Supply a private explicit TEST_DATABASE_URL for the task-owned disposable service.
-See [UI contract/recovery/deployment and evidence](tasks/demo-05c3c-workflow-ui.md).
 
 ### Demo-05C-3B six-domain verification
 
 `npm run test:demo-05c3b:typecheck` checks the strict TypeScript test fixture;
 `npm run test:demo-05c3b` requires an explicitly supplied private TEST_DATABASE_URL
 for an owned disposable PostgreSQL service with CREATE/DROP DATABASE rights.
-It creates a random `demo_05c3b_*` database, migrates all 14 migrations, seeds,
-drains and cuts over through the real operators before creating any Session.
+It creates a random `demo_05c3b_*` database, migrates and seeds before creating any Session.
 All Workflow mutations use existing protected Demo APIs. SQL is used for read
 assertions and transaction/row-lock barriers. Teardown closes sockets, confirms
 zero database backends and drops only the exact owned fixture without FORCE.
-It never targets a persistent Demo/developer database or runs production cutover.
+It never targets a persistent Demo/developer database.
 
 The suite verifies six published Datasets/ten Jobs, five input edges, negative
 year/period/Session isolation, CAPEX two-Job snapshot/definition pinning, Retry,
 lost ACK recovery, and three reproducible PostgreSQL lock schedules. It prints
 POSTGRES_LOCK_EVIDENCE with blocking PID chains and selected input versions;
 this is bounded test evidence, not a new application lock manager or executor.
-Legacy Guided suites continue to create their own Legacy configuration databases.
 
 ## Local development
-
-### Demo-05C-3A configuration cutover operator
-
-`npm run demo:cutover -- status|cutover` accepts exactly one explicit private
-DEMO_CUTOVER_DATABASE_URL or DEMO_CUTOVER_DATABASE_URL_FILE, with no DATABASE_URL
-or admission/seed fallback. Production operator commands are cutover-status and
-cutover. Status returns state/updatedAt/configuration; cutover adds outcome
-(APPLIED/ALREADY_APPLIED) and confirmation (COMMITTED/DURABLE_RELOAD). Conflicts,
-unavailable truth, NOT_APPLIED and UNKNOWN exit nonzero with sanitized codes.
-
-The Gate's new terminal WORKFLOW_OPEN permits Session Create but rejects first
-Legacy Scenario insertion with 503 DEMO_LEGACY_ADMISSION_CLOSED. Existing Scenario
-replay retains 200/409 type semantics. Old drain rejects WORKFLOW_OPEN with
-DEMO_LEGACY_DRAIN_CLOSED. Read-only admission status recognizes all three states.
-Startup accepts WORKFLOW_OPEN only with exact target configuration. The complete
-dedicated catalog is strict: nine legacy or ten target Types with exact DAGs,
-activation, counters, published versions and dependencies, including no extras.
-
-Cutover requires DRAINING, no active Session/Scenario/ledger/session-owned graph,
-and exact legacy settings. It preserves Definition v1 and all other Domains,
-inserts only the specified CAPEX changes and opens Workflow admission atomically.
-Repeated target validation performs no INSERT/UPDATE. No public management API,
-cleanup, Template activation, Frontend UI or financial execution is added.
-Follow the [offline/failed-deployment runbook and error contract](tasks/demo-05c3a-configuration-cutover.md)
-and [ADR-0018](adr/0018-demo-workflow-configuration-cutover.md). SQL counts do not
-prove the Backend/requests/writers are stopped. Down cannot undo a completed cutover.
-Focused checks: test:demo-05c3a:typecheck and test:demo-05c3a against disposable PG.
-
-### Demo-05C-2 trusted admission operator
-
-`npm run demo:admission -- status` and `npm run demo:admission -- drain` require
-exactly one private `DEMO_ADMISSION_DATABASE_URL` or
-`DEMO_ADMISSION_DATABASE_URL_FILE`, naming the intended Demo database. There is
-no fallback to DATABASE_URL, DEMO_SEED_DATABASE_URL or mounted runtime secrets.
-Status returns `{state,updatedAt}`. Drain adds `confirmation` (`COMMITTED` or
-`DURABLE_RELOAD`). Legacy drain supports LEGACY_OPEN → DRAINING only and rejects
-WORKFLOW_OPEN (the later cutover state described above). No HTTP admin route,
-reverse command or CAPEX configuration change is added.
-
-The production operator supports `admission-status` / `admission-drain`; explicitly
-provide `-e DEMO_ADMISSION_DATABASE_URL_FILE=/run/secrets/database_url` when using
-the existing Compose database secret as the admission target. The command does
-not infer that target automatically. Never print the private URL/token.
-
-New bootstrap/Scenario insertion returns sanitized 503 `DEMO_ADMISSION_DRAINING`
-while DRAINING, or 503 `DEMO_ADMISSION_UNAVAILABLE` if the Gate is absent/unreadable.
-Unconfirmed Session COMMIT is 503 `DEMO_SESSION_CREATE_OUTCOME_UNKNOWN` without a
-Cookie. Existing valid-cookie POST /demo/sessions replay returns 200; Scenario
-same-type replay remains 200, another type remains 409, and its COMMIT uncertainty
-retains `DEMO_SCENARIO_CREATE_OUTCOME_UNKNOWN`. Domain operations, Guided Steps,
-Session lifetime/security, Reset/recovery and coordinator limits are unchanged.
-Operator uncertainty is `DEMO_ADMISSION_DRAIN_OUTCOME_UNKNOWN`; confirmed fresh
-LEGACY_OPEN is `DEMO_ADMISSION_DRAIN_NOT_APPLIED`, requiring retry. Handled HTTP
-errors retain the existing message/code/no-store contract.
-
-Migration down is offline-only and refuses DRAINING, active Sessions or retained
-Scenarios. First installation requires replay-aware ingress suspension and actual
-quiescence before restarting the old Backend, whose startup revokes Sessions.
-Never reopen an unaware rollback Backend directly. A SQL count alone does not
-establish cutover safety. Follow the [complete runbook](tasks/demo-05c2-legacy-admission-drain.md#deployment-runbook)
-and [ADR-0017](adr/0017-demo-admission-drain.md). Focused real PostgreSQL commands:
-`npm run test:demo-05c2:typecheck` and `npm run test:demo-05c2`.
 
 ### Interactive frontend
 
 `frontend/` is one page with no client routing ([ADR-0020](adr/0020-one-page-demo-ui.md)). It plays four scripted scenarios and offers a [manual mode](tasks/demo-09-manual-mode.md), all through the existing `/demo/*` APIs. Root scripts `ui:dev`, `ui:typecheck`, `ui:test`, `ui:build` and `ui:smoke` delegate to that package.
 
-The page needs `WORKFLOW_OPEN`; the [README](../README.md#run-locally) has the setup. Requests use `credentials: include`, POST adds `X-Demo-Session: 1`, and Vite's `changeOrigin: false` keeps the browser's Host and Origin. Reloading sends GETs only. The language choice is the only thing kept in browser storage.
+The [README](../README.md#run-locally) has the setup. Requests use `credentials: include`, POST adds `X-Demo-Session: 1`, and Vite's `changeOrigin: false` keeps the browser's Host and Origin. Reloading sends GETs only. The language choice is the only thing kept in browser storage.
 
 `ui:smoke` uses real Chromium, the production bundle, the Caddyfile CSP and an owned disposable PostgreSQL database. Configure a safe test service first.
 
@@ -551,9 +327,8 @@ There is no real Airflow adapter. Public launch requires System Owner operation.
 
 Calculation types and published dependency definitions must be configured in PostgreSQL before their corresponding workflows can succeed. There is no management API or general-purpose financial seed. The explicit Demo-02A command above prepares only its minimal CAPEX configuration; integration suites install their own fixtures. A fresh migrated database alone is not a preconfigured financial pipeline.
 
-All six historical core migrations are retained, alongside Demo session, Scenario
-and Step ledger migrations. Scenario/ledger down refuses retained data; only empty
-tables are reversible. The v2 migration rejects unsafe/ambiguous legacy data and
+All historical migrations are retained. The removal of Guided scenarios and the admission gate is a
+forward-only migration ([ADR-0022](adr/0022-remove-guided-scenarios-and-cutover.md)). The v2 migration rejects unsafe/ambiguous legacy data and
 unsupported down conversions instead of discarding history. Do not edit applied
 migrations or delete/truncate a persistent developer database to bypass a guard.
 

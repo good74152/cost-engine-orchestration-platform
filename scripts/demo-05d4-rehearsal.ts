@@ -49,7 +49,6 @@ export async function runRehearsal(scenario:Scenario){
  await writeFile(override,overrideText,{mode:0o600});
  const base=['compose','--project-name',project,'--env-file',envFile,'-f',resolve('deploy/compose.yaml'),'-f',override];
  const scriptEnv:NodeJS.ProcessEnv={...env,COMPOSE_PROJECT_NAME:project,DEMO_DEPLOY_ENV:envFile,DEMO_COMPOSE_FILE:resolve('deploy/compose.yaml'),DEMO_COMPOSE_OVERRIDE:override};
- const target=['--database-url-file','/run/secrets/database_url'],approval=['--confirm-owner-acceptance-05d2-05d3',...target];
  const docker=async(args:string[],ok=true,timeout?:number)=>{const r=await command('docker',args,env,timeout);if(ok)check(r.code===0);return r;};
  const compose=(...args:string[])=>docker([...base,...args]);
  const script=async(name:string,args:string[]=[],ok=true)=>{
@@ -69,7 +68,6 @@ export async function runRehearsal(scenario:Scenario){
   const control=await new Promise<number>((done,reject)=>{const p=spawn(process.execPath,['deploy/scripts/control-json.cjs','config'],{stdio:['pipe','ignore','ignore']});p.once('error',reject);p.once('close',c=>done(c??-1));p.stdin.end(r.out);});
   check(control===0);
  };
- const status=async()=>JSON.parse((await script('operate',['cutover-status',...target])).out);
  const health=async()=>{
   const b=await inspect('backend');check(b?.State.Running&&b.State.Health?.Status==='healthy');assertRuntimePorts(b,'backend',port);
   const h=JSON.parse((await compose('exec','-T','backend','node','-e',"const r=await fetch('http://127.0.0.1:3000/health/ready');console.log(JSON.stringify({status:r.status,body:await r.json()}))")).out);
@@ -87,20 +85,8 @@ export async function runRehearsal(scenario:Scenario){
   check(!await inspect('backend')&&!await inspect('web'));
   check(await sql("SELECT count(*) FROM pg_tables WHERE schemaname='public'")==='0');
   await script('operate',['migrate-up']);await script('operate',['seed-six-domain']);
-  const s=await status();check(s.state==='LEGACY_OPEN'&&s.configuration==='LEGACY');
   const files=(await readdir('migrations')).filter(n=>/^\d+_.*\.ts$/.test(n)).map(n=>n.replace(/\.ts$/,''));
   check(JSON.stringify(JSON.parse(await sql('SELECT json_agg(name ORDER BY name) FROM pgmigrations')))===JSON.stringify(files.sort()));await offline();
- });
- if(scenario==='cutover-precondition-failure'){
-  await stage('CUTOVER_WITHOUT_DRAIN_REFUSED',async()=>{
-   const r=await script('operate',['cutover',...target],false);check(r.err.includes('Operator cutover failed'));
-   check((await status()).state==='LEGACY_OPEN');await offline();
-  });
-  return;
- }
- await stage('CONFIGURATION_CUTOVER',async()=>{
-  await script('operate',['admission-drain',...target]);await script('operate',['cutover',...target]);
-  const s=await status();check(s.state==='WORKFLOW_OPEN'&&s.configuration==='WORKFLOW');await offline();
  });
  if(scenario==='backend-startup-failure'){
   await stage('BACKEND_STARTUP_REFUSED',async()=>{
@@ -109,7 +95,7 @@ export async function runRehearsal(scenario:Scenario){
    const r=await script('start',[],false);check(r.err.includes('Backend not ready'));
    const b=await inspect('backend');check(b);
    const logs=await docker(['logs','--tail','20',b.Id]);assertExpectedBackendStartupFailure(b,logs.out+logs.err,await inspect('web'));
-   await script('open-web',approval,false);await closed();check(!await inspect('web'));
+   await script('open-web',[],false);await closed();check(!await inspect('web'));
   });
   return;
  }
@@ -123,7 +109,7 @@ export async function runRehearsal(scenario:Scenario){
   req.on('timeout',()=>req.destroy());req.on('error',()=>reject(Error('Rehearsal HTTPS failed')));req.end(bytes);
  });
  await stage('WEB_ACCEPTANCE',async()=>{
-  await config();await script('open-web',approval);const w=await inspect('web');check(w.State.Running);assertRuntimePorts(w,'web',port);
+  await config();await script('open-web');const w=await inspect('web');check(w.State.Running);assertRuntimePorts(w,'web',port);
   assertRuntimePorts(await inspect('database'),'database',port);assertRuntimePorts(await health(),'backend',port);
   const caFile=join(root,'ca.crt');const until=Date.now()+20000;
   for(;;){const r=await docker(['cp',w.Id+':/data/caddy/pki/authorities/local/root.crt',caFile],false);if(r.code===0)break;check(Date.now()<until);await delay(200);}
@@ -135,7 +121,7 @@ export async function runRehearsal(scenario:Scenario){
   check(value&&/; Secure(?:;|$)/.test(value)&&/; HttpOnly(?:;|$)/.test(value)&&/; SameSite=Strict(?:;|$)/.test(value)&&/; Path=\/(?:;|$)/.test(value));cookie=value.split(';')[0]!;
   check(cookie.startsWith('__Host-ce_demo_session='));check((await http('/demo/sessions','POST',{})).status===200);
   const c=await http('/demo/workflow-templates');check(c.status===200);const catalog=JSON.parse(c.body);
-  check(catalog.admissionState==='WORKFLOW_OPEN'&&catalog.templates.length===4&&catalog.templates.every((v:any)=>v.version===2&&v.availability==='AVAILABLE'));
+  check(catalog.templates.length===1);
   for(const t of catalog.templates)check((await http('/demo/workflow-templates/'+t.id)).status===200);
   check((await http('/demo/workflow-templates','GET',undefined,{origin:'https://evil.invalid'})).status===403);
   for(const p of ['/health','/health/ready','/internal/jobs','/dataset-versions','/calculation-jobs','/executor-callbacks','/migrations','/seed','/debug','/admin','/api/private'])

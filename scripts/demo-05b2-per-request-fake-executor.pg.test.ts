@@ -59,7 +59,7 @@ test('Demo-05B-2: per-request simulation, identity-safe concurrency and unchange
       import('../src/db/pool.js'),import('../src/app.js'),import('../src/modules/demo-session/demo-runtime.js'),import('./seed-demo-six-domain-configuration.js')]);
     db=pool; pool.on('connect',c=>ends.push(new Promise<void>(done=>c.once('end',done))));
     assert.equal((await pool.query('SELECT current_database() AS name')).rows[0].name,name);
-    assert.equal((await pool.query('SELECT count(*)::int AS n FROM pgmigrations')).rows[0].n,14);
+    assert.equal((await pool.query('SELECT count(*)::int AS n FROM pgmigrations')).rows[0].n,15);
     await seedDemoSixDomainConfiguration(pool);
     const resetHooks:ResetOptions={log(){}}; const assigned:FakeExecutor[]=[];
     const runtime=new DemoRuntime(pool,'test',{createExecutor:()=>assigned.shift()??new FakeExecutor()},resetHooks);
@@ -71,7 +71,7 @@ test('Demo-05B-2: per-request simulation, identity-safe concurrency and unchange
       const cookie=String(r.headers['set-cookie']).split(';')[0]!;
       return {cookie,context:await runtime.sessions.authenticate(cookie,'ce_demo_session')};
     };
-    const create=(s:Session,year=2026,domain='CAPEX')=>post('/demo/dataset-versions',s,{domain,fiscalYear:year,period:'Q4'});
+    const create=(s:Session,year=2026,domain='FAB_COST')=>post('/demo/dataset-versions',s,{domain,fiscalYear:year,period:'Q4'});
     const reset=(s:Session)=>post('/demo/sessions/reset',s);
     const idle=async()=>{
       const deadline=Date.now()+3000;
@@ -85,7 +85,7 @@ test('Demo-05B-2: per-request simulation, identity-safe concurrency and unchange
     const run=(s:Session,job:string,simulation?:FakeRunSimulation)=>post(`/demo/calculation-jobs/${job}/run`,s,simulation?{simulation}:{});
     const reconcile=(s:Session,job:string)=>post(`/demo/calculation-jobs/${job}/reconcile`,s);
     const accept=(completion:'RUNNING'|'SUCCEEDED'|'FAILED'='RUNNING'):FakeRunSimulation=>({dispatch:'ACCEPT',completion});
-    const dataset=async(s:Session,year=2026,domain='CAPEX')=>{const r=await create(s,year,domain);assert.equal(r.statusCode,201,r.body);return r.json<CreateDatasetVersionResult>();};
+    const dataset=async(s:Session,year=2026,domain='FAB_COST')=>{const r=await create(s,year,domain);assert.equal(r.statusCode,201,r.body);return r.json<CreateDatasetVersionResult>();};
     const fixture=async(year=2026)=>{const s=await session();const data=await dataset(s,year);const fake=new ControlledFake();assigned.push(fake);
       assert.equal(await runtime.executors.forSession(s.context),fake);return {s,data,job:data.calculationJobs[0]!.jobId,fake};};
     const states=async(job:string)=>(await pool.query(`SELECT j.status AS job,a.status AS attempt,a.id,a.attempt_number
@@ -126,7 +126,7 @@ test('Demo-05B-2: per-request simulation, identity-safe concurrency and unchange
       await assertStates(job,[[completion,completion==='RUNNING'?'ACCEPTED':completion]]);
     });
     await t.test('different jobs really dispatch concurrently on one Session fake with independent completion and one immutable snapshot',async()=>{
-      const s=await session();await finishDataset(s,await dataset(s));const data=await dataset(s,2026,'DPR');
+      const s=await session();await finishDataset(s,await dataset(s));const data=await dataset(s,2026,'ONE_STD_COST');
       const fake=await runtime.executors.forSession(s.context);assert.ok(fake instanceof FakeExecutor);
       // Install barriers on the existing instance, without replacing the registry entry.
       const original=fake.dispatchWithSimulation.bind(fake);const entered=barrier();const release=barrier();let calls=0;
@@ -146,7 +146,7 @@ test('Demo-05B-2: per-request simulation, identity-safe concurrency and unchange
       await assertStates(jobs[0]!,[['FAILED','FAILED']]);await assertStates(jobs[1]!,[['SUCCEEDED','SUCCEEDED']]);
       assert.deepEqual(await frozen(data.datasetVersionId),frozenBefore);assert.equal(await runtime.executors.forSession(s.context),fake);
       const commands=fake.getDispatchHistory().filter(c=>c.datasetVersionId===data.datasetVersionId);
-      assert.equal(new Set(commands.map(c=>c.airflowDagRunId)).size,2);assert.ok(commands.every(c=>c.upstreamDatasetVersions.length===1&&c.upstreamDatasetVersions[0]!.domain==='CAPEX'));
+      assert.equal(new Set(commands.map(c=>c.airflowDagRunId)).size,2);assert.ok(commands.every(c=>c.upstreamDatasetVersions.length===1&&c.upstreamDatasetVersions[0]!.domain==='FAB_COST'));
       const upstream=commands[0]!.upstreamDatasetVersions[0]!.datasetVersionId;
       await finishDataset(s,await dataset(s));const retried=result(await run(s,jobs[0]!,accept('SUCCEEDED')));assert.equal(retried.attemptNumber,2);
       assert.equal(fake.getDispatchHistory().at(-1)!.upstreamDatasetVersions[0]!.datasetVersionId,upstream);
@@ -234,7 +234,7 @@ test('Demo-05B-2: per-request simulation, identity-safe concurrency and unchange
       assert.deepEqual(await frozen(data.datasetVersionId),before);
     });
     await t.test('concurrent first Run allocation retains exactly one Session FakeExecutor, not one per request',async()=>{
-      const s=await session();const a=await dataset(s);const b=await dataset(s,2026,'FAB_COST');const before=runtime.executors.size;
+      const s=await session();const a=await dataset(s);const b=await dataset(s,2027);const before=runtime.executors.size;
       const fake=new ControlledFake();assigned.push(fake);const entered=barrier();const release=barrier();let calls=0;
       fake.after=async()=>{if(++calls===2)entered.release();await release.promise;};
       const requests=[run(s,a.calculationJobs[0]!.jobId,accept('FAILED')),run(s,b.calculationJobs[0]!.jobId,accept('SUCCEEDED'))];
@@ -371,14 +371,7 @@ test('Demo-05B-2: per-request simulation, identity-safe concurrency and unchange
       }finally{release.release();await pending;}
       result(await pending);assert.equal(a.fake.getExternalExecutions()[0]!.state,'FAILED');
     });
-    for(const type of ['HAPPY_PATH','FAILURE_RETRY','LOST_RESPONSE_RECOVERY']) await t.test(`${type}: unchanged exclusive Guided flow rejects manual scoped Run`,async()=>{
-      const s=await session();const created=await post('/demo/scenarios',s,{scenarioType:type});assert.equal(created.statusCode,201,created.body);const id=created.json().scenarioId;
-      error(await run(s,randomUUID(),accept()),409,'DEMO_SCENARIO_MODE_CONFLICT');
-      for(let step=1;step<=(type==='FAILURE_RETRY'?9:6);step++){const body={expectedStep:step,requestId:randomUUID()};let r=await post(`/demo/scenarios/${id}/next`,s,body);
-        if(type==='LOST_RESPONSE_RECOVERY'&&step===2){assert.equal(r.statusCode,202,r.body);r=await post(`/demo/scenarios/${id}/next`,s,body);}assert.equal(r.statusCode,200,r.body);}
-      assert.equal((await pool.query('SELECT status FROM demo_scenario_instances WHERE id=$1',[id])).rows[0].status,'COMPLETED');
-    });
-    await idle();console.info('DEMO_05B2_EVIDENCE',JSON.stringify({database:name,migrations:14,realPostgres:true,barriers:true,parallelLimit:4,noOpenTransactionDuringExecutor:true}));
+    await idle();console.info('DEMO_05B2_EVIDENCE',JSON.stringify({database:name,migrations:15,realPostgres:true,barriers:true,parallelLimit:4,noOpenTransactionDuringExecutor:true}));
   }finally{
     try{await app?.close();if(db){await db.end();await Promise.all(ends);}}
     finally{

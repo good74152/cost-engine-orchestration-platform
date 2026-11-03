@@ -7,8 +7,6 @@ import { setImmediate } from 'node:timers/promises';
 import { Client, type Pool } from 'pg';
 import { runner } from 'node-pg-migrate';
 import type { FastifyInstance } from 'fastify';
-import { DemoAdmissionOperator } from '../src/modules/demo-admission/demo-admission.operator.js';
-import { DemoCutoverOperator } from '../src/modules/demo-cutover/demo-cutover.operator.js';
 
 const source = process.env.TEST_DATABASE_URL;
 if (!source) throw new Error('Demo-06 requires an explicit disposable TEST_DATABASE_URL');
@@ -36,7 +34,6 @@ test('Demo-06: read APIs expose frozen input versions and nothing else', { timeo
     ]);
     db = pool; pool.on('connect', c => ends.push(new Promise<void>(done => c.once('end', done))));
     await seedDemoSixDomainConfiguration(pool);
-    await new DemoAdmissionOperator(pool).drain(); await new DemoCutoverOperator(pool).cutover();
     const runtime = new DemoRuntime(pool, 'test', {}, { log() {} }); await runtime.reset.startServer();
     app = await buildApp({ appMode: 'demo', demoRuntime: runtime, nodeEnvironment: 'test', logger: false, demoSession: { origin: 'https://demo.test' } });
     const server = app;

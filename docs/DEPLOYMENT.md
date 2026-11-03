@@ -91,194 +91,80 @@ From the reviewed checkout on the authorized VPS:
 export DEMO_DEPLOY_ENV=/opt/cost-engine-demo/compose.env
 docker compose --env-file "$DEMO_DEPLOY_ENV" -f deploy/compose.yaml config --quiet
 sh deploy/scripts/deploy.sh
-```
-
-This closes Web, builds backend/web/operator images, drains/stops the
-named backend and starts only DB. It never migrates, seeds, deletes data or opens
-HTTP. First installation initializes a named volume with explicit credentials.
-PG18 mounts `/var/lib/postgresql`, with PGDATA `/var/lib/postgresql/18/docker`.
-Do not reuse the old root developer Compose data mount. See the
-[official image](https://hub.docker.com/_/postgres) and
-[Docker persistence guide](https://docs.docker.com/guides/postgresql/immediate-setup-and-data-persistence/).
-
-Then explicitly authorize:
-
-```sh
 sh deploy/scripts/operate.sh migrate-up
 sh deploy/scripts/operate.sh seed-six-domain
-```
-
-These are separate explicit commands, not an automatic initialization pipeline.
-Current public Workflow deployment needs separately reviewed offline drain/cutover
-below. Never execute a Legacy seed against WORKFLOW_OPEN.
-
-Operator tools refuse a running named backend. Seed requires separate explicit
-DEMO_SEED_DATABASE_URL_FILE (operator profile mounts the chosen target), no
-DATABASE_URL fallback. It preserves the exact idempotent minimal CAPEX seed and
-rejects incompatible published configuration instead of rewriting it. No HTTP
-tools or automatic startup migrations/seed/down/wipe.
-
-Modifying commands also require Web stopped and automatic restart disabled for
-stopped writers/entrypoints. deploy.sh prepares this state. Read-only status may
-run with Backend online; --no-deps avoids implicitly starting other services.
-
-```sh
-sh deploy/scripts/operate.sh admission-status --database-url-file /run/secrets/database_url
-# Only after proving offline and quiescent:
-sh deploy/scripts/operate.sh admission-drain --database-url-file /run/secrets/database_url
-sh deploy/scripts/operate.sh cutover-status --database-url-file /run/secrets/database_url
-# A separate reviewed invocation; never automatically retried:
-sh deploy/scripts/operate.sh cutover --database-url-file /run/secrets/database_url
-```
-
-Admission/Cutover require that explicit shared Demo target file; no DATABASE_URL
-fallback. Existing Unknown COMMIT semantics remain: preserve closure, confirm
-durable state independently, and never assume rollback or retry automatically.
-
-The optional Demo-05A configuration uses the same stopped-backend operator:
-`sh deploy/scripts/operate.sh seed-six-domain`. Run it explicitly after migrations
-and before `start.sh`; it can initialize all six domains or extend the existing
-guided CAPEX configuration in one transaction. `seed` retains its original minimal
-behavior. See [type codes, dependencies and conflict safety](tasks/demo-05a-six-domain-configuration.md).
-
-Startup validates profile → DB → exact migration inventory → read-only seed
-compatibility → runtime → previous-session invalidation → listen → ready.
-Incomplete startup fails closed. `/health/ready` checks initialization and live
-DB access, returns 503 when unavailable, and exposes status/version only. Process
-alive alone is not ready. Only the backend loopback GET probe can reach readiness.
-Caddy returns 404 for /health and /health/* without proxying them, even if the
-backend is stopped. The public profile independently rejects non-loopback health
-requests before PostgreSQL access; forwarded headers cannot grant probe access.
-Use Docker's health status or an authorized loopback probe for DB monitoring.
-
-## Stop → Deploy → Start
-
-One fixed host-wide backend container identity rejects scaling/overlapping Compose
-projects using this configuration. Do not override the name, use `compose run
-backend`, start Core/another runtime or allow external/config writers against
-this DB. This is an operational boundary, not distributed locking. Only one owner
-deployment operation at a time. No rolling deployment or accepting replica overlap.
-
-Stop Caddy first, stop Node admission and drain Fastify. SIGTERM stops maintenance,
-waits for admitted requests/cleanup, then closes the pool; Docker allows 60s.
-Forced process death does not mean dispatch/step completion. New startup revokes
-old sessions before readiness because fake memory was lost; UI 401 handling shows
-expiry. Brief maintenance downtime is deliberate. Start preserves a ready
-same-version Backend process, starts DB/Backend only and leaves Web closed.
-Wrong running versions are refused rather than replaced. Never remove volumes.
-
-```sh
 sh deploy/scripts/start.sh
-sh deploy/scripts/open-web.sh --confirm-owner-acceptance-05d2-05d3 --database-url-file /run/secrets/database_url
-# If public HTTPS/ACME/flow acceptance fails, IMMEDIATELY close the entry:
-sh deploy/scripts/close-web.sh
+sh deploy/scripts/open-web.sh
 ```
 
-Approval covers reviewed artifacts/security/host/DNS/firewall/secrets, quiescence,
-cutover, readiness, version and immediate closure. Caddy may accept
-traffic immediately. Open checks live DB, unique healthy Backend, configured Image
-Tag/container environment/loopback readiness version, then the existing Cutover
-Status Operator. Complete JSON must confirm WORKFLOW_OPEN + WORKFLOW; exit code or
-matching text is insufficient. No financial configuration validator is duplicated.
-Failed startup attempts explicit closure and retains DB/configuration. Verify public
-HTTPS/ACME after authorized opening and close immediately if checks fail.
+| Script | What it does |
+|---|---|
+| `deploy.sh` | Closes Web, builds images, stops the Backend and starts only the database. Never migrates, seeds or deletes data. |
+| `operate.sh` | Runs one explicit operator command. Refuses while the Backend or Web runs. |
+| `start.sh` | Starts the database and Backend, and leaves Web closed. Keeps a ready Backend of the same version running and refuses a wrong version. |
+| `open-web.sh` | Checks the database and a ready Backend of the configured version, then starts Caddy. |
+| `close-web.sh` | Stops Caddy. Idempotent, and keeps the Backend, database and data. |
 
-Web uses public-web profile and restart: no; Backend also uses restart: no. Default
-Compose selects DB/Backend only; daemon restart cannot resume Backend/public Web.
-Use explicit start/approved open afterward. Close is idempotent, confirms project
-Web stopped and retains Backend/DB/data/Session/Gate/configuration/volumes. External
-CDN/proxies/other ingress are not controlled. If Docker cannot confirm closure,
-use the Owner's external ingress plan rather than claiming the entry is closed.
+If public HTTPS or a flow check fails after opening, run `close-web.sh` right away.
 
-Controls use an absolute readable DEMO_DEPLOY_ENV and absolute checked-in Compose
-file. Reviewed alternatives use DEMO_COMPOSE_FILE and optional DEMO_COMPOSE_OVERRIDE;
-keep the production host-wide Backend identity. Effective configuration is checked
-as JSON without printing credentials. JSON parsing uses host Node if available or
-the same Node 24 image in an unprivileged read-only network-none parser container.
-Docker-only hosts need no extra installation. One Owner operation at a time;
-arbitrary Docker administrators/external writers remain outside this boundary.
-See [complete safety contract/evidence](tasks/demo-05d1-deployment-safety.md).
+Startup checks profile → database → exact migration inventory → exact Demo configuration → runtime →
+previous-session invalidation → listen → ready. Incomplete startup fails closed. `/health/ready` checks
+initialization and live database access, and exposes status and version only. Only the Backend's loopback
+probe can reach it: Caddy returns 404 for `/health` and `/health/*`.
+
+PostgreSQL 18 mounts `/var/lib/postgresql`, with PGDATA `/var/lib/postgresql/18/docker`. Don't reuse the root
+developer Compose data mount. See the [official image](https://hub.docker.com/_/postgres).
+
+## One writer, no automatic restart
+
+A fixed host-wide Backend container name rejects scaling and overlapping Compose projects. Don't override it,
+use `compose run backend`, or let another writer touch this database. This is an operational boundary, not
+distributed locking. There is no rolling deployment.
+
+Web and Backend use `restart: no`, so a daemon restart can't reopen the public entrance. Run `start.sh` and
+`open-web.sh` again afterward. External CDNs, proxies and other ingress aren't controlled by these scripts.
+
+To stop: Caddy first, then the Backend. SIGTERM stops maintenance, waits for admitted requests and closes the
+pool; Docker allows 60 seconds. New startup revokes old sessions because fake memory was lost, and the page
+shows them as expired. Never remove volumes.
+
+The scripts need an absolute readable `DEMO_DEPLOY_ENV` and check the effective Compose configuration as JSON
+without printing credentials. They use host Node if present, or the Node 24 image in a read-only, network-less
+parser container. See the [safety contract](tasks/demo-05d1-deployment-safety.md).
 
 ## Maintenance and retention
 
-The bounded non-overlapping in-process timer calls existing owner cleanup and
-unknown-commit recovery. It cleans only inactive owner graphs and releases fakes
-after confirmed cleanup. Busy operations block cleanup; an idle DB RUNNING job
-follows existing Reset semantics. Failures remain isolated/logged; uncertain
-reservations retain blocking and identity history. No reconciliation/dispatch worker.
+A bounded in-process timer cleans inactive owner graphs and releases fakes after confirmed cleanup. Busy
+operations block cleanup. There's no reconciliation or dispatch worker.
 
-ADR-0010 retains Session history to prevent identity reuse. Those rows stay.
-The retained ceiling bounds total growth and eventually stops new admissions.
-Monitor it and request reviewed retention/archival work before exhaustion; do not
-purge history or increase limits indefinitely. Foreign-FK cleanup fails closed.
+[ADR-0010](adr/0010-demo-session-reset-and-recovery.md) keeps session rows to prevent identity reuse. The retained
+ceiling bounds growth and eventually stops new sessions. Monitor it.
 
-## Rollback
+## Rollback and data
 
-Retain previous immutable backend/web/operator images and env files. Stop traffic
-and backend, check previous-image schema compatibility, select that image
-version and start one backend. Exact startup inventory rejects incompatible schema;
-do not bypass it. Demo-04 adds no migrations, so its own image rollback needs no
-schema down. Later schema changes need individual reviewed down guards. Never
-auto-down, drop DB, truncate, remove volume or delete Dataset/Session history.
-Unsafe down is refused; choose a reviewed forward fix.
+Keep the previous images and env files. Stop traffic and the Backend, check that the previous image matches the
+schema, then start one Backend. The startup inventory check rejects a mismatch, so don't bypass it. Migrations aren't
+run down automatically; choose a reviewed forward fix.
+
+The demo keeps no backup. Its data is disposable anonymous sessions, and a lost database is rebuilt from migrations and
+the seed ([ADR-0021](adr/0021-remove-recovery-tooling.md)).
 
 ## Monitoring and release checklist
 
-Monitor internal readiness/DB/container health/version, RAM/disk,
-active/retained sessions, cleanup backlog, rate/executor limits and reset/startup
-failures. Logs contain event names/durable IDs/counts, not request headers or SQL.
+Watch readiness, container health and version, RAM and disk, active and retained sessions, and rate and executor limits.
+Logs contain event names, durable IDs and counts, not request headers or SQL.
 
-- Review PR and immutable image identity; run all build/regression gates.
-- Confirm one backend, no external writers, no public DB/Node bindings.
-- Verify secrets/permissions, origin and DNS/ACME.
-- Stop admissions/backend before explicit migration/seed; start and check readiness.
-- In WORKFLOW_OPEN run all four scenarios and manual mode; verify reads, Reset and restart.
-- Record actual public VPS/DNS/TLS evidence separately; no automatic deploy on merge.
+- Review the PR and image identity, and run the build and test gates.
+- Confirm one Backend, no external writers, and no public database or Node bindings.
+- Verify secrets, permissions, origin and DNS/ACME.
+- After opening, run all four scenarios and manual mode over HTTPS, then Reset.
+- There's no automatic deploy on merge.
 
-CI uses disposable PostgreSQL and isolated local HTTPS containers, never public
-credentials/targets. [Executed verification](verification/demo-04-deployment.md).
-Root and frontend dependency audits reject high-severity findings. Use the
-reviewed lockfiles with npm ci; do not replace them with an unreviewed upgrade
-or grant install-script approvals merely to suppress an npm warning.
-
-## Legacy admission drain installation
-
-Before installing Demo-05C-2 on an existing deployment, follow the
-[first-installation and rollback runbook](tasks/demo-05c2-legacy-admission-drain.md#deployment-runbook).
-Do not restart a Backend with active Sessions to install the Gate: startup revokes
-those credentials and loses process-local Fake state. Suspend new admission via a
-verified replay-aware entrypoint, preserve existing operations and Backend cookie
-validation, confirm actual quiescence, then update/migrate and explicitly drain.
-Keep admission closed when rolling back to a Gate-unaware binary. Configuration
-cutover is deferred to Demo-05C-3 and cannot be authorized by a SQL count alone.
-
-## Workflow configuration cutover capability
-
-Demo-05C-3A provides status/cutover only; applying its migration does not cut over.
-Use the [offline operator and failed-deployment runbook](tasks/demo-05c3a-configuration-cutover.md#offline-runbook-and-failed-deployment-recovery).
-Confirm DRAINING, stop Backend/ingress/requests/writers and resolve retained work before explicitly choosing the intended Demo DB. The new
-operator accepts DEMO_CUTOVER_DATABASE_URL or FILE only; production commands are
-cutover-status/cutover with the explicitly supplied target. No URL fallback.
-
-WORKFLOW_OPEN is irreversible and requires a compatible new Backend with target
-configuration validation. Do not restart an old image, run legacy seeds, auto-down
-or delete v1 to recover a failed deployment. Keep traffic closed, confirm durable
-state and choose a reviewed forward fix. SQL counts do not prove process
-quiescence. No actual public cutover is performed by this implementation.
-
-## Page deployment and recovery
-
-The [page](adr/0020-one-page-demo-ui.md) reads Workflow availability from the Backend Gate. Ship compatible Backend and Frontend images together; no Frontend setting can open Workflow. Outside WORKFLOW_OPEN, scenarios stop with a dialog explaining the missing configuration. Deployment still requires the offline sequence above.
-
-Browser refresh rereads durable state on the current running Backend. Backend restart still loses process-local Fake state and invalidates old Sessions; it is not browser recovery. Keep traffic closed if deployment or cutover fails, follow the reviewed forward-fix or restore plan, and never reopen an old binary. `npm run ui:smoke` must not target live Demo data.
+CI uses disposable PostgreSQL and isolated local HTTPS containers, never public credentials or targets. Dependency audits
+reject high-severity findings. Use the lockfiles with `npm ci`.
 
 ## Fresh-installation deployment rehearsal
 
-The `Fresh installation deployment rehearsal` workflow runs the real deployment scripts on a
-fresh GitHub-hosted machine, once per scenario: full install through the six-domain workflow over
-HTTPS, refused Backend startup, and refused cutover without drain. Secrets are random and
-disposable. Web binds to loopback only, with a local test CA and no public DNS or ACME. Nothing is
-kept afterward, because the machine is discarded.
-
-The demo keeps no backup. Its data is disposable anonymous sessions, and a lost database is rebuilt
-from migrations and the seed. See [ADR-0021](adr/0021-remove-recovery-tooling.md).
+The `Fresh installation deployment rehearsal` workflow runs the real deployment scripts on a fresh GitHub-hosted machine, once per
+scenario: full install through the six-domain workflow over HTTPS, and refused Backend startup. Secrets are random and disposable.
+Web binds to loopback only, with a local test CA and no public DNS or ACME. The machine is discarded afterward.

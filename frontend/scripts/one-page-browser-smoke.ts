@@ -13,8 +13,6 @@ import {runner} from 'node-pg-migrate';
 import {chromium,type Browser,type Page} from 'playwright';
 import {build} from 'vite';
 import type {FastifyInstance} from 'fastify';
-import {DemoAdmissionOperator} from '../../src/modules/demo-admission/demo-admission.operator.js';
-import {DemoCutoverOperator} from '../../src/modules/demo-cutover/demo-cutover.operator.js';
 import {DEFAULT_LINKS} from '../src/scenarios/labels.js';
 
 const source=process.env.TEST_DATABASE_URL;
@@ -56,7 +54,7 @@ test('One-page demo: real Chromium, production bundle, CSP and PostgreSQL',{time
   const [{pool},{buildApp},{DemoRuntime},{seedDemoSixDomainConfiguration}]=await Promise.all([
    import('../../src/db/pool.js'),import('../../src/app.js'),import('../../src/modules/demo-session/demo-runtime.js'),import('../../scripts/seed-demo-six-domain-configuration.js')]);
   db=pool;pool.on('connect',c=>ends.push(new Promise<void>(done=>c.once('end',done))));
-  await seedDemoSixDomainConfiguration(pool);await new DemoAdmissionOperator(pool).drain();await new DemoCutoverOperator(pool).cutover();
+  await seedDemoSixDomainConfiguration(pool);
   const runtime=new DemoRuntime(pool,'test',{},{log(){}});await runtime.reset.startServer();
   app=await buildApp({appMode:'demo',demoRuntime:runtime,nodeEnvironment:'test',logger:false});
   const posts:string[]=[];app.addHook('onRequest',async req=>{if(req.method==='POST')posts.push(req.url);});

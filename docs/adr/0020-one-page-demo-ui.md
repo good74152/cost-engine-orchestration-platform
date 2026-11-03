@@ -15,7 +15,7 @@ and frozen inputs and run identity were not visible. A recruiter will not get th
 ## Decision
 
 1. **One page.** Replace the Dashboard, Workflow Explorer, Guided, Free Exploration, Resources and About
-   pages with one page and no client routing. Backend Guided APIs and their tests stay.
+   pages with one page and no client routing. [ADR-0022](0022-remove-guided-scenarios-and-cutover.md) later removed the backend Guided APIs.
 2. **Scenario playback in the browser.** Four scenarios play explicit calls to the existing `/demo/*` APIs,
    one click at a time or all at once. There is no new endpoint, worker or server-side state.
    This replaces the Demo-05C-3C rule that the UI never sends more than one command per click.
@@ -63,7 +63,6 @@ HTTP 409 in the conflict scenario is the expected result, so it is reported as a
 - A browser cannot prove requests overlapped. The conflict scenario says so and links to the PostgreSQL test.
 - The session gate admits four Parallel requests, so that scenario sends four, not the test's twenty.
 - Reloading during playback keeps saved data but ends the run. An open attempt stays visible as DISPATCHING.
-- The page needs `WORKFLOW_OPEN`. Other admission states get a dialog explaining the missing configuration.
 - Scenarios stay scripted. [Demo-09](../tasks/demo-09-manual-mode.md) adds a manual mode for sending commands by hand, using the same APIs and holding no lifecycle rule in the page.
 - Updating PrimeReact means re-checking the CSP hashes. The browser test reports any mismatch.
 
