@@ -1,5 +1,6 @@
 import {ApiClient,ApiError} from '../api/client';
 import type {Attempt,CreatedDataset,Dataset,Job,RunResult} from '../api/types';
+import type {Messages} from '../i18n/messages';
 
 /** One command the page sent. Reads are omitted: they are not what a scenario demonstrates. */
 export interface ApiCall {path:string;status:number;code?:string;detail?:string}
@@ -50,4 +51,4 @@ export interface StepResult {message:string;focusSeriesId?:string;pause?:PauseRe
 export interface ScenarioStep {title:string;run:(api:ScenarioApi)=>Promise<StepResult>}
 export interface ScenarioSummary {title:string;facts:string[];note?:string;link?:{label:string;href:string}}
 export interface ScenarioPlan {steps:ScenarioStep[];summary:(api:ScenarioApi)=>Promise<ScenarioSummary>}
-export interface ScenarioDefinition {id:string;title:string;description:string;build:()=>ScenarioPlan}
+export interface ScenarioDefinition {id:string;title:string;build:(messages:Messages)=>ScenarioPlan}
