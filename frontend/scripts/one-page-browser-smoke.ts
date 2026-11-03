@@ -93,8 +93,8 @@ test('One-page demo: real Chromium, production bundle, CSP and PostgreSQL',{time
    assert.deepEqual(problems,[]);await shot('01-first-visit');
   });
   let company='';
-  await t.test('Normal close publishes all six reports, and the map matches the backend template',async()=>{
-   await page.getByRole('button',{name:'Run Normal close'}).click();
+  await t.test('Happy path publishes all six reports, and the map matches the backend template',async()=>{
+   await page.getByRole('button',{name:'Run Happy path'}).click();
    const done=dialog('All six reports published');await done.waitFor({timeout:40_000});
    const text=await done.innerText();assert.match(text,/6 reports published/);assert.match(text,/10 jobs succeeded/);assert.match(text,/5 reports locked the input/);
    company=(await session()).companyCode;
@@ -136,7 +136,7 @@ test('One-page demo: real Chromium, production bundle, CSP and PostgreSQL',{time
    await page.getByRole('button',{name:'Step through Failed job and retry'}).click();
    for(let clicks=0;clicks<6;clicks++){const next=page.getByRole('button',{name:/^Next: /});await next.waitFor();if(clicks===3)await shot('05-step-through');await next.click();}
    const done=dialog('Retried, with the failure on record');await done.waitFor();
-   assert.match(await done.innerText(),/try 1 FAILED, try 2 SUCCEEDED/);assert.match(await done.innerText(),/Fab cost v1\. The newest is v2/);
+   assert.match(await done.innerText(),/try 1 FAILED, try 2 SUCCEEDED/);assert.match(await done.innerText(),/version 1\. The newest is version 2/);
    const rows=await attempts(company,'CAPEX','Q3');const failed=rows.filter(a=>a.status==='FAILED');
    assert.equal(failed.length,1);assert.equal(rows.filter(a=>a.job===failed[0]!.job).length,2);
    assert.equal(new Set(rows.map(a=>a.airflow_dag_run_id)).size,rows.length,'a retry must use a new run ID');

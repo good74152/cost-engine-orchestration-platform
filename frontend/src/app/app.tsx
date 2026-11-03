@@ -6,11 +6,17 @@ import {REPOSITORY,scenarios} from '../scenarios/scenarios';
 import {DemoDialog} from '../ui/demo-dialog';
 import {Workspace} from '../ui/workspace';
 
+const DATA_MODEL=[
+ {name:'Report',code:'dataset_series',text:'One report for one year/period.'},
+ {name:'Version',code:'dataset_version',text:'One build of the report. This is what gets published.'},
+ {name:'Job',code:'calculation_job',text:'One calculation the version needs.'},
+ {name:'Try',code:'execution_attempt',text:'One run of a job. A retry adds a new try.'},
+];
 const THEN_AND_NOW=[
  {problem:'A job looked stuck after a status message was lost.',
   then:'A database rule stopped duplicate runs, and a sync tool fixed stuck jobs.',
   now:'The job is marked “unknown”, and the system checks the same run again.',scenario:'lost-reply'},
- {problem:'A step failed in a long cost workflow.',
+ {problem:'A step failed in a long workflow.',
   then:'Someone reran it by hand in Airflow.',
   now:'A retry starts on the same input, and the failure stays on record.',scenario:'failed-job'},
 ];
@@ -48,6 +54,11 @@ export function App(){
     <h1>Async Workflow for Financial Report Calculation</h1>
     <p className="lead">How a backend stays in sync with external workflows and jobs, including lost responses, failure recovery and conflicting requests.</p>
     <p className="truth">The tracking, database and recovery are real. The jobs are simulated.</p>
+   </section>
+   <section className="model" aria-labelledby="model-title">
+    <h2 id="model-title">How the data is organized</h2>
+    <ol>{DATA_MODEL.map(item=><li key={item.code}><strong>{item.name}</strong><small>{item.code}</small><p>{item.text}</p></li>)}</ol>
+    <p className="model-relation">One report has many versions, one version has many jobs, and one job has many tries.</p>
    </section>
    <section className="demo" aria-label="Interactive demo">
     <aside className="scenarios" aria-labelledby="scenarios-title">

@@ -5,13 +5,12 @@ import {domainLabel,PUBLISH_ORDER} from './labels';
 
 export const REPOSITORY='https://github.com/good74152/cost-engine-orchestration-platform';
 const plural=(n:number,word:string)=>n+' '+word+(n===1?'':'s');
-const CAPEX=domainLabel('CAPEX');const FAB=domainLabel('FAB_COST');
 const publishInput:ScenarioStep={title:'Publish the input report',run:async api=>{
  const dataset=await api.publish('FAB_COST');
- return {message:FAB+' v'+dataset.version+' is published, so '+CAPEX+' can use it.',focusSeriesId:dataset.datasetSeriesId};
+ return {message:'The input report is published, so the next report can use it.',focusSeriesId:dataset.datasetSeriesId};
 }};
 
-function normalClose():ScenarioPlan{
+function happyPath():ScenarioPlan{
  const published:CreatedDataset[]=[];
  return {steps:PUBLISH_ORDER.map(domain=>({title:'Publish '+domainLabel(domain),run:async api=>{
   const dataset=await api.publish(domain);published.push(dataset);
@@ -35,7 +34,7 @@ function lostReply():ScenarioPlan{
  const jobIds=()=>dataset.calculationJobs.map(j=>j.jobId);const attemptIds=new Map<string,string>();
  return {steps:[
   publishInput,
-  {title:'Create the '+CAPEX+' report',run:async api=>{
+  {title:'Create the report',run:async api=>{
    dataset=await api.create('CAPEX');
    return {message:'Version '+dataset.version+' is a draft with '+plural(dataset.calculationJobs.length,'job')+' waiting.',focusSeriesId:dataset.datasetSeriesId};
   }},
@@ -73,7 +72,7 @@ function lostReply():ScenarioPlan{
   return {title:'No duplicate run',facts:[
    'This job has '+plural(attempts.length,'try').replace('trys','tries')+'.',
    'The run ID stayed the same: '+first.airflowDagRunId+'.',
-   CAPEX+' v'+saved.version+' is '+saved.datasetStatus+'.',
+   'Version '+saved.version+' of the report is '+saved.datasetStatus+'.',
   ],note:'This also needs the job system to honor the run ID. The simulator here does, and a real one must too.'};
  }};
 }
@@ -83,7 +82,7 @@ function failedJob():ScenarioPlan{
  const jobIds=()=>dataset.calculationJobs.map(j=>j.jobId);
  return {steps:[
   publishInput,
-  {title:'Start '+CAPEX,run:async api=>{
+  {title:'Start the report’s jobs',run:async api=>{
    dataset=await api.create('CAPEX');
    for(const id of jobIds()){const {data}=await api.run(id);current.set(id,data.executionAttemptId);}
    return {message:'The input is now locked. '+plural(jobIds().length,'job')+' running.',focusSeriesId:dataset.datasetSeriesId};
@@ -94,7 +93,7 @@ function failedJob():ScenarioPlan{
   }},
   {title:'A newer input appears',run:async api=>{
    const upstream=await api.publish('FAB_COST');newest=upstream.version;
-   return {message:FAB+' v'+upstream.version+' is out. This report keeps the input it locked, so its jobs can’t end up on different data.'};
+   return {message:'Version '+upstream.version+' of the input report is out. This report keeps the version it locked, so its jobs can’t end up on different data.'};
   }},
   {title:'Retry the failed job',run:async api=>{
    const {data}=await api.run(failed);
@@ -113,11 +112,11 @@ function failedJob():ScenarioPlan{
   }},
  ],summary:async api=>{
   const attempts=await api.attempts(failed);const saved=await api.dataset(dataset.datasetVersionId);
-  const inputs=saved.frozenInputs.map(i=>domainLabel(i.domain)+' v'+i.version).join(', ');
+  const inputs=saved.frozenInputs.map(i=>'version '+i.version).join(', ');
   return {title:'Retried, with the failure on record',facts:[
    'The failed job: '+attempts.map(a=>'try '+a.attemptNumber+' '+a.attemptStatus).join(', ')+'.',
-   'Input used: '+inputs+'. The newest is v'+newest+'.',
-   CAPEX+' v'+saved.version+' is '+saved.datasetStatus+'.',
+   'Input used: '+inputs+'. The newest is version '+newest+'.',
+   'Version '+saved.version+' of the report is '+saved.datasetStatus+'.',
   ]};
  }};
 }
@@ -141,14 +140,14 @@ function conflictingRequests():ScenarioPlan{
    catch(error){
     if(!(error instanceof ApiError&&error.code==='DEPENDENCY_NOT_READY'))throw error;
     blocked=(await api.attempts(jobId)).length;
-    return {message:'Blocked with HTTP 409 because '+FAB+' isn’t published. Tries created: '+blocked+'.'};
+    return {message:'Blocked with HTTP 409 because the input report isn’t published. Tries created: '+blocked+'.'};
    }
-   expectThat(false,'The job started even though '+FAB+' isn’t published.');
+   expectThat(false,'The job started even though the input report isn’t published.');
   }},
   {title:'Publish the input and start again',run:async api=>{
-   const upstream=await api.publish('FAB_COST');
+   await api.publish('FAB_COST');
    for(const {jobId} of dataset.calculationJobs)await api.run(jobId);
-   return {message:FAB+' v'+upstream.version+' is published, so the jobs can start and lock it as their input.',focusSeriesId:dataset.datasetSeriesId};
+   return {message:'The input report is published, so the jobs can start and lock it as their input.',focusSeriesId:dataset.datasetSeriesId};
   }},
  ],summary:async()=>({title:'One winner, and the order held',facts:[
   '4 requests at once: '+results.created+' created, '+results.conflicts+' rejected with HTTP 409.',
@@ -158,7 +157,7 @@ function conflictingRequests():ScenarioPlan{
 }
 
 export const scenarios:ScenarioDefinition[]=[
- {id:'normal-close',title:'Normal close',description:'Six reports run in order. Each one waits for the reports it needs.',build:normalClose},
+ {id:'happy-path',title:'Happy path',description:'Six reports run in order. Each one waits for the reports it needs.',build:happyPath},
  {id:'lost-reply',title:'Lost reply',description:'A job starts, but the reply never arrives. The system checks instead of starting it twice.',build:lostReply},
  {id:'failed-job',title:'Failed job and retry',description:'A job fails. The retry uses the same input and keeps a record of the failure.',build:failedJob},
  {id:'conflicting-requests',title:'Conflicting requests',description:'Four people click Create at once. Only one succeeds.',build:conflictingRequests},

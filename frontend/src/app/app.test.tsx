@@ -25,12 +25,14 @@ describe('one-page demo',()=>{
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   expect(api.posts()).toEqual([]);
   expect(screen.getByRole('group',{name:'Example of saved records'})).toHaveTextContent('execution_attempt');
-  expect(document.body.textContent).not.toMatch(/LOCAL DEMO|Development demo|durable/i);
+  expect(document.body.textContent).not.toMatch(/LOCAL DEMO|Development demo|durable|Normal close|fiscal|ledger/i);
+  expect(screen.getByRole('heading',{name:'How the data is organized'})).toBeInTheDocument();
+  expect(document.body.textContent).toContain('One report for one year/period.');
  });
- it('publishes all six reports in order on a normal close, using the real replies',async()=>{
+ it('publishes all six reports in order on the happy path, using the real replies',async()=>{
   const {api,user}=mount();
   expect(screen.getByRole('group',{name:'Report dependency map'})).toHaveTextContent('Depreciation');
-  await user.click(screen.getByRole('button',{name:'Run Normal close'}));
+  await user.click(screen.getByRole('button',{name:'Run Happy path'}));
   const done=await dialog('All six reports published');
   expect(done).toHaveTextContent('6 reports published');
   expect(done).toHaveTextContent('10 jobs succeeded');
@@ -50,15 +52,15 @@ describe('one-page demo',()=>{
   const done=await dialog('No duplicate run');
   expect(api.posts().length).toBeGreaterThan(before);
   expect(done).toHaveTextContent('This job has 1 try.');
-  expect(done).toHaveTextContent('Capital spending v1 is PUBLISHED.');
+  expect(done).toHaveTextContent('Version 1 of the report is PUBLISHED.');
  });
  it('keeps failed history and the frozen input when a retry follows a newer upstream',async()=>{
   const {user}=mount();
   await user.click(screen.getByRole('button',{name:'Run Failed job and retry'}));
   const done=await dialog('Retried, with the failure on record');
   expect(done).toHaveTextContent('try 1 FAILED, try 2 SUCCEEDED');
-  expect(done).toHaveTextContent('Fab cost v1');
-  expect(done).toHaveTextContent('The newest is v2');
+  expect(done).toHaveTextContent('Input used: version 1');
+  expect(done).toHaveTextContent('The newest is version 2');
  });
  it('reports conflicting requests as an expected result, using the real replies',async()=>{
   const {api,user}=mount();
@@ -72,7 +74,7 @@ describe('one-page demo',()=>{
  it('steps one command group per click and can be stopped',async()=>{
   const {api,user}=mount();
   await user.click(screen.getByRole('button',{name:'Step through Lost reply'}));
-  const next=await screen.findByRole('button',{name:'Next: Create the Capital spending report'});
+  const next=await screen.findByRole('button',{name:'Next: Create the report'});
   expect(api.datasets.map(d=>d.domain)).toEqual(['FAB_COST']);
   await user.click(next);
   await screen.findByRole('button',{name:'Next: Start a job and lose the reply'});

@@ -22,7 +22,7 @@ export function jobTitle(code:string,domain=''){
 export const inputsLabel=(d:Dataset)=>d.frozenInputs.length?'Input locked: '+d.frozenInputs.map(i=>domainLabel(i.domain)+' v'+i.version).join(', '):undefined;
 
 export const EXPLANATIONS:Record<NodeKind,string>={
- series:'One report for one company and period. Requests for the same report take turns, so version numbers never repeat.',
+ series:'One report for one year/period. Requests for the same report take turns, so version numbers never repeat.',
  version:'One build of the report, and the thing that gets published. Its input locks when the first job starts.',
  job:'One calculation the report needs. The report can’t be approved until every job succeeds.',
  attempt:'One try at running a job. A retry adds a new try, so failures stay on record.',
