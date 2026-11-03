@@ -26,57 +26,27 @@ dataset_series → dataset_version → calculation_job → execution_attempt
 
 ## System architecture
 
-![API, orchestration, executor and persistence layers](docs/diagrams/orchestration-core-v2-architecture.svg)
-
-The demo deploys as Browser → Caddy (HTTPS, React) → Fastify → PostgreSQL 18 in Docker Compose. Only Caddy publishes ports.
+![Browser to Caddy to a Fastify backend to PostgreSQL, with a simulated job system](docs/diagrams/architecture.svg)
 
 ## System flow
 
-Each step is an explicit command. Nothing publishes on its own.
-
-```mermaid
-flowchart TD
-    create["Create version<br/>DRAFT, one PENDING job per type"] --> freeze["First Run freezes inputs<br/>BUILDING"]
-    freeze --> commit["Commit the try and run ID<br/>DISPATCHING"]
-    commit --> reply{"Job system reply"}
-    reply -- Accepted --> running["Job RUNNING"]
-    reply -- Rejected --> rejected["DISPATCH_FAILED"]
-    reply -- "Unknown, response lost" --> unknown["Stays DISPATCHING<br/>same try, same run ID"]
-    unknown -- "Run or Reconcile" --> reconcile
-    running --> reconcile["Reconcile reads the real outcome"]
-    rejected -- "Run, new try" --> commit
-    reconcile -- Failed --> failed["Job FAILED"]
-    failed -- "Retry, new try, same inputs" --> commit
-    reconcile -- Succeeded --> submit["Submit, when every job succeeded<br/>VALIDATING"]
-    submit -- Publish --> published["PUBLISHED"]
-    submit -- Reject --> rejectedVersion["REJECTED"]
-```
+![Create, first run, dispatch, reconcile and submit, ending in published or rejected](docs/diagrams/system-flow.svg)
 
 A DRAFT or BUILDING version can also be abandoned when it has no open try.
 
 ## Engineering flows
 
-### Concurrent dataset creation
+![Two requests lock one series row. One creates the version; the other gets 409](docs/diagrams/flows/task-002-dataset-creation.svg)
 
-![Task 002 flow](docs/diagrams/flows/task-002-dataset-creation.svg)
+![First Run freezes upstream versions for every job and retry in that version](docs/diagrams/flows/task-003-immutable-snapshot.svg)
 
-### Immutable input snapshot
+![When a response is lost, the try stays open and recovery reuses the same run ID](docs/diagrams/flows/task-004-execution-dispatch.svg)
 
-![Task 003 flow](docs/diagrams/flows/task-003-immutable-snapshot.svg)
+![Reconcile asks the job system outside a transaction, then saves the result or changes nothing](docs/diagrams/flows/task-005-executor-reconciliation.svg)
 
-### Execution dispatch and safe retry
+![Draft to building to validating, ending in published or rejected, or abandoned earlier](docs/diagrams/flows/task-006-dataset-lifecycle.svg)
 
-![Task 004 flow](docs/diagrams/flows/task-004-execution-dispatch.svg)
-
-### Executor reconciliation
-
-![Task 005 flow](docs/diagrams/flows/task-005-executor-reconciliation.svg)
-
-### Dataset lifecycle decisions
-
-![Task 006 flow](docs/diagrams/flows/task-006-dataset-lifecycle.svg)
-
-Animated versions and implementation details are in [Engineering Flows](docs/ENGINEERING_FLOWS.md).
+Implementation details are in [Engineering Flows](docs/ENGINEERING_FLOWS.md).
 
 ## Limits
 

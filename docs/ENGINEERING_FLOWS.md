@@ -1,6 +1,6 @@
 # Engineering Flows
 
-Five short animations explain how a dataset moves from creation to a publication decision. Read them in order, or open a static SVG to inspect a complete flow without animation.
+Five short diagrams explain how a dataset moves from creation to a publication decision. Read them in order.
 
 | Task | Main question |
 |---|---|
@@ -14,9 +14,7 @@ These flows describe the implemented orchestration core. FakeExecutor simulates 
 
 ## Task 002 — Dataset Creation
 
-![Two concurrent dataset requests share one PostgreSQL series lock](diagrams/flows/task-002-dataset-creation.gif)
-
-[Complete static SVG](diagrams/flows/task-002-dataset-creation.svg)
+![Two concurrent dataset requests share one PostgreSQL series lock](diagrams/flows/task-002-dataset-creation.svg)
 
 **Problem:** two requests may try to create the same dataset at the same time.
 
@@ -42,9 +40,7 @@ Verify in code: [creation service](../src/modules/dataset-version/dataset-versio
 
 ## Task 003 — Immutable Snapshot
 
-![DPR keeps CAPEX v1 after CAPEX v2 is published](diagrams/flows/task-003-immutable-snapshot.gif)
-
-[Complete static SVG](diagrams/flows/task-003-immutable-snapshot.svg)
+![DPR keeps CAPEX v1 after CAPEX v2 is published](diagrams/flows/task-003-immutable-snapshot.svg)
 
 **Problem:** upstream data or dependency definitions can change while jobs are being prepared.
 
@@ -69,9 +65,7 @@ Verify in code: [preparation service](../src/modules/calculation-job-preparation
 
 ## Task 004 — Execution Dispatch
 
-![A lost response is recovered using the same execution identity](diagrams/flows/task-004-execution-dispatch.gif)
-
-[Complete static SVG](diagrams/flows/task-004-execution-dispatch.svg)
+![A lost response is recovered using the same execution identity](diagrams/flows/task-004-execution-dispatch.svg)
 
 **Problem:** the executor may create a run but lose its response. A new run identity could duplicate the work.
 
@@ -90,7 +84,7 @@ Verify in code: [preparation service](../src/modules/calculation-job-preparation
 | REJECTED | Guarantees the run never existed and cannot later be created for that identity. Records DISPATCH_FAILED and returns `502 EXECUTOR_DISPATCH_FAILED`. An executor unable to make this guarantee must use UNKNOWN. |
 | Retry after failure | An eligible retry after definite dispatch failure or reconciled execution failure creates a new attempt/identity, keeping the frozen inputs. |
 
-The animation follows FakeExecutor's `ACCEPT_THEN_UNKNOWN` case: a run exists, so sending the same identity again returns ALREADY_EXISTS. Other UNKNOWN cases may remain unresolved. Once acceptance is saved, another Run returns saved state without redispatch. Late responses cannot overwrite terminal history. Task 005 owns confirmed execution success/failure.
+The Unknown path follows FakeExecutor's `ACCEPT_THEN_UNKNOWN` case: a run exists, so sending the same identity again returns ALREADY_EXISTS. Other UNKNOWN cases may remain unresolved. Once acceptance is saved, another Run returns saved state without redispatch. Late responses cannot overwrite terminal history. Task 005 owns confirmed execution success/failure.
 
 Read further: [Task 004 specification](tasks/004-execution-attempt-dispatch-fake-executor.md), [ADR-0005 — identity and reconciliation](adr/0005-execution-attempts-and-airflow-reconciliation.md), [ADR-0008 — definite rejection](adr/0008-identity-scoped-definite-dispatch-rejection.md).
 
@@ -98,9 +92,7 @@ Verify in code: [Run service](../src/modules/calculation-job-run.service.ts), [F
 
 ## Task 005 — Executor Reconciliation
 
-![Check executor truth before saving job and attempt results together](diagrams/flows/task-005-executor-reconciliation.gif)
-
-[Complete static SVG](diagrams/flows/task-005-executor-reconciliation.svg)
+![Check executor truth before saving job and attempt results together](diagrams/flows/task-005-executor-reconciliation.svg)
 
 **Problem:** a job can finish in the executor while PostgreSQL still shows it as running.
 
@@ -128,9 +120,7 @@ Verify in code: [reconciliation service](../src/modules/calculation-job-reconcil
 
 ## Task 006 — Dataset Lifecycle
 
-![Explicit validation and one winner for competing final decisions](diagrams/flows/task-006-dataset-lifecycle.gif)
-
-[Complete state machine SVG](diagrams/flows/task-006-dataset-lifecycle.svg)
+![Explicit validation and one winner for competing final decisions](diagrams/flows/task-006-dataset-lifecycle.svg)
 
 **Problem:** successful jobs still need a publication decision, and two requests may try to make opposing decisions.
 
@@ -159,4 +149,4 @@ Verify in code: [lifecycle service](../src/modules/dataset-version/dataset-versi
 
 The linked tests specify the illustrated behavior; this gallery is not a report of a new PostgreSQL test run. Recorded execution evidence remains in [Verification](verification/) and the [Task 007 final acceptance record](verification/task-007-final-acceptance.md). Accepted rules remain in [Architecture](ARCHITECTURE.md) and [ADRs](adr/README.md).
 
-To edit a flow, change its generator and regenerate both SVG and GIF. See [diagram sources and generation commands](diagrams/flows/README.md). Return to the [project overview](../README.md) or [backend reference](REFERENCE.md).
+To edit a diagram, see [the diagram source](diagrams/README.md). Return to the [project overview](../README.md) or [backend reference](REFERENCE.md).

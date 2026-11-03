@@ -27,4 +27,4 @@ These record what was asked and proved at the time, and may describe things that
 | [Verification reports](verification/) | Recorded test runs and their source revisions |
 | [Final acceptance](verification/task-007-final-acceptance.md) | Orchestration Core v2 acceptance and its limits |
 
-To change the flow diagrams, see [the diagram sources](diagrams/flows/README.md). To change the repository, follow the [engineering policy](../AGENTS.md).
+To change the diagrams, see [the diagram source](diagrams/README.md). To change the repository, follow the [engineering policy](../AGENTS.md).
