@@ -199,6 +199,65 @@ test('One-page demo: real Chromium, production bundle, CSP and PostgreSQL',{time
    assert.equal((await pool.query('SELECT 1 FROM dataset_series WHERE company_code=$1',[owner.companyCode])).rowCount,0);
    await page.reload();await page.getByRole('button',{name:'Run Lost response'}).waitFor();assert.equal(await page.getByRole('dialog').count(),0);
   });
+  await t.test('manual mode: the backend, not the page, enforces order, and the three tables show what it saved',async()=>{
+   const panel=page.locator('.manual');
+   const pick=async(name:string,option:string)=>{await panel.getByRole('button',{name,exact:true}).click();await page.getByRole('option',{name:option,exact:true}).click();};
+   const table=(title:string)=>panel.locator('section',{has:page.getByRole('heading',{name:title})});
+   const run=async(job:string,outcome:string)=>{await panel.getByRole('button',{name:'Run '+job,exact:true}).click();await page.getByRole('dialog').getByRole('button',{name:new RegExp('^'+outcome)}).click();};
+   const idle=()=>panel.getByRole('button',{name:'Create version'}).and(page.locator(':enabled')).waitFor();
+   const refused=async(code:string)=>{const box=dialog('The backend refused this');await box.waitFor();assert.match(await box.innerText(),new RegExp('HTTP 409 '+code));await closeDialog('The backend refused this');await idle();};
+   await page.getByRole('button',{name:'Open manual mode'}).click();await panel.getByRole('heading',{name:'Dataset versions'}).waitFor();await shot('10-manual-empty');
+   const closeDialog2=async(title:string)=>{await dialog(title).getByRole('button',{name:'Close'}).click();await dialog(title).waitFor({state:'detached'});};
+   const expectStatus=async(section:string,text:string)=>{await table(section).locator('.status',{hasText:new RegExp('^'+text+'$')}).first().waitFor();};
+   await page.reload();await page.getByRole('button',{name:'Open manual mode'}).click();
+
+   await panel.getByRole('button',{name:'Report',exact:true}).click();await page.getByRole('option',{name:'Capital expenditure',exact:true}).waitFor();await shot('10b-manual-dropdown');await page.getByRole('option',{name:'Capital expenditure',exact:true}).click();
+   await panel.getByRole('button',{name:'Create version'}).click();await expectStatus('Dataset versions','Draft');await idle();
+   await panel.getByRole('button',{name:'Run Table Y',exact:true}).click();await dialog('Run Table Y').waitFor();await shot('10c-manual-run-dialog');await closeDialog2('Run Table Y');
+   const capexCompany=(await session()).companyCode;
+   await run('Table Y','Success');await refused('DEPENDENCY_NOT_READY');await shot('11-manual-refused-run');
+   assert.equal((await attempts(capexCompany,'CAPEX','Q1')).length,0,'a refused run must create no try');
+
+   await pick('Report','Fab cost');await panel.getByRole('button',{name:'Create version'}).click();await expectStatus('Calculation jobs','Waiting');await idle();
+   await panel.getByRole('button',{name:'Publish'}).click();await refused('STATE_CONFLICT');
+   await panel.getByRole('button',{name:'Submit'}).click();await refused('DATASET_NOT_READY_FOR_VALIDATION');
+   await panel.getByRole('button',{name:'Check result of Summary'}).click();await refused('EXECUTION_NOT_RECONCILABLE');
+   await run('Summary','Success');await expectStatus('Calculation jobs','Running');await idle();await shot('12-manual-running-until-checked');
+   assert.equal((await attempts(capexCompany,'FAB_COST','Q1'))[0]!.status,'ACCEPTED','the database stays open until someone checks the result');
+   await panel.getByRole('button',{name:'Check result of Summary'}).click();await expectStatus('Calculation jobs','Succeeded');await idle();
+   await run('Summary','Success');await refused('JOB_NOT_RUNNABLE');
+   await panel.getByRole('button',{name:'Submit'}).click();await expectStatus('Dataset versions','Being approved');await idle();
+   await panel.getByRole('button',{name:'Publish'}).click();await expectStatus('Dataset versions','Published');await idle();
+
+   await pick('Report','Capital expenditure');await expectStatus('Dataset versions','Draft');await panel.getByText('published v1').waitFor();
+   await run('Table Y','Unknown');await expectStatus('Execution attempts','Unknown');await idle();await shot('13-manual-unknown');
+   const lost=(await attempts(capexCompany,'CAPEX','Q1'));assert.equal(lost.length,1);assert.equal(lost[0]!.status,'DISPATCHING');
+   await panel.getByRole('button',{name:'Check result of Table Y'}).click();await expectStatus('Execution attempts','Succeeded');await idle();
+   const recovered=await attempts(capexCompany,'CAPEX','Q1');assert.equal(recovered.length,1,'recovery must reuse the try');assert.equal(recovered[0]!.airflow_dag_run_id,lost[0]!.airflow_dag_run_id,'recovery must reuse the run ID');
+
+   await run('Summary','Unknown');await expectStatus('Execution attempts','Unknown');await idle();
+   await panel.getByRole('button',{name:'Run Summary',exact:true}).click();
+   const recover=page.getByRole('dialog');await recover.getByText('checks the same run ID').waitFor();assert.equal(await recover.getByRole('button',{name:/^Unknown/}).count(),0);
+   await recover.getByRole('button',{name:/^Failed/}).click();await expectStatus('Execution attempts','Running');await idle();
+   assert.equal((await attempts(capexCompany,'CAPEX','Q1')).length,2,'running again after a lost response must reuse the try');
+   await panel.getByRole('button',{name:'Check result of Summary'}).click();await expectStatus('Execution attempts','Failed');await idle();
+   await run('Summary','Success');await table('Execution attempts').getByText('Try 2').waitFor();await table('Execution attempts').getByText('Try 1').waitFor();await idle();
+   await panel.getByRole('button',{name:'Check result of Summary'}).click();await idle();await shot('14-manual-retried');
+   const all=await attempts(capexCompany,'CAPEX','Q1');assert.equal(all.length,3,'a retry adds a try and keeps the failure');assert.deepEqual(all.map(a=>a.status).sort(),['FAILED','SUCCEEDED','SUCCEEDED']);
+
+   await panel.getByRole('button',{name:'Reject'}).click();await refused('STATE_CONFLICT');
+   await panel.getByRole('button',{name:'Submit'}).click();await expectStatus('Dataset versions','Being approved');await idle();
+   await panel.getByRole('button',{name:'Reject'}).click();await expectStatus('Dataset versions','Rejected');await idle();
+   await panel.getByRole('button',{name:'Create version'}).click();await table('Dataset versions').getByText('Version 2').waitFor();await idle();
+   await panel.getByRole('button',{name:'Abandon'}).first().click();await expectStatus('Dataset versions','Abandoned');await idle();
+   assert.deepEqual(await versions(capexCompany,'CAPEX','Q1'),[{version:1,status:'REJECTED'},{version:2,status:'ABANDONED'}]);
+   await shot('15-manual-done');
+
+   await page.getByRole('button',{name:'繁體中文'}).click();await panel.getByRole('heading',{name:'手動模式'}).waitFor();await shot('16-manual-zh');await page.getByRole('button',{name:'English'}).click();
+   await page.setViewportSize({width:375,height:800});await shot('17-manual-phone');
+   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth),'manual mode must not scroll the page sideways on a phone');
+   await page.setViewportSize({width:1440,height:1000});
+  });
   assert.deepEqual(problems,[],'no CSP violation, console error or uncaught error across the whole run');
   assert.deepEqual(await page.evaluate(()=>Object.keys(localStorage)),['ce-demo-language'],'the language is the only thing kept in the browser');
   console.info('ONE_PAGE_BROWSER_VERIFIED',JSON.stringify({chromium:browser.version(),csp:policy}));await context.close();

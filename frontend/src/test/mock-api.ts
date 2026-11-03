@@ -38,7 +38,7 @@ export class MockApi {
   if(path==='/demo/dataset-versions')return this.create(body as {domain:string;fiscalYear:number;period:string});
   if((m=/^\/demo\/dataset-versions\/([^/]+)$/.exec(path)))return json(this.datasets.find(d=>d.datasetVersionId===m![1]));
   if((m=/^\/demo\/dataset-versions\/([^/]+)\/calculation-jobs$/.exec(path)))return page(this.jobs.filter(j=>j.datasetVersionId===m![1]));
-  if((m=/^\/demo\/dataset-versions\/([^/]+)\/(submit-validation|publish)$/.exec(path))){const d=this.datasets.find(x=>x.datasetVersionId===m![1])!;d.datasetStatus=m[2]==='publish'?'PUBLISHED':'VALIDATING';return json(d);}
+  if((m=/^\/demo\/dataset-versions\/([^/]+)\/(submit-validation|publish|reject|abandon)$/.exec(path)))return this.lifecycle(m[1]!,m[2]!);
   if((m=/^\/demo\/calculation-jobs\/([^/]+)\/execution-attempts$/.exec(path)))return page(this.attempts.filter(a=>a.jobId===m![1]));
   if((m=/^\/demo\/calculation-jobs\/([^/]+)\/run$/.exec(path)))return this.run(m[1]!,body as {simulation:{dispatch:string;completion:string}});
   if((m=/^\/demo\/calculation-jobs\/([^/]+)\/reconcile$/.exec(path)))return this.reconcile(m[1]!);
@@ -51,6 +51,15 @@ export class MockApi {
   const d:Dataset={datasetVersionId:this.id(),datasetSeriesId:same[0]?.datasetSeriesId??this.id(),domain,fiscalYear,period,version:same.length+1,datasetStatus:'DRAFT',createdAt:new Date(Date.parse(TIME)+this.next*1000).toISOString(),frozenInputs:[]};
   this.datasets.push(d);const calculationJobs=(JOBS[domain]??[]).map(code=>{const j:Job={jobId:this.id(),datasetVersionId:d.datasetVersionId,calculationTypeCode:code,jobStatus:'PENDING',createdAt:TIME,startedAt:null,finishedAt:null};this.jobs.push(j);return {jobId:j.jobId};});
   return json({...d,calculationJobs},201);
+ }
+ private lifecycle(id:string,command:string){
+  const d=this.datasets.find(x=>x.datasetVersionId===id)!;
+  if(command==='submit-validation'){
+   if(this.jobs.some(j=>j.datasetVersionId===id&&j.jobStatus!=='SUCCEEDED'))return fail('DATASET_NOT_READY_FOR_VALIDATION',409);
+   d.datasetStatus='VALIDATING';
+  }else if(command==='abandon')d.datasetStatus='ABANDONED';
+  else{if(d.datasetStatus!=='VALIDATING')return fail('STATE_CONFLICT',409);d.datasetStatus=command==='publish'?'PUBLISHED':'REJECTED';}
+  return json(d);
  }
  private run(jobId:string,{simulation}:{simulation:{dispatch:string;completion:string}}){
   const job=this.jobs.find(j=>j.jobId===jobId)!;const d=this.datasets.find(x=>x.datasetVersionId===job.datasetVersionId)!;
@@ -73,7 +82,8 @@ export class MockApi {
   return json(result,lost?202:200);
  }
  private reconcile(jobId:string){
-  const job=this.jobs.find(j=>j.jobId===jobId)!;const attempt=this.attempts.filter(a=>a.jobId===jobId).at(-1)!;
+  const job=this.jobs.find(j=>j.jobId===jobId)!;const attempt=this.attempts.filter(a=>a.jobId===jobId).at(-1);
+  if(!attempt)return fail('EXECUTION_NOT_RECONCILABLE',409);
   if(attempt.external==='SUCCEEDED'||attempt.external==='FAILED'){attempt.attemptStatus=attempt.external;job.jobStatus=attempt.external;attempt.finishedAt=TIME;job.finishedAt=TIME;}
   return json({jobId,jobStatus:job.jobStatus});
  }

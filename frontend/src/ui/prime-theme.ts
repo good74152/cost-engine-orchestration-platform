@@ -12,5 +12,6 @@ export const primeOptions:Partial<APIOptions>={
    lineLeft:({context}:{context:{lineTop:boolean}})=>className(context.lineTop?'chart-left chart-top':'chart-left'),
    lineRight:({context}:{context:{lineTop:boolean}})=>className(context.lineTop?'chart-right chart-top':'chart-right')},
   dataview:{root:className('scenario-list')},
+  dropdown:{root:className('select'),input:className('select-value'),trigger:className('select-trigger'),panel:className('select-panel'),wrapper:className('select-wrapper'),list:className('select-list'),item:className('select-item'),hiddenSelectedMessage:className('sr-only'),select:className('sr-only')},
  },
 };

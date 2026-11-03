@@ -121,6 +121,47 @@ button.node:hover{box-shadow:0 0 0 3px var(--rule-soft)}
 .call-detail{color:var(--muted);font-size:.86em}
 
 
+.manual{display:grid;grid-template-columns:minmax(0,1fr);gap:14px}
+.manual .panel-head{margin-bottom:0}
+.manual-filters{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end}
+.manual-filters .field{display:grid;gap:4px;font-size:.82rem;font-weight:500;color:var(--muted)}
+.manual-clear{margin-left:auto;padding-bottom:8px}
+.manual-upstream{color:var(--muted);font-size:.88rem}
+.manual-status{min-height:1.5em;font-size:.9rem;font-weight:500}
+.manual h4{margin:6px 0 6px;font-size:.95rem;font-weight:600}
+.manual h4 code{color:var(--muted);font-weight:400;margin-left:4px}
+.select{position:relative;display:inline-flex;align-items:center;justify-content:space-between;gap:8px;min-width:190px;background:var(--sheet);border:1px solid var(--rule);border-radius:8px;padding:7px 10px;color:var(--ink);font-size:.9rem;font-weight:400;cursor:pointer}
+.select:hover{border-color:var(--ink)}
+.select-value{white-space:nowrap}
+.select-trigger{display:grid;place-items:center;color:var(--muted)}
+.select-trigger svg{width:12px;height:12px}
+.select-panel{background:var(--sheet);border:1px solid var(--rule);border-radius:8px;box-shadow:0 10px 30px rgba(15,23,42,.14);font-size:.9rem;font-family:var(--font);color:var(--ink)}
+.select-wrapper{max-height:260px;overflow:auto;padding:4px}
+.select-item{padding:7px 10px;border-radius:6px;cursor:pointer;list-style:none}
+.select-item:hover,.select-item[data-p-focused=true]{background:var(--tint)}
+.select-item[data-p-highlight=true]{background:var(--tint);font-weight:600}
+.sr-only,.select [data-pc-section=hiddenselectedmessage],.select [data-pc-section=hiddenselect]{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip-path:inset(50%);border:0;white-space:nowrap}
+.table-scroll{overflow-x:auto;border:1px solid var(--rule);border-radius:12px;padding:4px 12px}
+.data-table table{width:100%;min-width:640px;border-collapse:collapse;font-size:.88rem}
+.data-table th{text-align:left;font-weight:600;padding:10px 12px;border-bottom:1px solid var(--rule);white-space:nowrap}
+.data-table td{padding:10px 12px;border-bottom:1px solid var(--rule-soft);vertical-align:middle;color:#334155}
+.data-table tbody tr:last-child td{border-bottom:0}
+.data-table tbody tr[aria-selected]{cursor:pointer}
+.data-table tbody tr[aria-selected]:hover{background:var(--tint)}
+.data-table tbody tr[aria-selected=true]{background:var(--tint);box-shadow:inset 3px 0 0 var(--ink)}
+.cell-name{display:grid;gap:0;white-space:nowrap}
+.cell-name strong{font-weight:500;color:var(--ink)}
+.cell-name small{color:var(--muted);font-size:.76rem}
+.status{display:inline-block;white-space:nowrap;font-size:.76rem;font-weight:600;border-radius:6px;padding:2px 8px;background:var(--rule-soft);color:#475569}
+.status.tone-good{background:var(--green-soft);color:var(--green)}
+.status.tone-active{background:var(--blue-soft);color:var(--blue)}
+.status.tone-unknown{background:var(--amber-soft);color:var(--amber)}
+.status.tone-bad{background:var(--red-soft);color:var(--red)}
+.row-actions{display:flex;gap:6px}
+.button.small{padding:4px 10px;font-size:.78rem;white-space:nowrap}
+.run-id{display:inline-block;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:bottom}
+.outcomes{display:grid;gap:8px;margin:12px 0 10px}
+
 .dialog-mask{position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(15,23,42,.45)}
 .dialog{width:min(520px,100%);max-height:calc(100dvh - 32px);display:flex;flex-direction:column;background:var(--sheet);border-radius:10px;box-shadow:0 18px 50px rgba(15,23,42,.3)}
 .dialog-header{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:22px 24px 6px}
@@ -156,5 +197,6 @@ button.node:hover{box-shadow:0 0 0 3px var(--rule-soft)}
  .concepts ol{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
  .concepts li:not(:last-child)::after{display:none}
  .more ul{grid-template-columns:minmax(0,1fr)}
+ .manual-clear{margin-left:0;padding-bottom:0}
 }
 @media (prefers-reduced-motion:reduce){.node,.block{transition:none}}
