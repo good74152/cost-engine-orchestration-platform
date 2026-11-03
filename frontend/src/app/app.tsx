@@ -35,11 +35,13 @@ export function App(){
   <div className="actions"><button type="button" className="button" disabled={active||clearing} aria-label={'Run '+s.title} onClick={()=>start(s.id,'auto')}>Run it</button>
    <button type="button" className="button quiet" disabled={active||clearing} aria-label={'Step through '+s.title} onClick={()=>start(s.id,'step')}>Step through</button></div>
  </div>;
- return <div className="page">
+ return <>
   <a className="skip-link" href="#main">Skip to content</a>
-  <header className="top"><span>Cost Engine Orchestration Platform</span><a href={REPOSITORY} target="_blank" rel="noreferrer">GitHub</a></header>
+  <header className="top"><div className="top-inner"><span>Cost Engine Orchestration Platform</span><a href={REPOSITORY} target="_blank" rel="noreferrer">GitHub</a></div></header>
+  <div className="page">
   <main id="main">
    <section className="hero">
+    <p className="badge" translate="no"><i aria-hidden="true"/>node@24 + postgresql@18</p>
     <h1>Async Workflow for Financial Report Calculation</h1>
     <p className="lead">How a backend stays in sync with external workflows and jobs, including lost responses, failure recovery and conflicting requests.</p>
     <div className="actions hero-actions"><button type="button" className="button" disabled={active||clearing} onClick={()=>start(KEY_SCENARIO,'auto')}>Run the key demo</button>
@@ -63,6 +65,7 @@ export function App(){
      <a className="block" href={b.href} target="_blank" rel="noreferrer"><strong>{b.title}</strong><span>{b.line}</span></a>}</li>)}</ul>
    </section>
   </main>
+  </div>
   <DemoDialog/>
- </div>;
+ </>;
 }
