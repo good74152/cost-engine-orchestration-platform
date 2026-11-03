@@ -515,30 +515,13 @@ establish cutover safety. Follow the [complete runbook](tasks/demo-05c2-legacy-a
 and [ADR-0017](adr/0017-demo-admission-drain.md). Focused real PostgreSQL commands:
 `npm run test:demo-05c2:typecheck` and `npm run test:demo-05c2`.
 
-### Interactive frontend (Demo-03)
+### Interactive frontend
 
-frontend/ provides React routes for Dashboard, Guided Demo, Free Exploration,
-Dataset detail/history and About. Root scripts ui:dev, ui:typecheck, ui:test and
-ui:build delegate to that package; install both root and frontend lockfiles.
-Start the existing Demo backend on 3000 and Vite on 5173 after explicit migration
-and the local guided seed. See [the complete setup](tasks/demo-03-frontend-ui.md#reproducible-local-development).
+`frontend/` is one page with no client routing ([ADR-0020](adr/0020-one-page-demo-ui.md)). It plays four scripted scenarios and offers a [manual mode](tasks/demo-09-manual-mode.md), all through the existing `/demo/*` APIs. Root scripts `ui:dev`, `ui:typecheck`, `ui:test`, `ui:build` and `ui:smoke` delegate to that package.
 
-All requests are relative /demo with credentials: include; POST also supplies
-X-Demo-Session: 1 and JSON. Vite changeOrigin: false retains the browser's Host
-and Origin. No Cookie/token storage, CORS bypass or backend contract change.
-Only a user starts a session. Backend 401 invalidates UI scope; only confirmed
-Reset 204 clears it as successful Reset. Error/unknown Reset retains state.
+The page needs `WORKFLOW_OPEN`; the [README](../README.md#run-locally) has the setup. Requests use `credentials: include`, POST adds `X-Demo-Session: 1`, and Vite's `changeOrigin: false` keeps the browser's Host and Origin. Reloading sends GETs only. The language choice is the only thing kept in browser storage.
 
-Guided request mappings are saved before POST under session/scenario/step scope.
-Reload GETs Session, Scenario and Pending Step; server progress/pending identity
-wins over browser storage. 202/503/network retry reuses the same request UUID,
-never auto-advances and never infers a financial status. Resource reads follow
-all nextCursor pages; fake status acknowledgements are not live executor reads.
-
-ui:smoke uses actual Chromium, a Vite proxy and an unchanged Demo backend on an
-owned template0 PostgreSQL fixture with normal DROP/zero-backend verification.
-It never uses a persistent DB as its data target. Configure the safe test service
-privately and install Playwright Chromium first. No deployment is implemented.
+`ui:smoke` uses real Chromium, the production bundle, the Caddyfile CSP and an owned disposable PostgreSQL database. Configure a safe test service first.
 
 Requirements: Node.js 24+, npm, Docker/Compose and PostgreSQL (repository Compose uses PostgreSQL 18).
 
