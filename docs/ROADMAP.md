@@ -286,3 +286,7 @@ Removes backups, restore verification, drills and readiness reports, and shrinks
 ## Demo-12 — Remove Guided scenarios and cutover
 
 Removes the unused Guided scenario APIs and the one-way admission gate and cutover. The seed now writes the final ten-type configuration directly, and Web opens on a ready Backend. See [ADR-0022](adr/0022-remove-guided-scenarios-and-cutover.md).
+
+## Demo-14 — Simpler diagrams
+
+Replaces the architecture, system flow and Task 002–006 diagrams with short static SVGs from [one generator](diagrams/generate.cjs). The five GIFs and their generators are removed.

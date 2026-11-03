@@ -1,88 +1,11 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 1000" width="1280" height="1000" role="img" aria-labelledby="flow-title flow-desc">
-<title id="flow-title">Task 004 — Execution Dispatch and Safe Retry — Complete Flow</title>
-<desc id="flow-desc">A response-loss example within one development/test FakeExecutor instance. Task 003 has saved a PENDING job, PREPARED attempt and backend-generated execution identity. Task 004 saves DISPATCHING and commits before dispatch. The executor call holds no orchestration database transaction or locks. A new transaction records the result: ACCEPTED or ALREADY_EXISTS confirms attempt ACCEPTED and job RUNNING; REJECTED means no run with this identity ever existed or can later be created, and records DISPATCH_FAILED; UNKNOWN leaves the attempt DISPATCHING and keeps the job unchanged. These are alternative results. In the shown response-loss path the fake creates a run, but the backend receives UNKNOWN. Redispatch reuses the same attempt and airflowDagRunId, with the same airflowDagId. The fake finds that identity and returns ALREADY_EXISTS without creating another run. The backend atomically saves ACCEPTED and RUNNING. Same execution ID, no duplicate execution in this example. Other UNKNOWN results can remain unresolved. Idempotency requires the executor to check the full stable identity. A permitted retry after a definite dispatch or execution failure can create a new attempt using the same frozen snapshot. Task 005 owns terminal success/failure reconciliation. Run ID text is a shortened template; FakeExecutor state is instance-local and in memory, not restart or cross-process durability. No real Airflow adapter is shown.</desc>
-<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M 0 0 L 10 5 L 0 10 Z" fill="#176270"/></marker><marker id="amber-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M 0 0 L 10 5 L 0 10 Z" fill="#87500f"/></marker></defs>
-<style>text { font-family: Arial, Helvetica, sans-serif; }</style>
-<rect x="0" y="0" width="1280" height="1000" rx="12" fill="#fff" stroke="none"/>
-<text x="32" y="49" font-size="32" font-weight="700" fill="#172b4d">Execution Dispatch &amp; Safe Retry</text>
-<text x="32" y="84" font-size="22" font-weight="400" fill="#42526b">Task 004 · What if the executor gets the request, but its response is lost?</text>
-<text x="32" y="139" font-size="17" font-weight="700" fill="#176270">COMPLETE DISPATCH FLOW</text>
-<path d="M 58 191 V 681" stroke="#bacbe0" stroke-width="2"/>
-<rect x="32" y="164" width="360" height="92" rx="12" fill="#f0f5fc" stroke="#bacbe0"/>
-<circle cx="58" cy="191" r="15" fill="#176270" stroke="#176270"/>
-<text x="53" y="197" font-size="17" font-weight="700" fill="#fff">1</text>
-<text x="84" y="195" font-size="21" font-weight="700" fill="#172b4d">Job Ready</text>
-<text x="84" y="221" font-size="17" font-weight="400" fill="#42526b">Job: PENDING</text>
-<text x="84" y="243" font-size="17" font-weight="400" fill="#42526b">Attempt: PREPARED</text>
-<rect x="32" y="262" width="360" height="92" rx="12" fill="#f0f5fc" stroke="#bacbe0"/>
-<circle cx="58" cy="289" r="15" fill="#176270" stroke="#176270"/>
-<text x="53" y="295" font-size="17" font-weight="700" fill="#fff">2</text>
-<text x="84" y="293" font-size="21" font-weight="700" fill="#172b4d">Save Before Dispatch</text>
-<text x="84" y="319" font-size="17" font-weight="400" fill="#42526b">PREPARED → DISPATCHING</text>
-<text x="84" y="341" font-size="17" font-weight="400" fill="#42526b">COMMIT before the executor call.</text>
-<rect x="32" y="360" width="360" height="92" rx="12" fill="#f0f5fc" stroke="#bacbe0"/>
-<circle cx="58" cy="387" r="15" fill="#176270" stroke="#176270"/>
-<text x="53" y="393" font-size="17" font-weight="700" fill="#fff">3</text>
-<text x="84" y="391" font-size="21" font-weight="700" fill="#172b4d">Send to Executor</text>
-<text x="84" y="417" font-size="17" font-weight="400" fill="#42526b">Call FakeExecutor after COMMIT.</text>
-<text x="84" y="439" font-size="17" font-weight="400" fill="#42526b">No open database transaction.</text>
-<rect x="32" y="458" width="360" height="92" rx="12" fill="#f0f5fc" stroke="#bacbe0"/>
-<circle cx="58" cy="485" r="15" fill="#176270" stroke="#176270"/>
-<text x="53" y="491" font-size="17" font-weight="700" fill="#fff">4</text>
-<text x="84" y="489" font-size="21" font-weight="700" fill="#172b4d">Executor Response</text>
-<text x="84" y="515" font-size="17" font-weight="400" fill="#42526b">Accepted, rejected or unknown.</text>
-<text x="84" y="537" font-size="17" font-weight="400" fill="#42526b">Save the result in a new transaction.</text>
-<rect x="32" y="556" width="360" height="92" rx="12" fill="#f0f5fc" stroke="#bacbe0"/>
-<circle cx="58" cy="583" r="15" fill="#176270" stroke="#176270"/>
-<text x="53" y="589" font-size="17" font-weight="700" fill="#fff">5</text>
-<text x="84" y="587" font-size="21" font-weight="700" fill="#172b4d">Response Lost</text>
-<text x="84" y="613" font-size="17" font-weight="400" fill="#42526b">Run created → response lost.</text>
-<text x="84" y="635" font-size="17" font-weight="400" fill="#42526b">Backend sees UNKNOWN.</text>
-<rect x="32" y="654" width="360" height="92" rx="12" fill="#f0f5fc" stroke="#bacbe0"/>
-<circle cx="58" cy="681" r="15" fill="#176270" stroke="#176270"/>
-<text x="53" y="687" font-size="17" font-weight="700" fill="#fff">6</text>
-<text x="84" y="685" font-size="21" font-weight="700" fill="#172b4d">Safe Recovery</text>
-<text x="84" y="711" font-size="17" font-weight="400" fill="#42526b">Send the same attempt and run ID.</text>
-<text x="84" y="733" font-size="17" font-weight="400" fill="#42526b">ALREADY_EXISTS confirms the run.</text>
-<text x="430" y="139" font-size="25" font-weight="700" fill="#172b4d">One attempt. One execution identity.</text>
-<text x="430" y="168" font-size="19" font-weight="400" fill="#42526b">Response-loss example · One FakeExecutor instance</text>
-<rect x="430" y="195" width="335" height="245" rx="12" fill="#f0f5fc" stroke="#bacbe0"/>
-<text x="450" y="232" font-size="24" font-weight="700" fill="#172b4d">Backend + PostgreSQL</text>
-<text x="450" y="273" font-size="23" font-weight="700" fill="#176270">Job: RUNNING</text>
-<text x="450" y="311" font-size="22" font-weight="700" fill="#176270">Attempt: ACCEPTED</text>
-<text x="450" y="353" font-size="18" font-weight="400" fill="#42526b">airflowDagRunId</text>
-<text x="450" y="385" font-size="22" font-weight="700" fill="#176270">cost-engine-&lt;uuid&gt;</text>
-<text x="450" y="419" font-size="17" font-weight="400" fill="#42526b">Backend creates and saves this ID</text>
-<rect x="950" y="195" width="298" height="245" rx="12" fill="#e2f2f3" stroke="#65a5af"/>
-<text x="970" y="232" font-size="26" font-weight="700" fill="#172b4d">FakeExecutor</text>
-<text x="970" y="273" font-size="23" font-weight="700" fill="#176270">1 run exists</text>
-<text x="970" y="353" font-size="18" font-weight="400" fill="#42526b">airflowDagRunId</text>
-<text x="970" y="385" font-size="22" font-weight="700" fill="#176270">cost-engine-&lt;uuid&gt;</text>
-<text x="970" y="419" font-size="18" font-weight="400" fill="#42526b">Development / test only</text>
-<path class="flow-arrow" d="M 765 273 H 950" fill="none" stroke="#176270" stroke-width="3" marker-end="url(#arrow)"/>
-<text x="787" y="254" font-size="19" font-weight="700" fill="#176270">same ID</text>
-<path class="flow-arrow" d="M 950 372 H 765" fill="none" stroke="#176270" stroke-width="3" marker-end="url(#arrow)"/>
-<text x="772" y="352" font-size="18" font-weight="700" fill="#176270">ALREADY_EXISTS</text>
-<rect x="430" y="466" width="818" height="93" rx="12" fill="#e2f2f3" stroke="#65a5af"/>
-<text x="450" y="501" font-size="23" font-weight="700" fill="#176270">Reuse DISPATCHING → COMMIT → send the same ID</text>
-<text x="450" y="538" font-size="20" font-weight="400" fill="#42526b">ALREADY_EXISTS → Save ACCEPTED + RUNNING in a new transaction.</text>
-<text x="430" y="598" font-size="23" font-weight="700" fill="#172b4d">Three possible results</text>
-<rect x="430" y="615" width="818" height="43" rx="12" fill="#e2f2f3" stroke="#65a5af"/>
-<text x="450" y="643" font-size="21" font-weight="700" fill="#176270">ACCEPTED / ALREADY_EXISTS</text>
-<text x="837" y="643" font-size="20" font-weight="700" fill="#172b4d">Attempt ACCEPTED · Job RUNNING</text>
-<rect x="430" y="666" width="818" height="43" rx="12" fill="#fff1f0" stroke="#dbaca7"/>
-<text x="450" y="694" font-size="21" font-weight="700" fill="#9f3d36">REJECTED</text>
-<text x="837" y="694" font-size="20" font-weight="700" fill="#172b4d">Attempt DISPATCH_FAILED</text>
-<rect x="430" y="717" width="818" height="43" rx="12" fill="#fff8ed" stroke="#dec39a"/>
-<text x="450" y="745" font-size="21" font-weight="700" fill="#87500f">UNKNOWN</text>
-<text x="837" y="745" font-size="20" font-weight="700" fill="#172b4d">Attempt stays DISPATCHING</text>
-<text x="430" y="797" font-size="19" font-weight="400" fill="#9f3d36">REJECTED: no run exists or can ever be created for that identity.</text>
-<text x="430" y="829" font-size="19" font-weight="400" fill="#42526b">UNKNOWN may stay open. Recovery needs executor ID checks.</text>
-<rect x="32" y="780" width="360" height="81" rx="12" fill="#f0f5fc" stroke="#bacbe0"/>
-<text x="52" y="812" font-size="22" font-weight="700" fill="#176270">UNKNOWN: keep the ID</text>
-<text x="52" y="842" font-size="18" font-weight="400" fill="#42526b">New attempt only in allowed states.</text>
-<rect x="32" y="883" width="1216" height="87" rx="12" fill="#e2f2f3" stroke="#65a5af"/>
-<text x="56" y="919" font-size="27" font-weight="700" fill="#176270">Same execution ID. No duplicate execution.</text>
-<text x="56" y="952" font-size="22" font-weight="400" fill="#172b4d">This run already exists in the fake; other UNKNOWN results may stay open.</text>
-<text x="32" y="992" font-size="18" font-weight="400" fill="#42526b">Task 005 checks success or failure. A permitted new attempt still uses the same frozen snapshot.</text>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 612" width="1200" height="612" role="img" aria-label="When a response is lost the try stays open, and recovery reuses the same run ID"><style>
+:root{--bg:#fff;--ink:#14213d;--muted:#5b6780;--line:#c9d2e0;--node:#fff;--band:#f4f6fa;
+--blue:#1d6fd8;--blue-bg:#eaf2fd;--green:#14804a;--green-bg:#e7f6ee;--red:#c22f3d;--red-bg:#fdecee;--amber:#b35c00;--amber-bg:#fff3e2;--violet:#6a3fc8;--violet-bg:#f1ecfc}
+@media (prefers-color-scheme:dark){:root{--bg:#0d1117;--ink:#e6edf3;--muted:#9aa7b8;--line:#3a4557;--node:#161b22;--band:#161b22;
+--blue:#6cb0ff;--blue-bg:#14263f;--green:#4cc98a;--green-bg:#10291e;--red:#ff7b86;--red-bg:#33161a;--amber:#f0a94b;--amber-bg:#33240f;--violet:#b49bff;--violet-bg:#231a3f}}
+text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;fill:var(--ink)}
+.title{font-size:40px;font-weight:800}.sub{font-size:20px;fill:var(--muted)}
+.name{font-size:23px;font-weight:700;text-anchor:middle}.note{font-size:17px;fill:var(--muted);text-anchor:middle}
+.label{font-size:16px;fill:var(--muted);text-anchor:middle}.point{font-size:22px;font-weight:700}.foot{font-size:16px;fill:var(--muted)}
+.state{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:18px;font-weight:700;text-anchor:middle}
+</style><defs><marker id="m-blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="var(--blue)"/></marker><marker id="m-green" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="var(--green)"/></marker><marker id="m-red" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="var(--red)"/></marker><marker id="m-amber" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="var(--amber)"/></marker><marker id="m-violet" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="var(--violet)"/></marker><marker id="m-line" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="var(--line)"/></marker></defs><rect width="1200" height="612" rx="18" fill="var(--bg)"/><text class="title" x="40" y="66">What if the response is lost?</text><text class="sub" x="40" y="100">Execution dispatch: save first, then call the job system.</text><rect x="40" y="240" width="220" height="130" rx="14" fill="var(--node)" stroke="var(--line)" stroke-width="2.5"/><text class="name" x="150" y="291">1. Save first</text><text class="note" x="150" y="319">Try and run ID</text><text class="note" x="150" y="342">COMMIT</text><rect x="310" y="240" width="240" height="130" rx="14" fill="var(--node)" stroke="var(--line)" stroke-width="2.5"/><text class="name" x="430" y="302.5">2. Call job system</text><text class="note" x="430" y="330.5">no open transaction</text><path d="M260 305H308" fill="none" stroke="var(--blue)" stroke-width="3" marker-end="url(#m-blue)"/><path d="M550 305C590 305 580 186 618 186" fill="none" stroke="var(--green)" stroke-width="3" marker-end="url(#m-green)"/><path d="M550 305C590 305 580 310 618 310" fill="none" stroke="var(--red)" stroke-width="3" marker-end="url(#m-red)"/><path d="M550 305C590 305 580 434 618 434" fill="none" stroke="var(--amber)" stroke-width="3" marker-end="url(#m-amber)"/><rect x="620" y="136" width="250" height="100" rx="14" fill="var(--green-bg)" stroke="var(--green)" stroke-width="2.5"/><text class="name" x="745" y="168" style="fill:var(--green)">Accepted</text><text class="state" x="745" y="196">ACCEPTED</text><text class="note" x="745" y="220">Job RUNNING</text><rect x="620" y="260" width="250" height="100" rx="14" fill="var(--red-bg)" stroke="var(--red)" stroke-width="2.5"/><text class="name" x="745" y="292" style="fill:var(--red)">Rejected</text><text class="state" x="745" y="320">DISPATCH_FAILED</text><text class="note" x="745" y="344">No run exists</text><rect x="620" y="384" width="250" height="100" rx="14" fill="var(--amber-bg)" stroke="var(--amber)" stroke-width="2.5"/><text class="name" x="745" y="416" style="fill:var(--amber)">Unknown</text><text class="state" x="745" y="444">DISPATCHING</text><text class="note" x="745" y="468">Same try stays open</text><path d="M870 310H918" fill="none" stroke="var(--red)" stroke-width="3" marker-end="url(#m-red)"/><rect x="920" y="260" width="240" height="100" rx="14" fill="var(--node)" stroke="var(--line)" stroke-width="2.5"/><text class="name" x="1040" y="307.5">Run again</text><text class="note" x="1040" y="335.5">new try</text><path d="M870 434H918" fill="none" stroke="var(--amber)" stroke-width="3" marker-end="url(#m-amber)"/><rect x="920" y="384" width="240" height="100" rx="14" fill="var(--node)" stroke="var(--line)" stroke-width="2.5"/><text class="name" x="1040" y="431.5">Run or Reconcile</text><text class="note" x="1040" y="459.5">same run ID</text><rect x="40" y="508" width="1120" height="84" rx="14" fill="var(--band)"/><text class="point" x="64" y="544">Unknown isn't failure. Recovery keeps the run ID, so nothing runs twice.</text><text class="foot" x="64" y="572">This needs the job system to honor the run ID. The simulator does; a real one must too.</text></svg>
