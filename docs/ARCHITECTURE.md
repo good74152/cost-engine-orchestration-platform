@@ -196,9 +196,8 @@ Raw ingestion remains a separate supported workflow. Its business key isn't seri
 | Guided scenarios | Backend APIs with a durable step ledger remain and are tested. The page no longer uses them. | [ADR-0011](adr/0011-demo-scenario-persistence-and-mode-isolation.md), [ADR-0012](adr/0012-demo-scenario-step-idempotency.md) |
 | Page | One page plays scripted scenarios and offers a manual mode through the same `/demo/*` APIs. It holds no lifecycle rule. Requires `WORKFLOW_OPEN`. | [ADR-0020](adr/0020-one-page-demo-ui.md), [Demo-09](tasks/demo-09-manual-mode.md) |
 | Public deployment | Caddy is the only public entry; Node and PostgreSQL stay on private networks. An explicit profile validates origin, secrets and limits. Web opens only by explicit command. | [ADR-0013](adr/0013-restricted-public-demo-deployment.md), [Deployment](DEPLOYMENT.md) |
-| Backup and recovery | Offline and online backups, restore into disposable targets only, read-only drills and offline readiness reports. No production restore command, and no RPO or RTO claim. | [Drill](RECOVERY_DRILL.md), [Readiness](RECOVERY_READINESS.md), [ADR-0019](adr/0019-offline-recovery-readiness-evidence.md) |
 
-A restored database doesn't restore FakeExecutor memory or a session's ability to run work.
+The demo keeps no backup: its data is disposable, and a lost database is rebuilt from migrations and the seed ([ADR-0021](adr/0021-remove-recovery-tooling.md)).
 
 ## 13. Status
 

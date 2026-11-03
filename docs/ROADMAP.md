@@ -278,3 +278,7 @@ Shortens the README and Architecture to current behavior and adds a [documentati
 - A reporting identity grain beyond the accepted quarterly model.
 
 FakeExecutor is the only implemented adapter and is limited to explicit development/test use. Its in-memory execution/tombstone state is not cross-process or restart durability.
+
+## Demo-11 — Remove recovery tooling
+
+Removes backups, restore verification, drills and readiness reports, and shrinks the deployment rehearsal to the scripts that still exist. The demo's data is disposable. See [ADR-0021](adr/0021-remove-recovery-tooling.md).

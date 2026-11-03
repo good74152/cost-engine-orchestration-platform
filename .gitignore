@@ -9,5 +9,4 @@ coverage/
 .DS_Store
 *.log
 deploy/secrets/
-deploy/backups/
 *.dump
