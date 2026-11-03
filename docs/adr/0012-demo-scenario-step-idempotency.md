@@ -1,6 +1,6 @@
 # ADR-0012 — Guided Scenario Step Idempotency and Recovery
 
-- Status: Accepted
+- Status: Superseded by [ADR-0022](0022-remove-guided-scenarios-and-cutover.md). The code was removed.
 - Date: 2026-10-25
 - Authority: System Owner's Demo-02C bounded specification. Implementation still
   requires review; this record does not approve or merge its PR.

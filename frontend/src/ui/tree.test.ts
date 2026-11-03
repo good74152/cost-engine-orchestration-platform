@@ -20,7 +20,7 @@ describe('dataset hierarchy',()=>{
  });
  it('returns nothing for a series with no versions',()=>expect(buildSeriesTree('x',[],{},{},MESSAGES.en)).toBeNull());
  it('treats an unknown dispatch as unknown, not failed',()=>{expect(toneOf('DISPATCHING')).toBe('unknown');expect(toneOf('FAILED')).toBe('bad');});
- it('turns job codes into plain words',()=>{expect(jobTitle('DEMO_CAPEX_TABLE_Y','CAPEX')).toBe('Table Y');expect(jobTitle('DEMO_GUIDED_SUMMARY','CAPEX')).toBe('Summary');});
+ it('turns job codes into plain words',()=>{expect(jobTitle('DEMO_CAPEX_TABLE_Y','CAPEX')).toBe('Table Y');expect(jobTitle('DEMO_CAPEX_SUMMARY','CAPEX')).toBe('Summary');});
 });
 describe('workflow map',()=>{
  it('reads links from template prerequisites',()=>{

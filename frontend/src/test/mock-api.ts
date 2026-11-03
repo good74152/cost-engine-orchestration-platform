@@ -4,7 +4,7 @@ export const json=(data:unknown,status=200)=>new Response(JSON.stringify(data),{
 export const fail=(code:string,status:number)=>json({code,message:'Safe backend message'},status);
 const uuid=(n:number)=>'10000000-0000-4000-8000-'+String(n).padStart(12,'0');
 const TIME='2026-11-02T01:00:00.000Z';
-const JOBS:Record<string,string[]>={FAB_COST:['DEMO_FAB_COST_SUMMARY'],CAPEX:['DEMO_CAPEX_TABLE_Y','DEMO_GUIDED_SUMMARY'],DPR:['DEMO_DPR_TABLE_X','DEMO_DPR_TABLE_Y'],
+const JOBS:Record<string,string[]>={FAB_COST:['DEMO_FAB_COST_SUMMARY'],CAPEX:['DEMO_CAPEX_TABLE_Y','DEMO_CAPEX_SUMMARY'],DPR:['DEMO_DPR_TABLE_X','DEMO_DPR_TABLE_Y'],
  INSURANCE:['DEMO_INSURANCE_SUMMARY'],ONE_STD_COST:['DEMO_ONE_STD_COST_TABLE_X','DEMO_ONE_STD_COST_TABLE_Y'],E2E_COST:['DEMO_E2E_COST_TABLE_X','DEMO_E2E_COST_TABLE_Y']};
 const NEEDS:Record<string,string>={CAPEX:'FAB_COST',DPR:'CAPEX',INSURANCE:'FAB_COST',ONE_STD_COST:'FAB_COST',E2E_COST:'ONE_STD_COST'};
 const TEMPLATE={steps:Object.keys(JOBS).flatMap(domain=>{const need=NEEDS[domain];return [
@@ -12,7 +12,7 @@ const TEMPLATE={steps:Object.keys(JOBS).flatMap(domain=>{const need=NEEDS[domain
 
 /** In-memory stand-in for the Demo API. Real behavior is proven by the PostgreSQL and browser tests. */
 export class MockApi {
- session:Session|null=null;admissionState='WORKFLOW_OPEN';
+ session:Session|null=null;
  datasets:Dataset[]=[];jobs:Job[]=[];attempts:(Attempt&{jobId:string;runId:string;external:string})[]=[];
  calls:{method:string;path:string;body:unknown}[]=[];
  override:((method:string,path:string)=>Response|undefined)|null=null;
@@ -30,7 +30,7 @@ export class MockApi {
   if(!this.session)return fail('DEMO_SESSION_UNAVAILABLE',401);
   if(path==='/demo/sessions/current')return json(this.session);
   if(path==='/demo/sessions/reset'){this.session=null;this.datasets=[];this.jobs=[];this.attempts=[];return new Response(null,{status:204});}
-  if(path==='/demo/workflow-templates')return json({admissionState:this.admissionState,templates:[]});
+  if(path==='/demo/workflow-templates')return json({templates:[]});
   if(path==='/demo/workflow-templates/SIX_DOMAIN_WORKFLOW')return json(TEMPLATE);
   const page=(items:unknown[])=>json({items,nextCursor:null});
   let m:RegExpExecArray|null;
@@ -38,7 +38,7 @@ export class MockApi {
   if(path==='/demo/dataset-versions')return this.create(body as {domain:string;fiscalYear:number;period:string});
   if((m=/^\/demo\/dataset-versions\/([^/]+)$/.exec(path)))return json(this.datasets.find(d=>d.datasetVersionId===m![1]));
   if((m=/^\/demo\/dataset-versions\/([^/]+)\/calculation-jobs$/.exec(path)))return page(this.jobs.filter(j=>j.datasetVersionId===m![1]));
-  if((m=/^\/demo\/dataset-versions\/([^/]+)\/(submit-validation|publish)$/.exec(path))){const d=this.datasets.find(x=>x.datasetVersionId===m![1])!;d.datasetStatus=m[2]==='publish'?'PUBLISHED':'VALIDATING';return json(d);}
+  if((m=/^\/demo\/dataset-versions\/([^/]+)\/(submit-validation|publish|reject|abandon)$/.exec(path)))return this.lifecycle(m[1]!,m[2]!);
   if((m=/^\/demo\/calculation-jobs\/([^/]+)\/execution-attempts$/.exec(path)))return page(this.attempts.filter(a=>a.jobId===m![1]));
   if((m=/^\/demo\/calculation-jobs\/([^/]+)\/run$/.exec(path)))return this.run(m[1]!,body as {simulation:{dispatch:string;completion:string}});
   if((m=/^\/demo\/calculation-jobs\/([^/]+)\/reconcile$/.exec(path)))return this.reconcile(m[1]!);
@@ -51,6 +51,15 @@ export class MockApi {
   const d:Dataset={datasetVersionId:this.id(),datasetSeriesId:same[0]?.datasetSeriesId??this.id(),domain,fiscalYear,period,version:same.length+1,datasetStatus:'DRAFT',createdAt:new Date(Date.parse(TIME)+this.next*1000).toISOString(),frozenInputs:[]};
   this.datasets.push(d);const calculationJobs=(JOBS[domain]??[]).map(code=>{const j:Job={jobId:this.id(),datasetVersionId:d.datasetVersionId,calculationTypeCode:code,jobStatus:'PENDING',createdAt:TIME,startedAt:null,finishedAt:null};this.jobs.push(j);return {jobId:j.jobId};});
   return json({...d,calculationJobs},201);
+ }
+ private lifecycle(id:string,command:string){
+  const d=this.datasets.find(x=>x.datasetVersionId===id)!;
+  if(command==='submit-validation'){
+   if(this.jobs.some(j=>j.datasetVersionId===id&&j.jobStatus!=='SUCCEEDED'))return fail('DATASET_NOT_READY_FOR_VALIDATION',409);
+   d.datasetStatus='VALIDATING';
+  }else if(command==='abandon')d.datasetStatus='ABANDONED';
+  else{if(d.datasetStatus!=='VALIDATING')return fail('STATE_CONFLICT',409);d.datasetStatus=command==='publish'?'PUBLISHED':'REJECTED';}
+  return json(d);
  }
  private run(jobId:string,{simulation}:{simulation:{dispatch:string;completion:string}}){
   const job=this.jobs.find(j=>j.jobId===jobId)!;const d=this.datasets.find(x=>x.datasetVersionId===job.datasetVersionId)!;
@@ -73,7 +82,8 @@ export class MockApi {
   return json(result,lost?202:200);
  }
  private reconcile(jobId:string){
-  const job=this.jobs.find(j=>j.jobId===jobId)!;const attempt=this.attempts.filter(a=>a.jobId===jobId).at(-1)!;
+  const job=this.jobs.find(j=>j.jobId===jobId)!;const attempt=this.attempts.filter(a=>a.jobId===jobId).at(-1);
+  if(!attempt)return fail('EXECUTION_NOT_RECONCILABLE',409);
   if(attempt.external==='SUCCEEDED'||attempt.external==='FAILED'){attempt.attemptStatus=attempt.external;job.jobStatus=attempt.external;attempt.finishedAt=TIME;job.finishedAt=TIME;}
   return json({jobId,jobStatus:job.jobStatus});
  }

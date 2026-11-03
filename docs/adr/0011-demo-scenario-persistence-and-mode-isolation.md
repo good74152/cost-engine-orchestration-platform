@@ -1,6 +1,6 @@
 # ADR-0011 — Demo Scenario Persistence and Mode Isolation
 
-- Status: Accepted
+- Status: Superseded by [ADR-0022](0022-remove-guided-scenarios-and-cutover.md). The code was removed.
 - Date: 2026-10-24
 - Authority: System Owner's Demo-02B bounded specification. Implementation and
   verification require Code Review; this is not implementation acceptance.

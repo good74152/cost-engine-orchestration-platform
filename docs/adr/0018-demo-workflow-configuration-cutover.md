@@ -1,6 +1,6 @@
 # ADR-0018 — Atomic Demo Workflow Configuration Cutover
 
-- Status: Accepted bounded System Owner specification; implementation awaits review.
+- Status: Superseded by [ADR-0022](0022-remove-guided-scenarios-and-cutover.md). The code was removed.
 - Baseline: Demo-05C-2 PR #39 merged at `04d7e51`.
 - Supplements ADR-0003/0006/0010/0011/0017; no Core execution changes.
 

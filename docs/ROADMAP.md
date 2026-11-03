@@ -254,7 +254,7 @@ pending. No production deployment/recovery or public DNS/TLS/RPO/RTO claim.
 
 ## Demo-06 — One-Page Demo UI
 
-Replaces the multi-page frontend with one page: three playable failure scenarios, a live
+Replaces the multi-page frontend with one page: four playable scenarios, a live
 Dataset / Job / Attempt hierarchy and read-only frozen inputs. Backend Guided APIs and Core protocols
 are unchanged. See [ADR-0020](adr/0020-one-page-demo-ui.md) and [the task](tasks/demo-06-one-page-ui.md).
 Merged after System Owner review.
@@ -263,6 +263,15 @@ Merged after System Owner review.
 
 Adds the [first-launch runbook](AWS_LIGHTSAIL_RUNBOOK.md) for one Lightsail instance. It reuses the existing
 deployment controls and adds no code. The System Owner runs it; no public launch has been recorded yet.
+
+## Demo-09 — Manual Mode
+
+Adds a [manual mode](tasks/demo-09-manual-mode.md): dropdowns and three tables for versions, jobs and tries. The backend
+decides what is allowed, and a dialog shows each refusal. There are no backend changes. Merged after System Owner review.
+
+## Demo-10 — Documentation Cleanup
+
+Shortens the README and Architecture to current behavior and adds a [documentation guide](README.md). ADRs, task specifications and verification reports stay as history.
 
 ## Deferred until a concrete requirement
 
@@ -274,3 +283,11 @@ deployment controls and adds no code. The System Owner runs it; no public launch
 - A reporting identity grain beyond the accepted quarterly model.
 
 FakeExecutor is the only implemented adapter and is limited to explicit development/test use. Its in-memory execution/tombstone state is not cross-process or restart durability.
+
+## Demo-11 — Remove recovery tooling
+
+Removes backups, restore verification, drills and readiness reports, and shrinks the deployment rehearsal to the scripts that still exist. The demo's data is disposable. See [ADR-0021](adr/0021-remove-recovery-tooling.md).
+
+## Demo-12 — Remove Guided scenarios and cutover
+
+Removes the unused Guided scenario APIs and the one-way admission gate and cutover. The seed now writes the final ten-type configuration directly, and Web opens on a ready Backend. See [ADR-0022](adr/0022-remove-guided-scenarios-and-cutover.md).

@@ -22,18 +22,11 @@ export interface WorkflowTemplate {
   readonly version: number;
   readonly title: string;
   readonly description: string;
-  readonly availability: 'PREVIEW';
   readonly steps: readonly WorkflowStep[];
 }
 
 export type WorkflowTemplateSummary = Omit<WorkflowTemplate, 'steps'>;
 
-/** HTTP projection only; developer-authored static definitions stay PREVIEW. */
-export type WorkflowTemplateResponse = Omit<WorkflowTemplate, 'availability'> & {
-  readonly availability: 'PREVIEW' | 'AVAILABLE';
-};
-export type WorkflowTemplateSummaryResponse = Omit<WorkflowTemplateResponse, 'steps'>;
 export interface WorkflowCatalogResponse {
-  readonly admissionState: 'LEGACY_OPEN' | 'DRAINING' | 'WORKFLOW_OPEN';
-  readonly templates: readonly WorkflowTemplateSummaryResponse[];
+  readonly templates: readonly WorkflowTemplateSummary[];
 }

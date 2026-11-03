@@ -11,7 +11,7 @@
         X-Content-Type-Options nosniff
         Referrer-Policy no-referrer
         Permissions-Policy "camera=(), microphone=(), geolocation=()"
-        Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'sha256-47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=' 'sha256-JE1tcvlXH6qavyMOZvuChCPlHOJ0eVdh7xKpJhkbzww='; img-src 'self' data:; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+        Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'sha256-47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=' 'sha256-JE1tcvlXH6qavyMOZvuChCPlHOJ0eVdh7xKpJhkbzww=' 'sha256-1fFFcb4ZF24nQzkqQbsVdu2s4Wnl//C7TpkEI8SRH5k='; img-src 'self' data:; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
         -Server
     }
     @health path /health /health/*

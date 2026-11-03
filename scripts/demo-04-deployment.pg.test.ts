@@ -13,7 +13,7 @@ import { DemoMaintenance } from '../src/deployment/demo-maintenance.js';
 import { DemoRuntime } from '../src/modules/demo-session/demo-runtime.js';
 import { SECURE_SESSION_COOKIE } from '../src/modules/demo-session/demo-session.service.js';
 import { createConfiguredCalculationExecutor, isApprovedFakeExecutorEnvironment } from '../src/executors/executor-factory.js';
-import { seedDemoGuidedConfiguration } from './seed-demo-guided-configuration.js';
+import { seedDemoSixDomainConfiguration } from './seed-demo-six-domain-configuration.js';
 
 const source = process.env.TEST_DATABASE_URL ?? process.env.DATABASE_URL;
 if (!source) throw new Error('Demo-04 requires a dedicated disposable PostgreSQL test service');
@@ -136,7 +136,7 @@ test('Demo-04 real PostgreSQL production profile and lifecycle', { timeout: 1800
     };
     await t.test('startup read-only migration and seed gate rejects incomplete configuration', async () => {
       await assert.rejects(verifyDemoDatabase(pool));
-      await seedDemoGuidedConfiguration(pool); await seedDemoGuidedConfiguration(pool);
+      await seedDemoSixDomainConfiguration(pool); await seedDemoSixDomainConfiguration(pool);
       await verifyDemoDatabase(pool);
       await pool.query("INSERT INTO pgmigrations(name,run_on) VALUES('unexpected_migration',now())");
       await assert.rejects(verifyDemoDatabase(pool), /inventory mismatch/);
@@ -216,7 +216,7 @@ test('Demo-04 real PostgreSQL production profile and lifecycle', { timeout: 1800
         process.env.DEMO_GLOBAL_MUTATIONS_PER_MINUTE = global ? '1' : '5000';
         const limited = await make();
         await post(limited.app, '/demo/sessions');
-        rejected(await post(limited.app, '/demo/scenarios', undefined, {}, global ? '192.0.2.2' : undefined), 429, 'DEMO_RATE_LIMITED');
+        rejected(await post(limited.app, '/demo/dataset-versions', undefined, {}, global ? '192.0.2.2' : undefined), 429, 'DEMO_RATE_LIMITED');
       }
       process.env.DEMO_MUTATIONS_PER_MINUTE = '1000'; process.env.DEMO_GLOBAL_MUTATIONS_PER_MINUTE = '5000';
     });
@@ -246,27 +246,24 @@ test('Demo-04 real PostgreSQL production profile and lifecycle', { timeout: 1800
       process.env.DEMO_MAX_ACTIVE_SESSIONS = '100'; process.env.DEMO_MAX_EXECUTORS = '100'; process.env.DEMO_MAX_RETAINED_SESSIONS = '10000';
     });
     await runtime.reset.startServer();
-    await t.test('all guided flows, ownership and Reset work unchanged under production profile', async () => {
-      for (const type of ['HAPPY_PATH', 'FAILURE_RETRY', 'LOST_RESPONSE_RECOVERY']) {
-        const s = await session(app); const other = await session(app);
-        const sc = await post(app, '/demo/scenarios', s.cookie, { scenarioType: type }); assert.equal(sc.statusCode, 201, sc.body);
-        for (let n = 1; n <= (type === 'FAILURE_RETRY' ? 9 : 6); n++) {
-          const payload = { expectedStep: n, requestId: randomUUID() }; const path = `/demo/scenarios/${sc.json().scenarioId}/next`;
-          let r = await post(app, path, s.cookie, payload);
-          if (type === 'LOST_RESPONSE_RECOVERY' && n === 2) { assert.equal(r.statusCode, 202, r.body); r = await post(app, path, s.cookie, payload); }
-          assert.equal(r.statusCode, 200, r.body);
-        }
-        const version = (await pool.query('SELECT v.id,v.status FROM dataset_versions v JOIN dataset_series s ON s.id=v.dataset_series_id WHERE s.company_code=$1', [s.dto.companyCode])).rows[0];
-        assert.equal(version.status, 'PUBLISHED');
-        rejected(await app.inject({ url: `/demo/dataset-versions/${version.id}`, headers: headers(other.cookie) }), 404, 'DEMO_RESOURCE_UNAVAILABLE');
-        assert.equal((await post(app, '/demo/sessions/reset', s.cookie)).statusCode, 204);
-        assert.equal((await pool.query('SELECT id FROM dataset_series WHERE company_code=$1', [s.dto.companyCode])).rowCount, 0);
+    await t.test('full lifecycle, ownership and Reset work under production profile', async () => {
+      const s = await session(app); const other = await session(app);
+      const created = await post(app, '/demo/dataset-versions', s.cookie, { domain: 'FAB_COST', fiscalYear: 2026, period: 'Q4' }); assert.equal(created.statusCode, 201, created.body);
+      const version = created.json().datasetVersionId; const job = created.json().calculationJobs[0].jobId;
+      const run = await post(app, `/demo/calculation-jobs/${job}/run`, s.cookie); assert.equal(run.statusCode, 200, run.body);
+      for (const [path, payload] of [[`/demo/execution-attempts/${run.json().executionAttemptId}/fake-state`, { state: 'SUCCEEDED' }], [`/demo/calculation-jobs/${job}/reconcile`, {}],
+        [`/demo/dataset-versions/${version}/submit-validation`, {}], [`/demo/dataset-versions/${version}/publish`, {}]] as const) {
+        const r = await post(app, path, s.cookie, payload); assert.equal(r.statusCode, 200, r.body);
       }
+      assert.equal((await pool.query('SELECT status FROM dataset_versions WHERE id=$1', [version])).rows[0].status, 'PUBLISHED');
+      rejected(await app.inject({ url: `/demo/dataset-versions/${version}`, headers: headers(other.cookie) }), 404, 'DEMO_RESOURCE_UNAVAILABLE');
+      assert.equal((await post(app, '/demo/sessions/reset', s.cookie)).statusCode, 204);
+      assert.equal((await pool.query('SELECT id FROM dataset_series WHERE company_code=$1', [s.dto.companyCode])).rowCount, 0);
     });
     await t.test('bounded periodic cleanup releases inactive owner fake, preserves active owner and history', async () => {
       const expired = await session(app); const active = await session(app);
       for (const s of [expired, active]) {
-        assert.equal((await post(app, '/demo/dataset-versions', s.cookie, { domain: 'CAPEX', fiscalYear: 2026, period: 'Q4' })).statusCode, 201);
+        assert.equal((await post(app, '/demo/dataset-versions', s.cookie, { domain: 'FAB_COST', fiscalYear: 2026, period: 'Q4' })).statusCode, 201);
         await runtime.executors.forSession(await runtime.sessions.authenticate(s.cookie, SECURE_SESSION_COOKIE));
       }
       await pool.query("UPDATE demo_sessions SET created_at=now()-interval '5 hours',expires_at=now()-interval '1 hour' WHERE id=$1", [expired.dto.sessionId]);

@@ -19,7 +19,6 @@ import { DemoRuntime, assertDemoEnvironment } from './modules/demo-session/demo-
 import { demoDomainRoutes } from './modules/demo-session/demo-domain.route.js';
 import { demoSessionResetRoutes } from './modules/demo-session/demo-session-reset.route.js';
 import { demoReadRoutes } from './modules/demo-session/demo-read.route.js';
-import { demoScenarioRoutes } from './modules/demo-scenario/demo-scenario.route.js';
 import { workflowTemplateRoutes } from './modules/workflow-template/workflow-template.route.js';
 import { publicDemoConfig } from './deployment/public-demo-config.js';
 import { installPublicDemoHttp } from './deployment/public-demo-http.js';
@@ -144,7 +143,6 @@ export async function buildApp(options: BuildAppOptions = {}) {
     await app.register(demoSessionResetRoutes(runtime, sessionOptions));
     await app.register(demoDomainRoutes(runtime, sessionOptions));
     await app.register(demoReadRoutes(runtime, sessionOptions));
-    await app.register(demoScenarioRoutes(runtime, sessionOptions));
     await app.register(workflowTemplateRoutes(runtime, sessionOptions));
   } else {
     await app.register(datasetVersionRoutes);

@@ -13,9 +13,7 @@ import type { DemoJobDto, DemoAttemptDto, DemoDatasetDetailDto } from '../src/mo
 import type { CalculationJobRunResult } from '../src/modules/calculation-job.types.js';
 import type { FakeRunSimulation } from '../src/executors/fake-executor.js';
 import type { DatasetDomain } from '../src/modules/dataset-version/dataset-version.types.js';
-import type { WorkflowTemplateResponse, WorkflowCatalogResponse } from '../src/modules/workflow-template/workflow-template.types.js';
-import { DemoAdmissionOperator } from '../src/modules/demo-admission/demo-admission.operator.js';
-import { DemoCutoverOperator } from '../src/modules/demo-cutover/demo-cutover.operator.js';
+import type { WorkflowTemplate, WorkflowCatalogResponse } from '../src/modules/workflow-template/workflow-template.types.js';
 import { types, upstream } from './support/six-domain-workflow-expectations.js';
 
 const source = process.env.TEST_DATABASE_URL;
@@ -41,7 +39,7 @@ async function until<T>(read: () => Promise<T>, ready: (value: T) => boolean, la
   }
 }
 
-test('Demo-05C-3B: six-domain API workflow on real migrated/cutover PostgreSQL', { timeout: 240_000 }, async t => {
+test('Demo-05C-3B: six-domain API workflow on real migrated PostgreSQL', { timeout: 240_000 }, async t => {
   const name = `demo_05c3b_${process.pid}_${randomUUID().replaceAll('-', '').slice(0, 12)}`;
   assert.match(name, /^demo_05c3b_[a-z0-9_]+$/); assert.ok(name.length <= 63);
   const admin = new Client({ connectionString: connection('postgres') }); await admin.connect();
@@ -59,17 +57,8 @@ test('Demo-05C-3B: six-domain API workflow on real migrated/cutover PostgreSQL',
     ]);
     db = pool; pool.on('connect', c => ends.push(new Promise<void>(done => c.once('end', done))));
     assert.equal((await pool.query('SELECT current_database() AS name')).rows[0].name, name);
-    assert.equal((await pool.query('SELECT count(*)::int AS n FROM pgmigrations')).rows[0].n, 14);
+    assert.equal((await pool.query('SELECT count(*)::int AS n FROM pgmigrations')).rows[0].n, 15);
     await seedDemoSixDomainConfiguration(pool);
-    const legacyDefinition = async () => (await pool.query(`SELECT to_jsonb(d) AS definition,
-      ARRAY(SELECT to_jsonb(e) FROM execution_dependency_definition_dependencies e WHERE e.definition_version_id=d.id) AS dependencies
-      FROM execution_dependency_definition_versions d JOIN calculation_types c ON c.id=d.calculation_type_id
-      WHERE c.domain='CAPEX' AND c.code='DEMO_GUIDED_SUMMARY' AND d.version=1`)).rows;
-    const preservedV1 = await legacyDefinition(); assert.equal(preservedV1.length, 1);
-    assert.equal((await new DemoAdmissionOperator(pool).drain()).state, 'DRAINING');
-    const cutover = new DemoCutoverOperator(pool);
-    assert.equal((await cutover.cutover()).outcome, 'APPLIED');
-    assert.equal((await cutover.status()).state, 'WORKFLOW_OPEN');
     const runtime = new DemoRuntime(pool, 'test', {}, { log() {} });
     app = await buildApp({ appMode: 'demo', demoRuntime: runtime, nodeEnvironment: 'test', logger: false,
       demoSession: { origin: 'https://demo.test' } });
@@ -168,7 +157,7 @@ test('Demo-05C-3B: six-domain API workflow on real migrated/cutover PostgreSQL',
         JOIN execution_dependency_definition_dependencies e ON e.definition_version_id=d.id
         WHERE j.output_dataset_version_id=$1 ORDER BY c.code`, [d.datasetVersionId])).rows;
       assert.deepEqual(rows.map(r => [r.code, r.version, r.status, r.required_domain]), [
-        ['DEMO_CAPEX_TABLE_Y', 1, 'PUBLISHED', 'FAB_COST'], ['DEMO_GUIDED_SUMMARY', 2, 'PUBLISHED', 'FAB_COST'],
+        ['DEMO_CAPEX_SUMMARY', 1, 'PUBLISHED', 'FAB_COST'], ['DEMO_CAPEX_TABLE_Y', 1, 'PUBLISHED', 'FAB_COST'],
       ]);
     };
 
@@ -190,7 +179,7 @@ test('Demo-05C-3B: six-domain API workflow on real migrated/cutover PostgreSQL',
       assert.equal(definitions.length, 10);
       for (const row of definitions) {
         assert.equal(row.status, 'PUBLISHED');
-        assert.equal(row.version, row.code === 'DEMO_GUIDED_SUMMARY' ? 2 : 1);
+        assert.equal(row.version, 1);
         const required = upstream[row.domain as DatasetDomain]; assert.deepEqual(row.deps, required ? [required] : []);
       }
       const identities = (await pool.query(`SELECT ds.domain,ds.company_code,ds.fiscal_year,ds.period,v.status,
@@ -236,7 +225,7 @@ test('Demo-05C-3B: six-domain API workflow on real migrated/cutover PostgreSQL',
       result(await lifecycle(s, capex1, 'submit-validation')); result(await lifecycle(s, capex1, 'publish'));
       const capex2 = await create(s, 'CAPEX'); assert.equal(capex2.version, capex1.version + 1);
       await publish(s, capex2); await assertSnapshot(capex2, fab2); await assertPublished(s, capex2);
-      assert.deepEqual(await frozen(capex1), original); assert.deepEqual(await legacyDefinition(), preservedV1);
+      assert.deepEqual(await frozen(capex1), original);
       const commands = (await runtime.executors.forSession(s.context)).getDispatchHistory().filter(c => c.datasetVersionId === capex1.datasetVersionId);
       assert.equal(commands.length, 2); assert.ok(commands.every(c => c.upstreamDatasetVersions[0]!.datasetVersionId === fab1.datasetVersionId));
     });
@@ -360,7 +349,7 @@ test('Demo-05C-3B: six-domain API workflow on real migrated/cutover PostgreSQL',
       await assertPublished(s, capex); await assertPublished(s, fab2);
     });
 
-    await t.test('v2 PREVIEW list/details remain read-only in WORKFLOW_OPEN and preserve Legacy Definition v1', async () => {
+    await t.test('workflow template list and detail stay read-only', async () => {
       const s = await session();
       const dump = async () => {
         const rows: Record<string, unknown> = {};
@@ -371,18 +360,15 @@ test('Demo-05C-3B: six-domain API workflow on real migrated/cutover PostgreSQL',
       };
       const before = await dump(); const fakes = runtime.executors.size;
       const list = result<WorkflowCatalogResponse>(await get('/demo/workflow-templates', s));
-      assert.equal(list.admissionState, 'WORKFLOW_OPEN');
-      assert.equal(list.templates.length, 4);
+      assert.equal(list.templates.length, 1);
       for (const summary of list.templates) {
-        assert.equal(summary.version, 2); assert.equal(summary.availability, 'AVAILABLE');
-        const { steps, ...detail } = result<WorkflowTemplateResponse>(await get(`/demo/workflow-templates/${summary.id}`, s));
+        const { steps, ...detail } = result<WorkflowTemplate>(await get(`/demo/workflow-templates/${summary.id}`, s));
         assert.deepEqual(detail, summary); assert.ok(steps.length);
       }
       assert.deepEqual(await dump(), before); assert.equal(runtime.executors.size, fakes);
-      assert.deepEqual(await legacyDefinition(), preservedV1);
     });
     for (const row of evidence) t.diagnostic(`POSTGRES_LOCK_EVIDENCE ${JSON.stringify(row)}`);
-    console.info('DEMO_05C3B_VERIFIED', JSON.stringify({ migrations: 14, gate: 'WORKFLOW_OPEN', domains: 6, jobs: 10,
+    console.info('DEMO_05C3B_VERIFIED', JSON.stringify({ migrations: 15, domains: 6, jobs: 10,
       lockSchedules: evidence.length, coreModified: false }));
   } finally {
     await app?.close(); await db?.end(); await Promise.all(ends);

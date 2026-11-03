@@ -28,13 +28,27 @@ Only deleting it stops the charge.
 
 ## 2. Instance
 
+Create your SSH key in WSL (or any Linux or macOS shell), and keep the private half on your computer:
+
+```sh
+ssh-keygen -t ed25519 -f ~/.ssh/cost-engine-lightsail
+cat ~/.ssh/cost-engine-lightsail.pub
+```
+
+Upload the `.pub` text in Lightsail → **Account → SSH keys**, with Tokyo selected.
+
+A new account's instance quota can be 0, which blocks creating an instance. If the create page says so, open
+Service Quotas → Amazon Lightsail → **Instances (vCPU)** in Tokyo and request an increase. The form's minimum was 20 when
+this was written. It costs nothing, and only instances bill. Approval can take a while.
+
 Lightsail console → **Create instance**:
 
 - Region: Tokyo (`ap-northeast-1`).
-- Blueprint: OS only, the newest Ubuntu LTS offered.
-- SSH key: create your own key and keep it private.
+- Blueprint: Linux, OS only, Ubuntu 24.04 LTS.
+- SSH key: the one you uploaded.
 - Network type: dual-stack (it has the public IPv4 address).
 - Plan: General purpose, $12, 2 GB.
+- Automatic snapshots: off.
 
 Then, on the instance:
 
@@ -69,14 +83,14 @@ nslookup cost-engine.ichiaho.dev 1.1.1.1
 
 ## 4. Host
 
-Connect with `ssh -i YOUR_KEY ubuntu@STATIC_IP`, then:
+Connect with `ssh -i ~/.ssh/cost-engine-lightsail ubuntu@STATIC_IP`, then:
 
 ```sh
 sudo apt update && sudo apt -y upgrade
 sudo sshd -T | grep -i '^passwordauthentication'   # must print "no"
 id -u                                              # must print 1000, the containers' user
 
-# Headroom for image builds and the restore check on a 2 GB instance.
+# Headroom for image builds on a 2 GB instance.
 sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile
 sudo mkswap /swapfile && sudo swapon /swapfile
 echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
@@ -108,7 +122,7 @@ Log out and back in so the group applies, then check `docker compose version`.
 
 ```sh
 git clone https://github.com/good74152/cost-engine-orchestration-platform.git ~/cost-engine
-sudo install -d -o ubuntu -g ubuntu -m 700 /opt/cost-engine-demo /opt/cost-engine-demo/secrets /var/backups/cost-engine-demo
+sudo install -d -o ubuntu -g ubuntu -m 700 /opt/cost-engine-demo /opt/cost-engine-demo/secrets
 
 ( cd /opt/cost-engine-demo/secrets && umask 077
   password=$(openssl rand -hex 24)
@@ -135,11 +149,10 @@ defaults in [DEPLOYMENT.md](DEPLOYMENT.md#configuration).
 
 Build once in the open first, because `deploy.sh` hides build output. If the build is
 killed for lack of memory, check that swap is on with `free -h`. If you reconnect later,
-run the two `export` lines again, and in steps 7 and 8 the `TARGET` line too.
+run the `export` line again.
 
 ```sh
 export DEMO_DEPLOY_ENV=/opt/cost-engine-demo/compose.env
-export DEMO_BACKUP_DIR=/var/backups/cost-engine-demo
 docker compose --env-file "$DEMO_DEPLOY_ENV" -f deploy/compose.yaml config --quiet
 docker compose --env-file "$DEMO_DEPLOY_ENV" -f deploy/compose.yaml \
   --profile operations --profile public-web build backend web operator
@@ -147,35 +160,17 @@ docker compose --env-file "$DEMO_DEPLOY_ENV" -f deploy/compose.yaml \
 
 ## 7. First install
 
-Run these one at a time and stop at the first failure. Do not retry a failed step
-blindly; read [DEPLOYMENT.md](DEPLOYMENT.md#backup-and-restore) first. This is the order
-the [deployment rehearsal](tasks/demo-05d4-deployment-rehearsal.md) runs in CI.
+Run these one at a time and stop at the first failure. This is the order the
+deployment rehearsal runs in CI.
 
 ```sh
-TARGET='--database-url-file /run/secrets/database_url'
-
-sh deploy/scripts/deploy.sh                              # Web closed; only the database starts
+sh deploy/scripts/deploy.sh                 # Web closed; only the database starts
 sh deploy/scripts/operate.sh migrate-up
 sh deploy/scripts/operate.sh seed-six-domain
-sh deploy/scripts/operate.sh admission-drain $TARGET
-sh deploy/scripts/operate.sh cutover-preflight $TARGET   # "result" must be "PASS"
-
-sh deploy/scripts/backup.sh $TARGET                      # note the "identity" it prints
-sh deploy/scripts/verify-backup.sh --backup-file \
-  /var/backups/cost-engine-demo/IDENTITY/backup.dump     # must print RESTORE_VERIFIED
+sh deploy/scripts/start.sh                  # Backend ready; Web still closed
 ```
 
-The next command cannot be undone. Run it only after the restore is verified.
-
-```sh
-sh deploy/scripts/operate.sh cutover $TARGET
-sh deploy/scripts/operate.sh cutover-status $TARGET      # WORKFLOW_OPEN and WORKFLOW
-sh deploy/scripts/start.sh                               # Backend ready; Web still closed
-
-sh deploy/scripts/backup-live.sh $TARGET                 # note the "identity" again
-sh deploy/scripts/verify-backup-live.sh --backup-file \
-  /var/backups/cost-engine-demo/IDENTITY/backup.dump     # must print RESTORE_VERIFIED
-```
+If the database is wrong or lost during first install, the simplest fix is a fresh one. The demo holds no data worth keeping.
 
 ## 8. Open and check
 
@@ -183,7 +178,7 @@ Repeat the `nslookup` from step 3 first. Repeated failed certificate requests ca
 the certificate authority's rate limits.
 
 ```sh
-sh deploy/scripts/open-web.sh --confirm-owner-acceptance-05d2-05d3 $TARGET
+sh deploy/scripts/open-web.sh
 ```
 
 From your own computer:
@@ -214,8 +209,8 @@ Then add an external uptime check on the public URL. The reason is in the next s
 
 ## Later operations
 
-Run all of these from `~/cost-engine` with `DEMO_DEPLOY_ENV` and `DEMO_BACKUP_DIR` exported.
-Never run `docker compose down -v` or `docker volume prune`: both can delete the database.
+Run all of these from `~/cost-engine` with `DEMO_DEPLOY_ENV` exported.
+Avoid `docker compose down -v` and `docker volume prune`: both delete the database, and you'd have to migrate and seed again.
 
 **After a reboot.** The site stays down until you open it. This is deliberate: a daemon
 restart must not reopen a closed site. Backend restart also ends existing demo sessions,
@@ -223,14 +218,12 @@ because the simulated executor's memory is gone.
 
 ```sh
 sh deploy/scripts/start.sh
-sh deploy/scripts/open-web.sh --confirm-owner-acceptance-05d2-05d3 --database-url-file /run/secrets/database_url
+sh deploy/scripts/open-web.sh
 ```
 
 **Release a new version.** Expect a short outage.
 
 ```sh
-# Only if the release adds migrations, back up now, while the versions still match:
-#   sh deploy/scripts/backup-live.sh --database-url-file /run/secrets/database_url
 git fetch origin && git checkout COMMIT
 sed -i "s/^DEPLOYMENT_VERSION=.*/DEPLOYMENT_VERSION=$(git rev-parse --short=12 HEAD)/" "$DEMO_DEPLOY_ENV"
 docker compose --env-file "$DEMO_DEPLOY_ENV" -f deploy/compose.yaml \
@@ -239,7 +232,7 @@ sh deploy/scripts/deploy.sh
 # Only if the release adds migrations:
 #   sh deploy/scripts/operate.sh migrate-up
 sh deploy/scripts/start.sh
-sh deploy/scripts/open-web.sh --confirm-owner-acceptance-05d2-05d3 --database-url-file /run/secrets/database_url
+sh deploy/scripts/open-web.sh
 ```
 
 **Take the demo down for good.** Delete the instance and release the static IP in the
@@ -252,6 +245,6 @@ from public DNS, and building on a 2 GB instance, are first proved by this launc
 
 ## What this launch does not claim
 
-- No scheduled or off-host backup, and no RPO or RTO target. Demo data is disposable.
+- No backup, and no RPO or RTO target. Demo data is disposable ([ADR-0021](adr/0021-remove-recovery-tooling.md)).
 - One instance: no high availability, and basic rate limits rather than DDoS protection.
 - The executor is simulated. There is no real Airflow and no financial calculation.

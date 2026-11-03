@@ -28,7 +28,7 @@ function error(response: Response, status: number, code: string) {
   assert.equal(response.json().code, code);
   assert.equal(response.headers['cache-control'], 'no-store');
 }
-const paths = ['/demo/workflow-templates', '/demo/workflow-templates/HAPPY_PATH'];
+const paths = ['/demo/workflow-templates', '/demo/workflow-templates/SIX_DOMAIN_WORKFLOW'];
 
 test('Demo-05C-1: protected read-only catalog and existing session barriers', { timeout: 120_000 }, async t => {
   const name = `demo_05c1_test_${process.pid}_${randomUUID().replaceAll('-', '').slice(0, 12)}`;
@@ -47,7 +47,7 @@ test('Demo-05C-1: protected read-only catalog and existing session barriers', { 
     ]);
     db = pool; pool.on('connect', client => ends.push(new Promise<void>(done => client.once('end', done))));
     assert.equal((await pool.query('SELECT current_database() AS name')).rows[0].name, name);
-    assert.equal((await pool.query('SELECT count(*)::int AS n FROM pgmigrations')).rows[0].n, 14);
+    assert.equal((await pool.query('SELECT count(*)::int AS n FROM pgmigrations')).rows[0].n, 15);
     const runtime = new DemoRuntime(pool, 'test', {}, { log() {} });
     app = await buildApp({ appMode: 'demo', demoRuntime: runtime, nodeEnvironment: 'test', logger: false, demoSession: { origin: 'https://demo.test' } });
     const post = (url: string, s?: Session, payload: unknown = {}) => app!.inject({ method: 'POST', url, payload: JSON.stringify(payload),
@@ -68,12 +68,12 @@ test('Demo-05C-1: protected read-only catalog and existing session barriers', { 
       return state;
     };
 
-    await t.test('all four templates and consistent exact list/detail contracts without seeded Domain configuration', async () => {
+    await t.test('the template and consistent exact list/detail contracts without seeded Domain configuration', async () => {
       const s = await session();
       assert.equal((await pool.query('SELECT id FROM calculation_types')).rowCount, 0);
       const list = await get(paths[0]!, s);
       assert.equal(list.statusCode, 200, list.body); assert.equal(list.headers['cache-control'], 'no-store');
-      assert.deepEqual(list.json(), { admissionState: 'LEGACY_OPEN', templates: listWorkflowTemplates() });
+      assert.deepEqual(list.json(), { templates: listWorkflowTemplates() });
       for (const summary of list.json<{ templates: WorkflowTemplateSummary[] }>().templates) {
         const response = await get(`/demo/workflow-templates/${summary.id}`, s);
         assert.equal(response.statusCode, 200, response.body);
@@ -108,10 +108,10 @@ test('Demo-05C-1: protected read-only catalog and existing session barriers', { 
 
     await t.test('reject extra queries and unknown case-sensitive template IDs with flat errors', async () => {
       const s = await session();
-      for (const path of paths) for (const query of ['?limit=4', '?id=HAPPY_PATH', '?extra=', '?a=1&a=2', '?__proto__=x']) {
+      for (const path of paths) for (const query of ['?limit=4', '?id=SIX_DOMAIN_WORKFLOW', '?extra=', '?a=1&a=2', '?__proto__=x']) {
         error(await get(path + query, s), 400, 'INVALID_REQUEST');
       }
-      for (const id of ['missing', 'happy_path', '__proto__', 'constructor', '%20']) error(await get(`/demo/workflow-templates/${id}`, s), 404, 'DEMO_RESOURCE_UNAVAILABLE');
+      for (const id of ['missing', 'six_domain_workflow', '__proto__', 'constructor', '%20']) error(await get(`/demo/workflow-templates/${id}`, s), 404, 'DEMO_RESOURCE_UNAVAILABLE');
     });
 
     await t.test('Demo-only registration and no start/next mutation endpoints', async () => {
@@ -121,37 +121,33 @@ test('Demo-05C-1: protected read-only catalog and existing session barriers', { 
       finally { process.env.APP_MODE = 'demo'; }
       try { for (const path of paths) assert.equal((await core.inject({ method: 'GET', url: path })).statusCode, 404); }
       finally { await core.close(); }
-      for (const path of ['/demo/workflow-templates/start', '/demo/workflow-templates/next', '/demo/workflow-templates/HAPPY_PATH/start']) {
+      for (const path of ['/demo/workflow-templates/start', '/demo/workflow-templates/next', '/demo/workflow-templates/SIX_DOMAIN_WORKFLOW/start']) {
         assert.equal((await post(path)).statusCode, 404);
       }
     });
 
-    await t.test('catalog is identical for empty, Free Exploration and active Guided sessions; all persisted state and Fake registry stay unchanged', async st => {
+    await t.test('catalog is identical for empty and active sessions; all persisted state and Fake registry stay unchanged', async st => {
       await seedDemoSixDomainConfiguration(pool);
-      const empty = await session(); const free = await session(); const guided = await session();
-      const dataset = await post('/demo/dataset-versions', free, { domain: 'CAPEX', fiscalYear: 2026, period: 'Q4' }); assert.equal(dataset.statusCode, 201, dataset.body);
+      const empty = await session(); const free = await session();
+      const dataset = await post('/demo/dataset-versions', free, { domain: 'FAB_COST', fiscalYear: 2026, period: 'Q4' }); assert.equal(dataset.statusCode, 201, dataset.body);
       const run = await post(`/demo/calculation-jobs/${dataset.json().calculationJobs[0].jobId}/run`, free); assert.equal(run.statusCode, 200, run.body);
-      const scenario = await post('/demo/scenarios', guided, { scenarioType: 'HAPPY_PATH' }); assert.equal(scenario.statusCode, 201, scenario.body);
-      const next = await post(`/demo/scenarios/${scenario.json().scenarioId}/next`, guided, { expectedStep: 1, requestId: randomUUID() }); assert.equal(next.statusCode, 200, next.body);
       const before = await dump(); const fakeSize = runtime.executors.size;
       const originalQuery = pool.query;
       const query = st.mock.method(pool, 'query', function (...args: unknown[]) {
-        // Authentication/revalidation and availability may read only Session/Gate.
+        // Authentication and revalidation may read only the session.
         assert.equal(typeof args[0], 'string');
-        assert.match(args[0] as string, /^\s*SELECT (?:(?:id, company_code, expires_at|id) FROM demo_sessions\s+WHERE|state FROM demo_admission_control WHERE id=1$)/);
+        assert.match(args[0] as string, /^\s*SELECT (?:id, company_code, expires_at|id) FROM demo_sessions\s+WHERE/);
         return Reflect.apply(originalQuery, pool, args);
       });
       try {
-        for (const s of [empty, free, guided]) {
-          assert.deepEqual((await get(paths[0]!, s)).json(), { admissionState: 'LEGACY_OPEN', templates: listWorkflowTemplates() });
+        for (const s of [empty, free]) {
+          assert.deepEqual((await get(paths[0]!, s)).json(), { templates: listWorkflowTemplates() });
           for (const summary of listWorkflowTemplates()) assert.deepEqual((await get(`/demo/workflow-templates/${summary.id}`, s)).json(), getWorkflowTemplate(summary.id));
         }
       } finally { query.mock.restore(); }
       assert.deepEqual(await dump(), before);
       assert.equal(runtime.executors.size, fakeSize);
       assert.equal(runtime.executors.hasSession(empty.context.sessionId), false);
-      assert.equal(runtime.executors.hasSession(guided.context.sessionId), false);
-      assert.equal((await post('/demo/sessions/reset', guided)).statusCode, 204);
       assert.equal((await post('/demo/sessions/reset', free)).statusCode, 204);
     });
 
@@ -200,30 +196,7 @@ test('Demo-05C-1: protected read-only catalog and existing session barriers', { 
       for (const path of paths) assert.equal((await get(path, s)).statusCode, 200);
       assert.equal(runtime.coordinator.activeSessionCount, 0);
     });
-    let drainSession: Session | undefined;
-    await t.test('PostgreSQL DRAINING projects PREVIEW consistently without modifying static definitions or resource state', async () => {
-      const { DemoAdmissionOperator } = await import('../src/modules/demo-admission/demo-admission.operator.js');
-      const s = await session(); drainSession = s; await new DemoAdmissionOperator(pool).drain(); const before = await dump();
-      const list = await get(paths[0]!, s);
-      assert.deepEqual(list.json(), { admissionState: 'DRAINING', templates: listWorkflowTemplates() });
-      for (const summary of listWorkflowTemplates()) {
-        const detail = await get('/demo/workflow-templates/' + summary.id, s);
-        assert.equal(detail.statusCode, 200, detail.body); assert.deepEqual(detail.json(), getWorkflowTemplate(summary.id));
-      }
-      assert.deepEqual(await dump(), before);
-    });
-    await t.test('missing/unreadable PostgreSQL Gate fails both catalog routes closed with sanitized 503', async () => {
-      assert.ok(drainSession); const before = await dump();
-      await pool.query('ALTER TABLE demo_admission_control RENAME TO unavailable_admission_fixture');
-      try {
-        for (const path of paths) {
-          const r = await get(path, drainSession); error(r, 503, 'DEMO_ADMISSION_UNAVAILABLE');
-          assert.doesNotMatch(r.body, /postgres|relation|SELECT|unavailable_admission_fixture/i);
-        }
-      } finally { await pool.query('ALTER TABLE unavailable_admission_fixture RENAME TO demo_admission_control'); }
-      assert.deepEqual(await dump(), before);
-    });
-    console.info('DEMO_05C1_EVIDENCE', JSON.stringify({ database: name, migrations: 14, domainStateUnchanged: true, parallelLimit: 4 }));
+    console.info('DEMO_05C1_EVIDENCE', JSON.stringify({ database: name, migrations: 15, domainStateUnchanged: true, parallelLimit: 4 }));
   } finally {
     try { await app?.close(); if (db) { await db.end(); await Promise.all(ends); } }
     finally {

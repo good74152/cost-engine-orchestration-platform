@@ -26,18 +26,20 @@ If a decision changes materially, prefer a new ADR that supersedes the old one i
 - [ADR-0008 — Identity-Scoped Definite Dispatch Rejection](0008-identity-scoped-definite-dispatch-rejection.md)
 - [ADR-0009 — Demo Session API and Executor Boundary](0009-demo-session-api-and-executor-boundary.md)
 - [ADR-0010 — Demo Session Reset and Recovery](0010-demo-session-reset-and-recovery.md)
-- [ADR-0011 — Demo Scenario Persistence and Mode Isolation](0011-demo-scenario-persistence-and-mode-isolation.md)
-- [ADR-0012 — Guided Scenario Step Idempotency and Recovery](0012-demo-scenario-step-idempotency.md)
+- [ADR-0011 — Demo Scenario Persistence and Mode Isolation](0011-demo-scenario-persistence-and-mode-isolation.md) (superseded by ADR-0022)
+- [ADR-0012 — Guided Scenario Step Idempotency and Recovery](0012-demo-scenario-step-idempotency.md) (superseded by ADR-0022)
 - [ADR-0013 — Restricted Single-Instance Public Demo](0013-restricted-public-demo-deployment.md)
 - [ADR-0014 — Canonical Domain Naming: E2E_COST](0014-canonical-domain-e2e-cost.md)
 - [ADR-0015 — Demo Session Parallel and Exclusive Admission](0015-demo-session-concurrency-gate.md)
 - [ADR-0016 — Request-Scoped Demo Simulation on Shared Execution Identities](0016-request-scoped-demo-simulation.md)
 
-- [ADR-0017 — PostgreSQL Demo Admission Drain](0017-demo-admission-drain.md)
+- [ADR-0017 — PostgreSQL Demo Admission Drain](0017-demo-admission-drain.md) (superseded by ADR-0022)
 
-- [ADR-0018 — Atomic Demo Workflow Configuration Cutover](0018-demo-workflow-configuration-cutover.md)
-- [ADR-0019 — Offline Recovery Readiness and Owner-attested Evidence](0019-offline-recovery-readiness-evidence.md)
+- [ADR-0018 — Atomic Demo Workflow Configuration Cutover](0018-demo-workflow-configuration-cutover.md) (superseded by ADR-0022)
+- [ADR-0019 — Offline Recovery Readiness and Owner-attested Evidence](0019-offline-recovery-readiness-evidence.md) (superseded by ADR-0021)
 - [ADR-0020 — One-Page Demo UI and Scenario Playback](0020-one-page-demo-ui.md)
+- [ADR-0021 — Remove Recovery Tooling](0021-remove-recovery-tooling.md)
+- [ADR-0022 — Remove Guided Scenarios and Cutover](0022-remove-guided-scenarios-and-cutover.md)
 
 ## Truth Boundary
 
