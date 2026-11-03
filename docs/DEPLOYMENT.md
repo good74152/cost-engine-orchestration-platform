@@ -4,6 +4,7 @@ This is deployment capability, not an already deployed website. System Owner own
 VPS, DNS, credentials, production operations and launch authorization. Local tests
 use disposable targets only. See [Demo-04](tasks/demo-04-secure-deployment.md) and
 [ADR-0013 / threat model](adr/0013-restricted-public-demo-deployment.md).
+For step-by-step first-launch commands, see the [AWS Lightsail runbook](AWS_LIGHTSAIL_RUNBOOK.md).
 
 ## Architecture and security
 

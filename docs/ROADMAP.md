@@ -257,7 +257,12 @@ pending. No production deployment/recovery or public DNS/TLS/RPO/RTO claim.
 Replaces the multi-page frontend with one page: three playable failure scenarios, a live
 Dataset / Job / Attempt hierarchy and read-only frozen inputs. Backend Guided APIs and Core protocols
 are unchanged. See [ADR-0020](adr/0020-one-page-demo-ui.md) and [the task](tasks/demo-06-one-page-ui.md).
-Await System Owner Review.
+Merged after System Owner review.
+
+## Demo-08 — AWS Lightsail Launch
+
+Adds the [first-launch runbook](AWS_LIGHTSAIL_RUNBOOK.md) for one Lightsail instance. It reuses the existing
+deployment controls and adds no code. The System Owner runs it; no public launch has been recorded yet.
 
 ## Deferred until a concrete requirement
 
