@@ -170,8 +170,8 @@ test('Demo-04 isolated Compose, HTTPS, production UI and PostgreSQL operations',
         const started = page.waitForResponse(r => new URL(r.url()).pathname === '/demo/sessions' && r.request().method() === 'POST');
         await page.getByRole('button', { name: 'Run Lost response', exact: true }).click();
         const created = await started; assert.equal(created.status(), 201);
-        await page.getByRole('dialog', { name: 'No duplicate run' }).waitFor({ timeout: 120000 });
-        await page.keyboard.press('Escape');
+        await page.getByRole('dialog', { name: 'The response never arrived' }).getByRole('button', { name: 'Check the same run' }).click({ timeout: 60000 });
+        await page.getByRole('dialog', { name: 'No duplicate run' }).waitFor({ timeout: 60000 });
         const cookies = await context.cookies(); const cookie = cookies.find(c => c.name === '__Host-ce_demo_session'); assert.ok(cookie?.secure && cookie.httpOnly);
         await page.reload(); await page.getByRole('heading', { level: 1 }).waitFor();
         await page.getByRole('button', { name: 'Clear my demo data', exact: true }).click();
