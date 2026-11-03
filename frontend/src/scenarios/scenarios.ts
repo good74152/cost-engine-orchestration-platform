@@ -1,5 +1,5 @@
 import {ApiError} from '../api/client';
-import type {CreatedDataset,RunResult} from '../api/types';
+import type {CreatedDataset,Dataset,Job,RunResult} from '../api/types';
 import {expectThat,type ScenarioDefinition,type ScenarioPlan,type ScenarioStep} from './engine';
 import {domainLabel,PUBLISH_ORDER} from './labels';
 
@@ -19,8 +19,9 @@ function normalClose():ScenarioPlan{
   const inputs=saved.frozenInputs.map(i=>domainLabel(i.domain)+' v'+i.version).join(', ');
   return {message:domainLabel(domain)+' v'+dataset.version+' is published'+(inputs?', using '+inputs:'')+'.',focusSeriesId:dataset.datasetSeriesId};
  }})),summary:async api=>{
-  const saved=await Promise.all(published.map(d=>api.dataset(d.datasetVersionId)));
-  const jobs=(await Promise.all(published.map(d=>api.jobs(d.datasetVersionId)))).flat();
+  // One at a time: the session gate rejects a fifth overlapping request.
+  const saved:Dataset[]=[];const jobs:Job[]=[];
+  for(const {datasetVersionId} of published){saved.push(await api.dataset(datasetVersionId));jobs.push(...await api.jobs(datasetVersionId));}
   return {title:'All six reports published',facts:[
    saved.filter(d=>d.datasetStatus==='PUBLISHED').length+' reports published, in order.',
    jobs.filter(j=>j.jobStatus==='SUCCEEDED').length+' jobs succeeded.',

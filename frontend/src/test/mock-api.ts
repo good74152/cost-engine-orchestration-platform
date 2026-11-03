@@ -16,12 +16,15 @@ export class MockApi {
  datasets:Dataset[]=[];jobs:Job[]=[];attempts:(Attempt&{jobId:string;runId:string;external:string})[]=[];
  calls:{method:string;path:string;body:unknown}[]=[];
  override:((method:string,path:string)=>Response|undefined)|null=null;
- private next=1;
+ private next=1;private inFlight=0;
  private id(){return uuid(this.next++);}
  posts(){return this.calls.filter(c=>c.method==='POST');}
  fetch:typeof fetch=async(input,init)=>{
   const url=new URL(String(input),'http://local');const method=init?.method??'GET';const path=url.pathname;
   const body=init?.body?JSON.parse(String(init.body)) as Record<string,unknown>:undefined;this.calls.push({method,path,body});
+  // Same limit as the backend's session gate: a fifth overlapping request gets 429.
+  if(++this.inFlight>4){this.inFlight--;return fail('DEMO_SESSION_QUEUE_FULL',429);}
+  await new Promise(done=>setTimeout(done,0));this.inFlight--;
   const forced=this.override?.(method,path);if(forced)return forced;
   if(path==='/demo/sessions'&&method==='POST'){this.session={sessionId:uuid(9000),companyCode:'DEMO_1',expiresAt:'2099-01-01T00:00:00.000Z',status:'ACTIVE'};return json(this.session,201);}
   if(!this.session)return fail('DEMO_SESSION_UNAVAILABLE',401);
