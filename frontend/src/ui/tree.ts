@@ -1,4 +1,5 @@
 import type {Attempt,Dataset,Job,WorkflowTemplate} from '../api/types';
+import type {Messages} from '../i18n/messages';
 import {domainLabel,type WorkflowLinks} from '../scenarios/labels';
 
 export type Tone='neutral'|'active'|'good'|'bad'|'unknown';
@@ -19,14 +20,7 @@ export function jobTitle(code:string,domain=''){
  const words=code.replace(/^DEMO_/,'').replace(new RegExp('^'+domain+'_'),'').replace(/^GUIDED_/,'').split('_');
  return words.map(w=>w.charAt(0)+w.slice(1).toLowerCase()).join(' ');
 }
-export const inputsLabel=(d:Dataset)=>d.frozenInputs.length?'Input locked: '+d.frozenInputs.map(i=>domainLabel(i.domain)+' v'+i.version).join(', '):undefined;
-
-export const EXPLANATIONS:Record<NodeKind,string>={
- series:'One report for one year/period. Requests for the same report take turns, so version numbers never repeat.',
- version:'One build of the report, and the thing that gets published. Its input locks when the first job starts.',
- job:'One calculation the report needs. The report can’t be approved until every job succeeds.',
- attempt:'One try at running a job. A retry adds a new try, so failures stay on record.',
-};
+export const inputsLabel=(d:Dataset,m:Messages)=>d.frozenInputs.length?m.workspace.inputLocked(d.frozenInputs.map(i=>domainLabel(i.domain)+' v'+i.version).join(', ')):undefined;
 
 /** Reads the template's prerequisites, so the page doesn't define the workflow itself. */
 export function linksFromTemplate(template:WorkflowTemplate):WorkflowLinks{
@@ -45,16 +39,16 @@ export function buildWorkflowMap(links:WorkflowLinks,inPeriod:Dataset[]):MapNode
 }
 
 /** Reads one report into dataset_series → dataset_version → calculation_job → execution_attempt. */
-export function buildSeriesTree(seriesId:string,datasets:Dataset[],jobs:Record<string,Job[]>,attempts:Record<string,Attempt[]>):ChartNode|null{
+export function buildSeriesTree(seriesId:string,datasets:Dataset[],jobs:Record<string,Job[]>,attempts:Record<string,Attempt[]>,m:Messages):ChartNode|null{
  const versions=datasets.filter(d=>d.datasetSeriesId===seriesId).sort((a,b)=>a.version-b.version);const first=versions[0];
  if(!first)return null;
  return {key:seriesId,expanded:true,data:{kind:'series',title:domainLabel(first.domain)+' '+first.fiscalYear+' '+first.period,caption:'dataset_series',tone:'neutral',id:seriesId},
-  children:versions.map(v=>{const note=inputsLabel(v);return {key:v.datasetVersionId,expanded:true as const,
-   data:{kind:'version' as const,title:'Version '+v.version,caption:'dataset_version',status:v.datasetStatus,tone:toneOf(v.datasetStatus),id:v.datasetVersionId,times:[['Created',v.createdAt]],...(note?{note}:{})},
+  children:versions.map(v=>{const note=inputsLabel(v,m);return {key:v.datasetVersionId,expanded:true as const,
+   data:{kind:'version' as const,title:'Version '+v.version,caption:'dataset_version',status:v.datasetStatus,tone:toneOf(v.datasetStatus),id:v.datasetVersionId,times:[[m.details.created,v.createdAt]],...(note?{note}:{})},
    children:(jobs[v.datasetVersionId]??[]).slice().sort((a,b)=>a.calculationTypeCode.localeCompare(b.calculationTypeCode)).map(j=>({key:j.jobId,expanded:true as const,
-    data:{kind:'job' as const,title:jobTitle(j.calculationTypeCode,v.domain),caption:'calculation_job',status:j.jobStatus,tone:toneOf(j.jobStatus),id:j.jobId,times:[['Started',j.startedAt],['Finished',j.finishedAt]]},
+    data:{kind:'job' as const,title:jobTitle(j.calculationTypeCode,v.domain),caption:'calculation_job',status:j.jobStatus,tone:toneOf(j.jobStatus),id:j.jobId,times:[[m.details.started,j.startedAt],[m.details.finished,j.finishedAt]]},
     children:(attempts[j.jobId]??[]).slice().sort((a,b)=>a.attemptNumber-b.attemptNumber).map(a=>({key:a.executionAttemptId,expanded:true as const,
-     data:{kind:'attempt' as const,title:'Try '+a.attemptNumber,caption:'execution_attempt',status:a.attemptStatus,tone:toneOf(a.attemptStatus),id:a.executionAttemptId,times:[['Created',a.createdAt],['Accepted',a.acceptedAt],['Finished',a.finishedAt]]},
+     data:{kind:'attempt' as const,title:'Try '+a.attemptNumber,caption:'execution_attempt',status:a.attemptStatus,tone:toneOf(a.attemptStatus),id:a.executionAttemptId,times:[[m.details.created,a.createdAt],[m.details.accepted,a.acceptedAt],[m.details.finished,a.finishedAt]]},
     })),
    })),
   };}),
@@ -62,7 +56,7 @@ export function buildSeriesTree(seriesId:string,datasets:Dataset[],jobs:Record<s
 }
 
 /** Shown before anything has run, so the hierarchy explains itself. */
-export const PREVIEW_TREE:ChartNode={key:'series',expanded:true,data:{kind:'series',title:'One report',caption:'dataset_series',tone:'neutral'},children:[
+export const previewTree=(m:Messages):ChartNode=>({key:'series',expanded:true,data:{kind:'series',title:m.workspace.oneReport,caption:'dataset_series',tone:'neutral'},children:[
  {key:'version',expanded:true,data:{kind:'version',title:'Version 1',caption:'dataset_version',tone:'neutral'},children:[
   {key:'job-a',expanded:true,data:{kind:'job',title:'Job A',caption:'calculation_job',tone:'neutral'},children:[
    {key:'attempt-a1',expanded:true,data:{kind:'attempt',title:'Try 1',caption:'execution_attempt',tone:'neutral'}},
@@ -72,4 +66,4 @@ export const PREVIEW_TREE:ChartNode={key:'series',expanded:true,data:{kind:'seri
    {key:'attempt-b1',expanded:true,data:{kind:'attempt',title:'Try 1',caption:'execution_attempt',tone:'neutral'}},
   ]},
  ]},
-]};
+]});

@@ -28,6 +28,13 @@ Out of scope: README and document cleanup, AWS deployment, automatic triggers, n
 | 11 | Frozen inputs and run ID were invisible | Input on version boxes; run ID in dialogs |
 | 12 | 404 noise and timestamps without seconds | The Guided read is gone; details show seconds |
 
+## Language switch
+
+The header switches between English and Traditional Chinese. Proper nouns and technical terms stay in English in
+both: Report, Version, Job, Try, scenario and report names, statuses, HTTP codes, run ID and Airflow. English is the
+default. The choice is kept in `localStorage` as a convenience, and the page still works when storage is blocked.
+Backend APIs and data are unaffected.
+
 ## Scenarios
 
 Each run takes a reporting period the session hasn't used, so scenarios can be replayed.

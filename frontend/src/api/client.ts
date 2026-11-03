@@ -1,3 +1,5 @@
+import {MESSAGES,type Lang} from '../i18n/messages';
+
 export class ApiError extends Error {
  constructor(readonly status:number,readonly code:string){super(code);this.name='ApiError';}
 }
@@ -33,34 +35,7 @@ export class ApiClient {
  }
 }
 
-const FALLBACK='The request didn’t finish. Reload the page to see the saved state, then try again.';
-const MESSAGES:Record<string,string>={
- DEMO_SESSION_UNAVAILABLE:'Your demo session ended. Run a scenario to start a new one.',
- NETWORK_ERROR:'The reply didn’t arrive, so the result is unknown. Nothing was retried automatically. Reload the page to see the saved state.',
- DEPENDENCY_NOT_READY:'This job needs an upstream dataset that isn’t published yet. Publish that dataset, then run the job again.',
- DEPENDENCY_DEFINITION_NOT_READY:'This job has no published dependency definition yet. Run the configuration seed for this environment.',
- CALCULATION_TYPE_NOT_CONFIGURED:'This domain has no calculation types configured. Run the configuration seed for this environment.',
- ACTIVE_DATASET_VERSION_EXISTS:'This dataset series already has a version in progress. Finish or abandon it first.',
- EXECUTOR_DISPATCH_FAILED:'The executor rejected this run, so it never started. You can retry the job.',
- EXECUTOR_STATUS_UNAVAILABLE:'The executor status isn’t available right now. The saved state wasn’t changed.',
- DATASET_NOT_READY_FOR_VALIDATION:'Every required job has to succeed before validation.',
- DATASET_HAS_ACTIVE_EXECUTION:'A job is still running, so this dataset can’t be abandoned yet.',
- JOB_NOT_RUNNABLE:'This job can’t run from its current state.',
- STATE_CONFLICT:'Another change got there first. Reload the page to see the current state.',
- RESET_CONFLICT:'Another operation is still running. Wait for it to finish, then clear your data.',
- DEMO_RESET_OUTCOME_UNKNOWN:'The result of clearing your data is unknown. Reload the page to check.',
- DEMO_RESET_FAILED:'Your data wasn’t cleared and nothing was lost. Try again.',
- DEMO_RATE_LIMITED:'Too many requests in a minute. Wait a moment, then run the scenario again.',
- DEMO_SESSION_QUEUE_FULL:'Too many requests are in progress. Wait a moment, then try again.',
- DEMO_SESSION_CAPACITY_REACHED:'The demo is at capacity right now. Try again later.',
- DEMO_EXECUTOR_CAPACITY_REACHED:'The demo is at capacity right now. Try again later.',
- DEMO_ADMISSION_UNAVAILABLE:'The demo’s configuration couldn’t be read. Reload the page to try again.',
- DEMO_ADMISSION_DRAINING:'The demo is being reconfigured. Try again later.',
- DEMO_NOT_WORKFLOW_OPEN:'This environment isn’t set up for the workflow yet. Complete the Workflow cutover in the deployment guide, then reload.',
- DEMO_SESSION_CSRF_REJECTED:'The request failed the same-origin check. Open the demo from its public address.',
- INVALID_RESPONSE:'The server’s reply couldn’t be read. Reload the page to see the saved state.',
-};
-export function errorMessage(error:unknown):{code:string;message:string}{
- const code=error instanceof ApiError?error.code:'REQUEST_FAILED';
- return {code,message:MESSAGES[code]??FALLBACK};
+export function errorMessage(error:unknown,lang:Lang='en'):{code:string;message:string}{
+ const code=error instanceof ApiError?error.code:'REQUEST_FAILED';const errors=MESSAGES[lang].errors;
+ return {code,message:errors[code]??errors.FALLBACK!};
 }

@@ -1,5 +1,6 @@
 import {ApiClient,ApiError,errorMessage} from '../api/client';
 import type {Attempt,Dataset,Job,Session,WorkflowCatalog,WorkflowTemplate} from '../api/types';
+import {MESSAGES,type Lang} from '../i18n/messages';
 import {ScenarioApi,ScenarioMismatch,type ApiCall,type PauseRequest,type ScenarioDefinition,type ScenarioSummary} from '../scenarios/engine';
 import {DEFAULT_LINKS,type WorkflowLinks} from '../scenarios/labels';
 import {nextReportingPeriod,scenarios} from '../scenarios/scenarios';
@@ -20,17 +21,24 @@ export interface PlaybackState {
 }
 export interface DemoState {
  session:Session|null;datasets:Dataset[];jobs:Record<string,Job[]>;attempts:Record<string,Attempt[]>;
- selectedSeriesId:string|null;links:WorkflowLinks;playback:PlaybackState|null;calls:ApiCall[];dialog:DialogState|null;runIds:Record<string,string>;clearing:boolean;
+ selectedSeriesId:string|null;links:WorkflowLinks;playback:PlaybackState|null;calls:ApiCall[];dialog:DialogState|null;runIds:Record<string,string>;clearing:boolean;lang:Lang;
 }
-const empty=():DemoState=>({session:null,datasets:[],jobs:{},attempts:{},selectedSeriesId:null,links:DEFAULT_LINKS,playback:null,calls:[],dialog:null,runIds:{},clearing:false});
+const LANGUAGE_KEY='ce-demo-language';
+/** Browser storage may be blocked. The language is a convenience, so English is the fallback. */
+function storedLanguage():Lang{try{return window.localStorage.getItem(LANGUAGE_KEY)==='zh-TW'?'zh-TW':'en';}catch{return 'en';}}
+const empty=(lang:Lang):DemoState=>({lang,session:null,datasets:[],jobs:{},attempts:{},selectedSeriesId:null,links:DEFAULT_LINKS,playback:null,calls:[],dialog:null,runIds:{},clearing:false});
 const sleep=(ms:number)=>new Promise<void>(done=>setTimeout(done,ms));
 
 /** Page state. Commands come only from a viewer's click; reloading the page sends GETs only. */
 export class DemoController {
- private state=empty();private readonly listeners=new Set<()=>void>();
+ private state=empty(storedLanguage());private readonly listeners=new Set<()=>void>();
  private epoch=0;private generation=0;private release:(()=>void)|null=null;
  readonly api:ApiClient;
- constructor(fetcher?:typeof fetch,private readonly stepDelay=900){this.api=new ApiClient(()=>this.sessionEnded(),fetcher);}
+ constructor(fetcher?:typeof fetch,private readonly stepDelay=900){this.api=new ApiClient(()=>this.sessionEnded(),fetcher);this.applyLanguage();}
+ messages(){return MESSAGES[this.state.lang];}
+ private applyLanguage(){document.documentElement.lang=this.state.lang;}
+ /** Text already on screen in a running step or an open dialog changes with the next update. */
+ setLanguage=(lang:Lang)=>{try{window.localStorage.setItem(LANGUAGE_KEY,lang);}catch{/* not remembered, still applied */}this.patch({lang});this.applyLanguage();};
  getSnapshot=()=>this.state;
  subscribe=(listener:()=>void)=>{this.listeners.add(listener);return()=>{this.listeners.delete(listener);};};
  private patch(change:Partial<DemoState>){this.state={...this.state,...change};this.listeners.forEach(l=>l());}
@@ -40,8 +48,8 @@ export class DemoController {
  /** A first-time visitor has no session. That is the normal start, not an error. */
  private sessionEnded(){
   const hadSession=!!this.state.session;this.abandon();
-  this.state=empty();
-  if(hadSession)this.state.dialog={kind:'error',title:'Your demo session ended',...errorMessage(new ApiError(401,'DEMO_SESSION_UNAVAILABLE'))};
+  const lang=this.state.lang;this.state=empty(lang);
+  if(hadSession)this.state.dialog={kind:'error',title:this.messages().dialog.sessionEnded,...errorMessage(new ApiError(401,'DEMO_SESSION_UNAVAILABLE'),lang)};
   this.listeners.forEach(l=>l());
  }
  private abandon(){this.epoch++;this.generation++;const release=this.release;this.release=null;release?.();}
@@ -53,7 +61,7 @@ export class DemoController {
    if(epoch!==this.epoch)return;this.patch({session});await this.refresh();if(epoch===this.epoch)await this.readWorkflow();}
   catch(error){
    if(epoch!==this.epoch||(error instanceof ApiError&&error.status===401))return;
-   this.showError('The saved state couldn’t be loaded',error);
+   this.showError(this.messages().dialog.loadFailed,error);
   }
  };
  /** Replaces data only when the whole read succeeds, so the page never empties or jumps. */
@@ -86,7 +94,7 @@ export class DemoController {
   return this.play(definition,mode);
  };
  private async play(definition:ScenarioDefinition,mode:'auto'|'step'){
-  const epoch=++this.epoch;const live=()=>epoch===this.epoch;const plan=definition.build();const total=plan.steps.length;
+  const epoch=++this.epoch;const live=()=>epoch===this.epoch;const plan=definition.build(this.messages());const total=plan.steps.length;
   this.patch({calls:[],dialog:null,playback:{scenarioId:definition.id,title:definition.title,mode,status:'running',stepNumber:1,totalSteps:total,
    stepTitle:plan.steps[0]!.title,nextStepTitle:null,message:''}});
   try{
@@ -118,12 +126,12 @@ export class DemoController {
   }catch(error){
    if(!live())return;
    this.patchPlayback({status:'failed'});
-   if(error instanceof ScenarioMismatch)this.patch({dialog:{kind:'error',title:'The backend replied differently than this scenario expected',message:error.message}});
-   else this.showError('The scenario stopped',error);
+   if(error instanceof ScenarioMismatch)this.patch({dialog:{kind:'error',title:this.messages().dialog.mismatch,message:error.message}});
+   else this.showError(this.messages().dialog.stopped,error);
    try{await this.refresh();}catch{/* the error dialog already explains the state */}
   }
  }
- private showError(title:string,error:unknown){this.patch({dialog:{kind:'error',title,...errorMessage(error)}});}
+ private showError(title:string,error:unknown){this.patch({dialog:{kind:'error',title,...errorMessage(error,this.state.lang)}});}
  /** Moves to the next step, or continues from a pause. */
  proceed=()=>{const release=this.release;this.release=null;release?.();};
  /** Leaves a step-through run. Data already saved stays visible. */
@@ -134,7 +142,7 @@ export class DemoController {
  askToClear=()=>{if(!this.isActive()||this.state.playback?.status==='waiting')this.patch({dialog:{kind:'clear'}});};
  clear=async()=>{
   this.patch({clearing:true});
-  try{await this.api.request<void>('/demo/sessions/reset',{});this.abandon();this.state=empty();this.listeners.forEach(l=>l());}
-  catch(error){this.patch({clearing:false});if(!(error instanceof ApiError&&error.status===401))this.showError('Your data wasn’t cleared',error);}
+  try{await this.api.request<void>('/demo/sessions/reset',{});this.abandon();this.state=empty(this.state.lang);this.listeners.forEach(l=>l());}
+  catch(error){this.patch({clearing:false});if(!(error instanceof ApiError&&error.status===401))this.showError(this.messages().dialog.notCleared,error);}
  };
 }

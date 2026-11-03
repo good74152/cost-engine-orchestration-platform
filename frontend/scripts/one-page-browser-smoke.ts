@@ -135,6 +135,15 @@ test('One-page demo: real Chromium, production bundle, CSP and PostgreSQL',{time
    await dialog('A step failed in a long workflow').getByText('Someone reran it by hand in Airflow.').waitFor();await shot('04c-then-now');await closeDialog('A step failed in a long workflow');
    assert.equal(posts.length,count);
   });
+  await t.test('the language switch changes the page, not the data, and survives a reload',async()=>{
+   const count=posts.length;
+   await page.getByRole('button',{name:'繁體中文'}).click();
+   await page.getByRole('heading',{level:1,name:/財務報表計算的 Async Workflow/}).waitFor();
+   assert.equal(await page.evaluate(()=>document.documentElement.lang),'zh-TW');await shot('04d-zh');
+   await page.reload();await page.getByRole('heading',{name:'選擇情境'}).waitFor();
+   await page.getByRole('button',{name:'English'}).click();await page.getByRole('heading',{name:'Pick a scenario'}).waitFor();
+   assert.equal(posts.length,count);
+  });
   await t.test('reloading the page restores saved state and sends no command',async()=>{
    const count=posts.length;await page.reload();
    await page.getByRole('group',{name:/Saved records for/}).waitFor();await page.waitForLoadState('networkidle');
@@ -191,7 +200,7 @@ test('One-page demo: real Chromium, production bundle, CSP and PostgreSQL',{time
    await page.reload();await page.getByRole('button',{name:'Run Lost reply'}).waitFor();assert.equal(await page.getByRole('dialog').count(),0);
   });
   assert.deepEqual(problems,[],'no CSP violation, console error or uncaught error across the whole run');
-  assert.equal(await page.evaluate(()=>localStorage.length),0);
+  assert.deepEqual(await page.evaluate(()=>Object.keys(localStorage)),['ce-demo-language'],'the language is the only thing kept in the browser');
   console.info('ONE_PAGE_BROWSER_VERIFIED',JSON.stringify({chromium:browser.version(),csp:policy}));await context.close();
  }finally{
   try{await browser?.close();await new Promise<void>(done=>web?web.close(()=>done()):done());await app?.close();await db?.end();await Promise.all(ends);await rm(dist,{recursive:true,force:true});}

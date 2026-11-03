@@ -56,6 +56,32 @@ describe('one-page demo',()=>{
   await dialog('The reply never arrived');
   expect(api.posts().length).toBeGreaterThan(0);
  });
+ it('switches language, keeps technical terms in English and remembers the choice',async()=>{
+  const {user,api}=mount();
+  expect(document.documentElement.lang).toBe('en');
+  await user.click(screen.getByRole('button',{name:'繁體中文'}));
+  expect(document.documentElement.lang).toBe('zh-TW');
+  expect(screen.getByRole('heading',{level:1})).toHaveTextContent('財務報表計算的 Async Workflow');
+  expect(screen.getByRole('heading',{name:'選擇情境'})).toBeInTheDocument();
+  expect(document.body.textContent).toContain('execution_attempt');
+  expect(document.body.textContent).toContain('Lost reply');
+  expect(api.posts()).toEqual([]);
+  await user.click(screen.getByRole('button',{name:'執行 Lost reply'}));
+  const paused=await dialog('回應沒有回來');
+  await user.click(within(paused).getByRole('button',{name:'確認同一次 run'}));
+  expect(await dialog('沒有重複執行')).toHaveTextContent('這個 job 有 1 個 try。');
+  expect(localStorage.getItem('ce-demo-language')).toBe('zh-TW');
+  cleanup();
+  mount(api);
+  expect(screen.getByRole('heading',{level:1})).toHaveTextContent('Async Workflow');
+  expect(document.documentElement.lang).toBe('zh-TW');
+ });
+ it('still works in English when browser storage is blocked',async()=>{
+  const real=Storage.prototype.getItem;Storage.prototype.getItem=()=>{throw new Error('blocked');};
+  try{const {user}=mount();expect(document.documentElement.lang).toBe('en');
+   await user.click(screen.getByRole('button',{name:'繁體中文'}));expect(document.documentElement.lang).toBe('zh-TW');}
+  finally{Storage.prototype.getItem=real;}
+ });
  it('pauses a lost response until the viewer recovers it, then proves there is no duplicate',async()=>{
   const {api,user}=mount();
   await user.click(screen.getByRole('button',{name:'Run Lost reply'}));
