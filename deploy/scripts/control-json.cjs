@@ -1,5 +1,4 @@
-// Deployment DTO/Container checks only. Configuration truth stays in the existing
-// Cutover Status Operator; no financial/configuration validator is duplicated.
+// Deployment DTO/Container checks only. The Backend verifies the Demo configuration at startup.
 const fs = require('node:fs');
 const [mode, project, name, image, version] = process.argv.slice(2);
 const requireValue = value => { if (!value) throw Error('Invalid deployment observation'); };
@@ -27,11 +26,6 @@ try {
       requireValue(service.secrets.some(s => s.source === 'database_url' && ['database_url','/run/secrets/database_url'].includes(s.target)));
     }
     console.log([v,data.name,b.container_name,b.image,w.image].join('|'));
-  } else if (mode === 'workflow-status') {
-    requireValue(data && !Array.isArray(data) && Object.keys(data).sort().join(',') === 'configuration,state,updatedAt');
-    requireValue(data.state === 'WORKFLOW_OPEN' && data.configuration === 'WORKFLOW');
-    requireValue(typeof data.updatedAt === 'string' && new Date(data.updatedAt).toISOString() === data.updatedAt);
-    console.log('WORKFLOW_CONFIRMED');
   } else {
     requireValue(Array.isArray(data));
     const inactive = c => !c.State.Running && !c.State.Restarting && !c.State.Paused && ['exited','dead','created'].includes(c.State.Status);

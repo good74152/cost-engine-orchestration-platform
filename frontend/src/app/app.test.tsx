@@ -208,13 +208,6 @@ describe('one-page demo',()=>{
   expect(stopped).toHaveTextContent('the result is unknown');
   expect(aborted).toBe(1);
  });
- it('refuses to run on an environment without the Workflow configuration',async()=>{
-  const api=new MockApi();api.admissionState='LEGACY_OPEN';
-  const {user}=mount(api);
-  await user.click(screen.getByRole('button',{name:'Run Lost response'}));
-  expect(await dialog('The scenario stopped')).toHaveTextContent('Workflow cutover');
-  expect(api.datasets).toEqual([]);
- });
  it('clears data only after confirmation',async()=>{
   const {api,user}=mount();
   await user.click(screen.getByRole('button',{name:'Run Conflicting requests'}));

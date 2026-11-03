@@ -1,14 +1,13 @@
 import 'dotenv/config';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { setImmediate } from 'node:timers/promises';
 import test from 'node:test';
 import { Client, type Pool } from 'pg';
 import { runner } from 'node-pg-migrate';
 import type { FastifyInstance } from 'fastify';
-import { seedDemoGuidedConfiguration, DemoConfigurationConflict } from './seed-demo-guided-configuration.js';
+import { seedDemoSixDomainConfiguration } from './seed-demo-six-domain-configuration.js';
 import { DemoRuntime } from '../src/modules/demo-session/demo-runtime.js';
 import type { ResetOptions } from '../src/modules/demo-session/demo-session-reset.service.js';
 import { DemoReadRepository } from '../src/modules/demo-session/demo-read.repository.js';
@@ -32,7 +31,7 @@ function error(response: Response, status: number, code: string) {
   assert.doesNotMatch(response.body, /token_hash|constraint|SELECT |INSERT |postgresql:\/\//i);
 }
 
-test('Demo-02A: explicit seed and session-scoped durable reads', { timeout: 240_000 }, async (t) => {
+test('Demo-02A: session-scoped durable reads', { timeout: 240_000 }, async (t) => {
   const name = `demo_02a_test_${process.pid}_${randomUUID().replaceAll('-', '').slice(0, 12)}`;
   assert.match(name, /^demo_02a_test_[a-z0-9_]+$/); assert.ok(name.length <= 63);
   const prior = { DATABASE_URL: process.env.DATABASE_URL, NODE_ENV: process.env.NODE_ENV,
@@ -69,7 +68,7 @@ test('Demo-02A: explicit seed and session-scoped durable reads', { timeout: 240_
       return { cookie, context: await runtime.sessions.authenticate(cookie, LOCAL_SESSION_COOKIE) };
     };
     const create = async (s: Session, year = 2026) => {
-      const response = await post('/demo/dataset-versions', s, { domain: 'CAPEX', fiscalYear: year, period: 'Q3' });
+      const response = await post('/demo/dataset-versions', s, { domain: 'FAB_COST', fiscalYear: year, period: 'Q3' });
       assert.equal(response.statusCode, 201);
       return response.json() as { datasetVersionId: string; datasetSeriesId: string; calculationJobs: { jobId: string }[] };
     };
@@ -83,108 +82,14 @@ test('Demo-02A: explicit seed and session-scoped durable reads', { timeout: 240_
       result.sessions = (await pool.query('SELECT id,company_code,created_at,expires_at,revoked_at FROM demo_sessions ORDER BY id')).rows;
       return result;
     };
-    const seedCli = (overrides: NodeJS.ProcessEnv = {}) => spawnSync(process.execPath,
-      ['--import', 'tsx', 'scripts/seed-demo-guided-configuration.ts'], {
-        env: { ...process.env, ...overrides }, encoding: 'utf8', timeout: 20_000,
-      });
     console.log('DEMO_02A_RUNTIME', JSON.stringify({ node: process.version, database: name,
       postgres: (await pool.query('SHOW server_version')).rows[0].server_version,
       migrations: (await pool.query('SELECT count(*)::int AS n FROM pgmigrations')).rows[0].n }));
 
-    await t.test('startup/buildApp/session creation never seed; fresh CLI seed creates exact minimal configuration', async () => {
-      await newSession();
-      assert.equal((await pool.query('SELECT id FROM calculation_types')).rowCount, 0);
-      const child = seedCli(); assert.equal(child.status, 0); assert.equal(child.signal, null);
-      assert.equal(child.stderr, ''); assert.match(child.stdout, /configuration ready/);
-      const type = (await pool.query('SELECT domain,code,airflow_dag_id,is_active,last_allocated_dependency_definition_version FROM calculation_types')).rows;
-      assert.deepEqual(type, [{ domain: 'CAPEX', code: 'DEMO_GUIDED_SUMMARY', airflow_dag_id: 'demo_capex_guided',
-        is_active: true, last_allocated_dependency_definition_version: 1 }]);
-      const def = (await pool.query('SELECT version,status,published_at FROM execution_dependency_definition_versions')).rows;
-      assert.equal(def.length, 1); assert.equal(def[0].version, 1); assert.equal(def[0].status, 'PUBLISHED'); assert.ok(def[0].published_at);
-      assert.equal((await pool.query('SELECT definition_version_id FROM execution_dependency_definition_dependencies')).rowCount, 0);
-    });
-
-    await t.test('CLI repeat and concurrent seed preserve IDs, counters, published values and all existing data', async () => {
-      const before = await dump(); const child = seedCli(); assert.equal(child.status, 0);
-      const [a, b] = await Promise.all([seedDemoGuidedConfiguration(pool), seedDemoGuidedConfiguration(pool)]);
-      assert.deepEqual(a, b); assert.deepEqual(await dump(), before);
-    });
-
-    await t.test('seed safety rejects production/core/unset environment and missing explicit target without fallback or credentials', async () => {
-      const before = await dump();
-      for (const overrides of [{ NODE_ENV: 'production' }, { NODE_ENV: '' }, { APP_MODE: 'core' },
-        { APP_MODE: '' }, { DEMO_SEED_DATABASE_URL: '' }]) {
-        const child = seedCli(overrides); assert.equal(child.status, 1); assert.equal(child.signal, null);
-        assert.doesNotMatch(child.stderr + child.stdout, /postgres(?:ql)?:\/\/|password|token_hash|SELECT |INSERT /i);
-      }
-      assert.deepEqual(await dump(), before);
-    });
-
-    await t.test('other active CAPEX fails closed, including rollback of newly inserted guided type; other domains preserved', async () => {
-      // No Domain data exists yet. Remove only this suite's seed fixture to
-      // exercise creation rollback against the real migrated public tables.
-      await pool.query('DELETE FROM execution_dependency_definition_versions; DELETE FROM calculation_types');
-      const other = (await pool.query(`INSERT INTO calculation_types(domain,code,airflow_dag_id) VALUES
-        ('CAPEX','OTHER','other') RETURNING id`)).rows[0].id;
-      await pool.query(`INSERT INTO calculation_types(domain,code,airflow_dag_id,is_active) VALUES ('DPR','KEEP','keep',false)`);
-      const before = await dump();
-      try {
-        await assert.rejects(seedDemoGuidedConfiguration(pool), DemoConfigurationConflict);
-        assert.deepEqual(await dump(), before);
-      } finally { await pool.query('DELETE FROM calculation_types WHERE id=$1', [other]); }
-      await seedDemoGuidedConfiguration(pool);
-    });
-
-    await t.test('every incompatible existing guided configuration rolls back without rewriting published history', async () => {
-      const mutations = [
-        ["UPDATE calculation_types SET airflow_dag_id='wrong' WHERE domain='CAPEX'", "UPDATE calculation_types SET airflow_dag_id='demo_capex_guided' WHERE domain='CAPEX'"],
-        ["UPDATE calculation_types SET is_active=false WHERE domain='CAPEX'", "UPDATE calculation_types SET is_active=true WHERE domain='CAPEX'"],
-        ["UPDATE calculation_types SET last_allocated_dependency_definition_version=2 WHERE domain='CAPEX'", "UPDATE calculation_types SET last_allocated_dependency_definition_version=1 WHERE domain='CAPEX'"],
-        ["INSERT INTO execution_dependency_definition_dependencies SELECT id,'DPR' FROM execution_dependency_definition_versions", "DELETE FROM execution_dependency_definition_dependencies WHERE required_domain='DPR'"],
-        ["UPDATE execution_dependency_definition_versions SET status='DRAFT'", "UPDATE execution_dependency_definition_versions SET status='PUBLISHED'"],
-        ["INSERT INTO execution_dependency_definition_versions(calculation_type_id,version,status) SELECT id,2,'DRAFT' FROM calculation_types WHERE domain='CAPEX'", "DELETE FROM execution_dependency_definition_versions WHERE version=2"],
-        ["INSERT INTO calculation_types(domain,code,airflow_dag_id) VALUES ('CAPEX','CONFLICT','conflict')", "DELETE FROM calculation_types WHERE code='CONFLICT'"],
-      ];
-      for (const [mutation, restore] of mutations) {
-        await pool.query(mutation!);
-        try {
-          const before = await dump();
-          await assert.rejects(seedDemoGuidedConfiguration(pool), DemoConfigurationConflict);
-          assert.deepEqual(await dump(), before);
-        } finally { await pool.query(restore!); }
-      }
-    });
-
-    await t.test('unexpected real PostgreSQL insert failure is sanitized and rolls back the newly inserted type', async () => {
-      await pool.query("DELETE FROM execution_dependency_definition_versions; DELETE FROM calculation_types WHERE domain='CAPEX'");
-      await pool.query(`CREATE FUNCTION demo_02a_seed_failure() RETURNS trigger LANGUAGE plpgsql AS $$
-        BEGIN RAISE EXCEPTION 'private SQL credential detail'; END $$;
-        CREATE TRIGGER demo_02a_seed_failure BEFORE INSERT ON execution_dependency_definition_versions
-        FOR EACH ROW EXECUTE FUNCTION demo_02a_seed_failure()`);
-      const before = await dump();
-      try {
-        await assert.rejects(seedDemoGuidedConfiguration(pool), { message: 'Demo configuration seed persistence failed' });
-        const child = seedCli(); assert.equal(child.status, 1); assert.doesNotMatch(child.stderr, /private SQL|credential detail/);
-        assert.deepEqual(await dump(), before);
-      } finally { await pool.query('DROP TRIGGER demo_02a_seed_failure ON execution_dependency_definition_versions; DROP FUNCTION demo_02a_seed_failure()'); }
-      await seedDemoGuidedConfiguration(pool);
-    });
-
-    await t.test('missing definition and missing publication timestamp fail closed, never silently repaired', async () => {
-      const d = (await pool.query('SELECT id,calculation_type_id,version,status,created_at,published_at FROM execution_dependency_definition_versions')).rows[0];
-      for (const mutation of ['DELETE FROM execution_dependency_definition_versions', 'UPDATE execution_dependency_definition_versions SET published_at=NULL']) {
-        await pool.query(mutation);
-        try {
-          const before = await dump(); await assert.rejects(seedDemoGuidedConfiguration(pool), DemoConfigurationConflict);
-          assert.deepEqual(await dump(), before);
-        } finally {
-          if (mutation.startsWith('DELETE')) await pool.query(`INSERT INTO execution_dependency_definition_versions
-            (id,calculation_type_id,version,status,created_at,published_at) VALUES ($1,$2,$3,$4,$5,$6)`,
-          [d.id,d.calculation_type_id,d.version,d.status,d.created_at,d.published_at]);
-          else await pool.query('UPDATE execution_dependency_definition_versions SET published_at=$1 WHERE id=$2', [d.published_at,d.id]);
-        }
-      }
-    });
+    // Seed behavior is covered by the six-domain configuration suite.
+    await newSession();
+    assert.equal((await pool.query('SELECT id FROM calculation_types')).rowCount, 0);
+    await seedDemoSixDomainConfiguration(pool);
 
     const a = await newSession(); const b = await newSession();
     const dataA = await create(a); const dataB = await create(b);
@@ -359,7 +264,7 @@ test('Demo-02A: explicit seed and session-scoped durable reads', { timeout: 240_
 
     const p = await newSession(); const paged = await create(p, 2040); const pagedJob = paged.calculationJobs[0]!.jobId;
     await t.test('pagination fixtures use real persisted datasets/jobs/attempts, including more than the maximum page size', async () => {
-      const seed = await seedDemoGuidedConfiguration(pool);
+      const seed = { calculationTypeId: (await pool.query("SELECT id FROM calculation_types WHERE code='DEMO_FAB_COST_SUMMARY'")).rows[0].id as string };
       // Terminal history: one real job per version; monotonic counter retained.
       await pool.query(`INSERT INTO dataset_versions(id,dataset_series_id,version,status,abandoned_at)
         SELECT gen_random_uuid(),$1,n,'ABANDONED',now() FROM generate_series(2,116) n`, [paged.datasetSeriesId]);
@@ -368,7 +273,7 @@ test('Demo-02A: explicit seed and session-scoped durable reads', { timeout: 240_
       await pool.query('UPDATE dataset_series SET last_allocated_version=116 WHERE id=$1', [paged.datasetSeriesId]);
       for (let n = 0; n < 105; n++) {
         const type = (await pool.query(`INSERT INTO calculation_types(domain,code,airflow_dag_id,is_active,last_allocated_dependency_definition_version)
-          VALUES ('CAPEX',$1,'fixture_capex',false,1) RETURNING id`, [`READ_FIXTURE_${n}`])).rows[0].id;
+          VALUES ('FAB_COST',$1,'fixture_fab_cost',false,1) RETURNING id`, [`READ_FIXTURE_${n}`])).rows[0].id;
         await pool.query(`INSERT INTO execution_dependency_definition_versions(calculation_type_id,version,status,published_at)
           VALUES ($1,1,'PUBLISHED',now())`, [type]);
         await pool.query(`INSERT INTO calculation_jobs(id,output_dataset_version_id,calculation_type_id,status)
@@ -422,8 +327,6 @@ test('Demo-02A: explicit seed and session-scoped durable reads', { timeout: 240_
 
     await t.test('GET is read-only across entire PostgreSQL graph, shared config, sessions and every FakeExecutor memory field', async () => {
       const before = await dump();
-      await seedDemoGuidedConfiguration(pool);
-      assert.deepEqual(await dump(), before, 'Seed also preserves existing datasets/jobs/attempts and inactive types');
       const fakes: FakeExecutor[] = [];
       for (const s of [a, b, p]) fakes.push(await runtime.executors.forSession(s.context));
       const fakeMemory = () => JSON.stringify(fakes, (_key, value: unknown) =>
@@ -447,7 +350,7 @@ test('Demo-02A: explicit seed and session-scoped durable reads', { timeout: 240_
         const plan = await pool.query(`EXPLAIN (ANALYZE,FORMAT JSON) ${sql}`, [...args]);
         console.log('DEMO_02A_QUERY_PLAN', JSON.stringify(plan.rows));
       }
-      assert.equal((await pool.query('SELECT count(*)::int AS n FROM pgmigrations')).rows[0].n, 14);
+      assert.equal((await pool.query('SELECT count(*)::int AS n FROM pgmigrations')).rows[0].n, 15);
     });
   } finally {
     try { await Promise.all(apps.map((app) => app.close())); if (db) { await db.end(); await Promise.all(ends); } }

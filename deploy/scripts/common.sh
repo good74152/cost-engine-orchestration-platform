@@ -1,5 +1,5 @@
 #!/bin/sh
-# Sourced by explicit trusted commands. No automatic migration, seed or cutover.
+# Sourced by explicit trusted commands. No automatic migration or seed.
 set -eu
 CONTROL_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 DEPLOY_ROOT=$(CDPATH= cd -- "$CONTROL_DIR/.." && pwd)
@@ -67,12 +67,4 @@ assert_backend() {
 }
 assert_database() {
   compose exec -T database pg_isready -U demo_owner -d cost_engine_demo >/dev/null 2>&1 || fail 'PostgreSQL is unavailable'
-}
-validate_target() { [ "$1" = '/run/secrets/database_url' ] || fail 'Explicit target must be the mounted Demo database file /run/secrets/database_url'; }
-run_operator() {
-  case "$1" in
-    admission-*) compose --profile operations run --rm -T --no-deps -e "DEMO_ADMISSION_DATABASE_URL_FILE=$2" operator "$1";;
-    cutover*) compose --profile operations run --rm -T --no-deps -e "DEMO_CUTOVER_DATABASE_URL_FILE=$2" operator "$1";;
-    *) compose --profile operations run --rm -T --no-deps operator "$1";;
-  esac
 }

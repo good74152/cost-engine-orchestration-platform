@@ -17,7 +17,7 @@ const STATUS_LABELS:Record<string,string>={DRAFT:'Draft',BUILDING:'In progress',
 export const statusLabel=(status:string)=>STATUS_LABELS[status]??status;
 /** DEMO_CAPEX_TABLE_Y becomes "Table Y". The raw code stays in the details dialog. */
 export function jobTitle(code:string,domain=''){
- const words=code.replace(/^DEMO_/,'').replace(new RegExp('^'+domain+'_'),'').replace(/^GUIDED_/,'').split('_');
+ const words=code.replace(/^DEMO_/,'').replace(new RegExp('^'+domain+'_'),'').split('_');
  return words.map(w=>w.charAt(0)+w.slice(1).toLowerCase()).join(' ');
 }
 export const inputsLabel=(d:Dataset,m:Messages)=>d.frozenInputs.length?m.workspace.inputLocked(d.frozenInputs.map(i=>domainLabel(i.domain)+' v'+i.version).join(', ')):undefined;

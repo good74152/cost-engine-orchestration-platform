@@ -1,6 +1,6 @@
 # ADR-0017 — PostgreSQL Demo Admission Drain
 
-- Status: Accepted bounded task specification; implementation requires System Owner Review.
+- Status: Superseded by [ADR-0022](0022-remove-guided-scenarios-and-cutover.md). The code was removed.
 - Authority: System Owner's Demo-05C-2 specification.
 - Supplements ADR-0010/0011/0012/0015/0016; does not alter Core or Guided execution.
 

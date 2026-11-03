@@ -17,7 +17,8 @@ const connection = (name: string) => { const url = new URL(source!); url.pathnam
 interface Session { cookie: string; context: AuthenticatedDemoSession }
 type Response = Awaited<ReturnType<FastifyInstance['inject']>>;
 const expected = [
-  ['CAPEX','DEMO_GUIDED_SUMMARY','demo_capex_guided',[]],
+  ['CAPEX','DEMO_CAPEX_SUMMARY','demo_capex_summary',['FAB_COST']],
+  ['CAPEX','DEMO_CAPEX_TABLE_Y','demo_capex_table_y',['FAB_COST']],
   ['DPR','DEMO_DPR_TABLE_X','demo_dpr_table_x',['CAPEX']],
   ['DPR','DEMO_DPR_TABLE_Y','demo_dpr_table_y',['CAPEX']],
   ['E2E_COST','DEMO_E2E_COST_TABLE_X','demo_e2e_cost_table_x',['ONE_STD_COST']],
@@ -46,12 +47,12 @@ test('Demo-05A: explicit six-domain configuration and unchanged Demo/Core workfl
       logger:{debug(){},info(){},warn(){},error(){}}});
     process.env.DATABASE_URL=connection(name); process.env.DEMO_SEED_DATABASE_URL=connection(name);
     process.env.APP_MODE='demo'; process.env.NODE_ENV='test'; process.env.EXECUTOR_TYPE='fake';
-    const [{pool},{buildApp},{DemoRuntime},{seedDemoSixDomainConfiguration,DemoSixDomainConfigurationConflict},{seedDemoGuidedConfiguration}] = await Promise.all([
+    const [{pool},{buildApp},{DemoRuntime},{seedDemoSixDomainConfiguration,DemoConfigurationConflict}] = await Promise.all([
       import('../src/db/pool.js'),import('../src/app.js'),import('../src/modules/demo-session/demo-runtime.js'),
-      import('./seed-demo-six-domain-configuration.js'),import('./seed-demo-guided-configuration.js')]);
+      import('./seed-demo-six-domain-configuration.js')]);
     db=pool; pool.on('connect',c=>ends.push(new Promise<void>(done=>c.once('end',done))));
     assert.equal((await pool.query('SELECT current_database() AS name')).rows[0].name,name);
-    assert.equal((await pool.query('SELECT count(*)::int AS n FROM pgmigrations')).rows[0].n,14);
+    assert.equal((await pool.query('SELECT count(*)::int AS n FROM pgmigrations')).rows[0].n,15);
     const runtime = new DemoRuntime(pool,'test',{}, {log(){}});
     app=await buildApp({appMode:'demo',demoRuntime:runtime,nodeEnvironment:'test',logger:false,demoSession:{origin:'https://demo.test'}});
     const post=async(url:string,s?:Session,payload:unknown={}):Promise<Response>=>app!.inject({method:'POST',url,payload:JSON.stringify(payload),
@@ -114,7 +115,7 @@ test('Demo-05A: explicit six-domain configuration and unchanged Demo/Core workfl
       }
       assert.deepEqual(await dump(),before);
     });
-    await t.test('fresh CLI seed creates nine exact active types and published definitions for six domains, no user data',async()=>{
+    await t.test('fresh CLI seed creates ten exact active types and published definitions for six domains, no user data',async()=>{
       const r=seedCli(); assert.equal(r.status,0,r.stderr); assert.equal(r.stderr,''); assert.match(r.stdout,/configuration ready/);
       const rows=(await pool.query(`SELECT t.domain,t.code,t.airflow_dag_id,t.is_active,t.last_allocated_dependency_definition_version,
         d.version,d.status,d.published_at,ARRAY(SELECT required_domain FROM execution_dependency_definition_dependencies e
@@ -128,19 +129,13 @@ test('Demo-05A: explicit six-domain configuration and unchanged Demo/Core workfl
       const before=await dump(); await Promise.all(Array.from({length:5},()=>seedDemoSixDomainConfiguration(pool)));
       assert.equal(seedCli().status,0); assert.deepEqual(await dump(),before);
       await clearConfig(); await Promise.all(Array.from({length:5},()=>seedDemoSixDomainConfiguration(pool)));
-      assert.equal((await pool.query('SELECT count(*)::int AS n FROM calculation_types')).rows[0].n,9);
-      assert.equal((await pool.query('SELECT count(*)::int AS n FROM execution_dependency_definition_versions')).rows[0].n,9);
-    });
-    await t.test('existing CAPEX guided configuration is reused unchanged; original seed still works',async()=>{
-      await clearConfig(); const capex=await seedDemoGuidedConfiguration(pool); const before=await dump();
-      await seedDemoSixDomainConfiguration(pool); assert.deepEqual(await seedDemoGuidedConfiguration(pool),capex);
-      const after=await dump();
-      for(const table of configTables) for(const row of before[table] as unknown[]) assert.ok((after[table] as unknown[]).some(r=>JSON.stringify(r)===JSON.stringify(row)));
+      assert.equal((await pool.query('SELECT count(*)::int AS n FROM calculation_types')).rows[0].n,10);
+      assert.equal((await pool.query('SELECT count(*)::int AS n FROM execution_dependency_definition_versions')).rows[0].n,10);
     });
     await t.test('late conflict rolls back all earlier inserted domains and preserves incompatible rows',async()=>{
       await clearConfig();
       await pool.query(`INSERT INTO calculation_types(domain,code,airflow_dag_id) VALUES ('ONE_STD_COST','DEMO_ONE_STD_COST_TABLE_Y','incompatible')`);
-      const before=await dump(); await assert.rejects(seedDemoSixDomainConfiguration(pool),DemoSixDomainConfigurationConflict);
+      const before=await dump(); await assert.rejects(seedDemoSixDomainConfiguration(pool),DemoConfigurationConflict);
       assert.deepEqual(await dump(),before); const r=seedCli(); assert.equal(r.status,1); assert.match(r.stderr,/DEMO_CONFIGURATION_CONFLICT/); assert.deepEqual(await dump(),before);
       await clearConfig(); await seedDemoSixDomainConfiguration(pool);
     });
@@ -159,16 +154,15 @@ test('Demo-05A: explicit six-domain configuration and unchanged Demo/Core workfl
       ];
       for(const mutation of conflicts) {
         await pool.query(mutation); const before=await dump();
-        await assert.rejects(seedDemoSixDomainConfiguration(pool),DemoSixDomainConfigurationConflict); assert.deepEqual(await dump(),before);
+        await assert.rejects(seedDemoSixDomainConfiguration(pool),DemoConfigurationConflict); assert.deepEqual(await dump(),before);
         await clearConfig(); await seedDemoSixDomainConfiguration(pool);
       }
     });
-    await t.test('extra active type in every configured domain is refused; inactive unrelated history is preserved',async()=>{
-      for(const domain of ['CAPEX','DPR','E2E_COST','FAB_COST','INSURANCE','ONE_STD_COST']) {
-        const id=(await pool.query(`INSERT INTO calculation_types(domain,code,airflow_dag_id) VALUES ($1,'EXTRA','extra') RETURNING id`,[domain])).rows[0].id;
-        const before=await dump(); await assert.rejects(seedDemoSixDomainConfiguration(pool),DemoSixDomainConfigurationConflict); assert.deepEqual(await dump(),before);
-        await pool.query('UPDATE calculation_types SET is_active=false WHERE id=$1',[id]);
-        const inactive=await dump(); await seedDemoSixDomainConfiguration(pool); assert.deepEqual(await dump(),inactive);
+    await t.test('any extra type in any domain is refused, active or inactive',async()=>{
+      for(const domain of ['CAPEX','DPR','E2E_COST','FAB_COST','INSURANCE','ONE_STD_COST']) for(const active of [true,false]) {
+        const id=(await pool.query(`INSERT INTO calculation_types(domain,code,airflow_dag_id,is_active) VALUES ($1,'EXTRA','extra',$2) RETURNING id`,[domain,active])).rows[0].id;
+        const before=await dump(); await assert.rejects(seedDemoSixDomainConfiguration(pool),DemoConfigurationConflict); assert.deepEqual(await dump(),before);
+        await pool.query('DELETE FROM calculation_types WHERE id=$1',[id]);
       }
     });
     await t.test('unexpected PostgreSQL failure rolls back complete seed and returns sanitized errors',async()=>{
@@ -196,18 +190,19 @@ test('Demo-05A: explicit six-domain configuration and unchanged Demo/Core workfl
         assert.equal((await graph(data)).snapshots.length,0);assert.equal((await graph(data)).attempts.length,0);
       }
     });
-    for(const domain of ['DPR','INSURANCE','ONE_STD_COST','E2E_COST'] as const) await t.test(`${domain}: unpublished required upstream rejects Run atomically for every job`,async()=>{
+    for(const domain of ['CAPEX','DPR','INSURANCE','ONE_STD_COST','E2E_COST'] as const) await t.test(`${domain}: unpublished required upstream rejects Run atomically for every job`,async()=>{
       const data=datasets[domain]; const before=await graph(data);
       for(const job of data.calculationJobs) error(await run(owner,job.jobId),409,'DEPENDENCY_NOT_READY');
       assert.deepEqual(await graph(data),before); assert.equal((await runtime.executors.forSession(owner.context)).getDispatchHistory().length,0);
     });
     await t.test('missing or another Session published upstream cannot satisfy dependency ownership',async()=>{
-      const other=await session(); const foreignCapex=await create(other,'CAPEX'); await finish(other,foreignCapex);
+      const other=await session(); const foreignFab=await create(other,'FAB_COST'); await finish(other,foreignFab);
+      const foreignCapex=await create(other,'CAPEX'); await finish(other,foreignCapex);
       const missing=await session(); const dpr=await create(missing,'DPR'); const before=await graph(dpr);
       error(await run(missing,dpr.calculationJobs[0]!.jobId),409,'DEPENDENCY_NOT_READY');assert.deepEqual(await graph(dpr),before);
     });
-    await t.test('zero-dependency CAPEX/FAB_COST run and publish; dependent domains reuse existing workflows',async()=>{
-      await finish(owner,datasets.CAPEX); await finish(owner,datasets.FAB_COST);
+    await t.test('zero-dependency FAB_COST runs and publishes; dependent domains reuse existing workflows',async()=>{
+      await finish(owner,datasets.FAB_COST); await finish(owner,datasets.CAPEX);
       await finish(owner,datasets.INSURANCE);
       for(const domain of ['DPR','ONE_STD_COST','E2E_COST'] as const) {
         const data=datasets[domain]; const first=await run(owner,data.calculationJobs[0]!.jobId); assert.equal(first.statusCode,200,first.body);
@@ -229,8 +224,9 @@ test('Demo-05A: explicit six-domain configuration and unchanged Demo/Core workfl
     for(const domain of ['DPR','ONE_STD_COST','E2E_COST'] as const) await t.test(`${domain}: later job and failed-job retry keep frozen upstream v1 after v2 publication`,async()=>{
       const s=await session();
       // Publish the prerequisite chain solely through existing protected APIs.
-      const root=domain==='DPR'?'CAPEX':'FAB_COST'; const rootData=await create(s,root);await finish(s,rootData);
-      let upstream=rootData; let upstreamDomain:DatasetDomain=root;
+      const rootData=await create(s,'FAB_COST');await finish(s,rootData);
+      let upstream=rootData; let upstreamDomain:DatasetDomain='FAB_COST';
+      if(domain==='DPR'){upstreamDomain='CAPEX';upstream=await create(s,upstreamDomain);await finish(s,upstream);}
       if(domain==='E2E_COST'){upstreamDomain='ONE_STD_COST';upstream=await create(s,upstreamDomain);await finish(s,upstream);}
       const downstream=await create(s,domain);const [a,b]=downstream.calculationJobs;
       const first=await run(s,a!.jobId);assert.equal(first.statusCode,200,first.body);
@@ -251,18 +247,7 @@ test('Demo-05A: explicit six-domain configuration and unchanged Demo/Core workfl
       const beforeSeed=await dump([...configTables,'dataset_series','dataset_versions','calculation_jobs','dataset_build_snapshots','dataset_build_snapshot_dependencies','execution_attempts']);
       await seedDemoSixDomainConfiguration(pool);assert.deepEqual(await dump(Object.keys(beforeSeed)),beforeSeed);
     });
-    for(const type of ['HAPPY_PATH','FAILURE_RETRY','LOST_RESPONSE_RECOVERY']) await t.test(`${type}: complete Guided Scenario remains compatible with six-domain seed`,async()=>{
-      const s=await session();const created=await post('/demo/scenarios',s,{scenarioType:type});assert.equal(created.statusCode,201,created.body);
-      const id=created.json().scenarioId;
-      for(let step=1;step<=(type==='FAILURE_RETRY'?9:6);step++) {
-        const body={expectedStep:step,requestId:randomUUID()};let r=await post(`/demo/scenarios/${id}/next`,s,body);
-        if(type==='LOST_RESPONSE_RECOVERY'&&step===2) {assert.equal(r.statusCode,202,r.body);r=await post(`/demo/scenarios/${id}/next`,s,body);}
-        assert.equal(r.statusCode,200,r.body);
-      }
-      const row=(await pool.query('SELECT status,completed_step FROM demo_scenario_instances WHERE id=$1',[id])).rows[0];
-      assert.deepEqual(row,{status:'COMPLETED',completed_step:type==='FAILURE_RETRY'?9:6});
-    });
-    console.log('DEMO_05A_VERIFIED',JSON.stringify({database:name,migrations:14,domains:6,activeTypes:9,postgres:(await pool.query('SHOW server_version')).rows[0].server_version}));
+    console.log('DEMO_05A_VERIFIED',JSON.stringify({database:name,migrations:15,domains:6,activeTypes:10,postgres:(await pool.query('SHOW server_version')).rows[0].server_version}));
   } finally {
     try {await app?.close();if(db){await db.end();await Promise.all(ends);}}
     finally {

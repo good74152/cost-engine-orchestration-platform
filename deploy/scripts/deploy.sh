@@ -16,4 +16,4 @@ assert_offline
 compose up -d --no-deps --wait --wait-timeout 120 database >/dev/null 2>&1 || fail 'Database startup failed'
 echo 'Backend stopped.'
 echo 'Run operator commands in the runbook, then deploy/scripts/start.sh.'
-echo 'Web requires a separate approved open-web.sh command; no automatic migration, seed, drain or cutover.'
+echo 'Web requires a separate open-web.sh command; no automatic migration or seed.'

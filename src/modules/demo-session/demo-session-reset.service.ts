@@ -124,11 +124,8 @@ export class DemoSessionResetService {
       // the lock. A subquery in the waiting SELECT could see pre-commit children.
       const row = result.rows[0];
       const remaining = row && (await recovery.query<{ remaining: boolean }>(`SELECT
-        EXISTS (SELECT 1 FROM dataset_series WHERE company_code=$1)
-        OR EXISTS (SELECT 1 FROM demo_scenario_instances WHERE session_id=$2)
-        OR EXISTS (SELECT 1 FROM demo_scenario_step_executions l JOIN demo_scenario_instances sc ON sc.id=l.scenario_id
-          WHERE sc.session_id=$2) AS remaining`,
-      [row.company_code, pending.reservation.sessionId])).rows[0]!.remaining;
+        EXISTS (SELECT 1 FROM dataset_series WHERE company_code=$1) AS remaining`,
+      [row.company_code])).rows[0]!.remaining;
       await recovery.query('COMMIT');
       if (!row || (row.revoked && remaining && !pending.inactive)) return 'unknown';
       const committed = row.revoked && !remaining;
@@ -157,8 +154,7 @@ export class DemoSessionResetService {
     const registryIds = this.runtime.executors.sessionIds();
     const candidates = await this.runtime.db.query<{ id: string }>(`SELECT s.id FROM demo_sessions s
       WHERE (revoked_at IS NOT NULL OR expires_at<=clock_timestamp()) AND
-      (EXISTS (SELECT 1 FROM dataset_series ds WHERE ds.company_code=s.company_code)
-       OR EXISTS (SELECT 1 FROM demo_scenario_instances scenario WHERE scenario.session_id=s.id) OR s.id=ANY($1::uuid[]))
+      (EXISTS (SELECT 1 FROM dataset_series ds WHERE ds.company_code=s.company_code) OR s.id=ANY($1::uuid[]))
       AND NOT (s.id=ANY($3::uuid[])) ORDER BY created_at,id LIMIT $2`, [registryIds, limit, [...this.pending.keys()]]);
     let cleaned = 0; let failedCount = 0;
     for (const row of candidates.rows) {
@@ -166,8 +162,7 @@ export class DemoSessionResetService {
     }
     const remaining = await this.runtime.db.query<{ n: number }>(`SELECT count(*)::int AS n FROM demo_sessions s
       WHERE s.id=ANY($2::uuid[]) OR ((revoked_at IS NOT NULL OR expires_at<=clock_timestamp()) AND
-      (EXISTS (SELECT 1 FROM dataset_series ds WHERE ds.company_code=s.company_code)
-       OR EXISTS (SELECT 1 FROM demo_scenario_instances scenario WHERE scenario.session_id=s.id) OR s.id=ANY($1::uuid[])))`,
+      (EXISTS (SELECT 1 FROM dataset_series ds WHERE ds.company_code=s.company_code) OR s.id=ANY($1::uuid[])))`,
     [this.runtime.executors.sessionIds(), [...this.pending.keys()]]);
     const result = { cleaned, failed: failedCount, pending: remaining.rows[0]!.n };
     this.log('demo_old_session_cleanup_batch', undefined, result);

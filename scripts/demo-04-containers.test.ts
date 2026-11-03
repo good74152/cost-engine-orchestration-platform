@@ -95,22 +95,16 @@ test('Demo-04 isolated Compose, HTTPS, production UI and PostgreSQL operations',
       assert.match(before.err + before.out.toString(), /application_startup_failed/);
       await compose('--profile', 'operations', 'run', '--rm', 'operator', 'migrate-up');
       const unseeded = await command([...base, 'run', '--rm', '--no-deps', 'backend'], undefined, true); assert.equal(unseeded.code, 1);
-      for (let n = 0; n < 2; n++) await compose('--profile', 'operations', 'run', '--rm', 'operator', 'seed');
-      assert.equal(await sql('SELECT count(*) FROM pgmigrations'), '14');
+      for (let n = 0; n < 2; n++) await compose('--profile', 'operations', 'run', '--rm', 'operator', 'seed-six-domain');
+      assert.equal(await sql('SELECT count(*) FROM pgmigrations'), '15');
     });
-    await t.test('explicit six-domain operator seed is atomic/idempotent and preserves guided CAPEX', async () => {
-      const guided = await sql(`SELECT row_to_json(t) FROM calculation_types t WHERE domain='CAPEX'`);
-      const definition = await sql(`SELECT row_to_json(d) FROM execution_dependency_definition_versions d`);
-      await compose('--profile', 'operations', 'run', '--rm', 'operator', 'seed-six-domain');
-      assert.equal(await sql('SELECT count(*) FROM calculation_types WHERE is_active'), '9');
-      assert.equal(await sql("SELECT count(*) FROM execution_dependency_definition_versions WHERE status='PUBLISHED'"), '9');
-      assert.equal(await sql(`SELECT row_to_json(t) FROM calculation_types t WHERE domain='CAPEX'`), guided);
-      assert.equal(await sql(`SELECT row_to_json(d) FROM execution_dependency_definition_versions d
-        JOIN calculation_types t ON t.id=d.calculation_type_id WHERE t.domain='CAPEX'`), definition);
+    await t.test('explicit operator seed creates the exact configuration and repeats without changes', async () => {
+      assert.equal(await sql('SELECT count(*) FROM calculation_types WHERE is_active'), '10');
+      assert.equal(await sql("SELECT count(*) FROM execution_dependency_definition_versions WHERE status='PUBLISHED'"), '10');
+      assert.equal(await sql('SELECT count(*) FROM execution_dependency_definition_dependencies'), '9');
       const before = await sql(`SELECT jsonb_agg(to_jsonb(t) ORDER BY domain,code) FROM calculation_types t`);
       await compose('--profile', 'operations', 'run', '--rm', 'operator', 'seed-six-domain');
       assert.equal(await sql(`SELECT jsonb_agg(to_jsonb(t) ORDER BY domain,code) FROM calculation_types t`), before);
-      assert.equal(await sql('SELECT count(*) FROM execution_dependency_definition_dependencies'), '7');
       assert.equal(await sql('SELECT count(*) FROM dataset_versions'), '0');
     });
     await compose('up', '-d', '--wait', 'backend', 'web');
@@ -141,22 +135,23 @@ test('Demo-04 isolated Compose, HTTPS, production UI and PostgreSQL operations',
       assert.equal((await readiness()).status, 200);
     });
     let persistentId = ''; let oldCookie = '';
-    await t.test('HTTPS session, all guided steps, publish and Reset; UNKNOWN recovers 202 to 200', async () => {
-      for (const type of ['HAPPY_PATH', 'FAILURE_RETRY', 'LOST_RESPONSE_RECOVERY']) {
-        const r = await https('/demo/sessions', 'POST', undefined, {}, { 'x-demo-proxy-key': 'spoofed', 'x-demo-client-ip': 'spoofed' });
-        assert.equal(r.status, 201, r.body); const cookie = r.headers['set-cookie']![0]!.split(';')[0]!;
-        assert.match(r.headers['set-cookie']![0]!, /Secure/); assert.match(cookie, /^__Host-/);
-        const sc = await https('/demo/scenarios', 'POST', cookie, { scenarioType: type }); assert.equal(sc.status, 201, sc.body);
-        const scenarioId = JSON.parse(sc.body).scenarioId;
-        for (let n = 1; n <= (type === 'FAILURE_RETRY' ? 9 : 6); n++) {
-          const payload = { expectedStep: n, requestId: randomUUID() }; const path = `/demo/scenarios/${scenarioId}/next`;
-          let step = await https(path, 'POST', cookie, payload);
-          if (type === 'LOST_RESPONSE_RECOVERY' && n === 2) { assert.equal(step.status, 202, step.body); step = await https(path, 'POST', cookie, payload); }
-          assert.equal(step.status, 200, step.body);
-        }
-        const dto = JSON.parse(r.body); assert.equal(await sql(`SELECT v.status FROM dataset_versions v JOIN dataset_series s ON s.id=v.dataset_series_id WHERE s.company_code='${dto.companyCode}'`), 'PUBLISHED');
-        assert.equal((await https('/demo/sessions/reset', 'POST', cookie, {})).status, 204);
-      }
+    await t.test('HTTPS session, full lifecycle and Reset; UNKNOWN recovers 202 to 200', async () => {
+      const created = await https('/demo/sessions', 'POST', undefined, {}, { 'x-demo-proxy-key': 'spoofed', 'x-demo-client-ip': 'spoofed' });
+      assert.equal(created.status, 201, created.body); const cookie = created.headers['set-cookie']![0]!.split(';')[0]!;
+      assert.match(created.headers['set-cookie']![0]!, /Secure/); assert.match(cookie, /^__Host-/);
+      const post = async (path: string, body: unknown = {}, status = 200) => { const r = await https(path, 'POST', cookie, body); assert.equal(r.status, status, r.body); return JSON.parse(r.body); };
+      const dataset = await post('/demo/dataset-versions', { domain: 'FAB_COST', fiscalYear: 2026, period: 'Q4' }, 201);
+      const job = dataset.calculationJobs[0].jobId;
+      const unknown = await https(`/demo/calculation-jobs/${job}/run`, 'POST', cookie, { simulation: { dispatch: 'ACCEPT_THEN_UNKNOWN', completion: 'RUNNING' } });
+      assert.equal(unknown.status, 202, unknown.body);
+      const recovered = await post(`/demo/calculation-jobs/${job}/run`, { simulation: { dispatch: 'ACCEPT', completion: 'RUNNING' } });
+      assert.equal(recovered.attemptNumber, 1);
+      await post(`/demo/execution-attempts/${recovered.executionAttemptId}/fake-state`, { state: 'SUCCEEDED' });
+      await post(`/demo/calculation-jobs/${job}/reconcile`);
+      await post(`/demo/dataset-versions/${dataset.datasetVersionId}/submit-validation`);
+      await post(`/demo/dataset-versions/${dataset.datasetVersionId}/publish`);
+      const dto = JSON.parse(created.body); assert.equal(await sql(`SELECT v.status FROM dataset_versions v JOIN dataset_series s ON s.id=v.dataset_series_id WHERE s.company_code='${dto.companyCode}'`), 'PUBLISHED');
+      assert.equal((await https('/demo/sessions/reset', 'POST', cookie, {})).status, 204);
       const r = await https('/demo/sessions', 'POST', undefined, {}); assert.equal(r.status, 201);
       oldCookie = r.headers['set-cookie']![0]!.split(';')[0]!; persistentId = JSON.parse(r.body).sessionId;
       assert.equal((await https('/demo/dataset-versions', 'POST', oldCookie, { domain: 'CAPEX', fiscalYear: 2026, period: 'Q4' })).status, 201);
@@ -173,10 +168,10 @@ test('Demo-04 isolated Compose, HTTPS, production UI and PostgreSQL operations',
         // A first visit has no session: no error appears and nothing is created until a click.
         await page.getByRole('heading', { level: 1 }).waitFor(); assert.equal(await page.getByRole('dialog').count(), 0);
         const started = page.waitForResponse(r => new URL(r.url()).pathname === '/demo/sessions' && r.request().method() === 'POST');
-        // This fixture is LEGACY_OPEN, so the page must create the session and then explain the missing configuration.
         await page.getByRole('button', { name: 'Run Lost response', exact: true }).click();
         const created = await started; assert.equal(created.status(), 201);
-        await page.getByRole('dialog', { name: 'The scenario stopped' }).getByText(/Workflow cutover/).waitFor();
+        await page.getByRole('dialog', { name: 'The response never arrived' }).getByRole('button', { name: 'Check the same run' }).click({ timeout: 60000 });
+        await page.getByRole('dialog', { name: 'No duplicate run' }).waitFor({ timeout: 60000 });
         const cookies = await context.cookies(); const cookie = cookies.find(c => c.name === '__Host-ce_demo_session'); assert.ok(cookie?.secure && cookie.httpOnly);
         await page.reload(); await page.getByRole('heading', { level: 1 }).waitFor();
         await page.getByRole('button', { name: 'Clear my demo data', exact: true }).click();
@@ -189,17 +184,6 @@ test('Demo-04 isolated Compose, HTTPS, production UI and PostgreSQL operations',
       await compose('up', '-d', '--force-recreate', '--wait', 'database');
       assert.equal(await sql('SELECT count(*) FROM dataset_versions'), count);
       assert.equal(await sql(`SELECT count(*) FROM demo_sessions WHERE id='${persistentId}'`), '1');
-    });
-    await t.test('custom-format backup restores to a separate disposable database', async () => {
-      const dump = await compose('exec', '-T', 'database', 'pg_dump', '-U', 'demo_owner', '-d', 'cost_engine_demo', '-Fc');
-      assert.equal(dump.out.subarray(0, 5).toString(), 'PGDMP');
-      await compose('exec', '-T', 'database', 'createdb', '-U', 'demo_owner', 'restore_validation');
-      try {
-        await command([...base, 'exec', '-T', 'database', 'pg_restore', '-U', 'demo_owner', '-d', 'restore_validation', '--exit-on-error', '--no-owner'], dump.out);
-        for (const table of ['pgmigrations', 'dataset_series', 'dataset_versions', 'calculation_jobs', 'demo_sessions']) {
-          assert.equal(await sql(`SELECT count(*) FROM ${table}`, 'restore_validation'), await sql(`SELECT count(*) FROM ${table}`));
-        }
-      } finally { await compose('exec', '-T', 'database', 'dropdb', '-U', 'demo_owner', 'restore_validation'); }
     });
     await t.test('backend restart invalidates sessions; fixed identity rejects a second replica', async () => {
       const scaled = await command([...base, 'up', '-d', '--scale', 'backend=2', 'backend'], undefined, true); assert.notEqual(scaled.code, 0);
@@ -215,45 +199,7 @@ test('Demo-04 isolated Compose, HTTPS, production UI and PostgreSQL operations',
       for (const secret of [password, proxy, oldCookie, databaseUrl]) assert.ok(!logs.includes(secret), 'No credentials in process logs');
       assert.match(logs, /application_draining/); assert.match(logs, /application_ready/);
     });
-    await t.test('trusted admission operator requires explicit target and drains idempotently without restarting Backend', async () => {
-      const missing = await command([...base, '--profile', 'operations', 'run', '--rm', '--no-deps', 'operator', 'admission-status'], undefined, true);
-      assert.equal(missing.code, 1);
-      const operate = (operation: string) => compose('--profile', 'operations', 'run', '--rm', '--no-deps',
-        '-e', 'DEMO_ADMISSION_DATABASE_URL_FILE=/run/secrets/database_url', 'operator', operation);
-      assert.equal(JSON.parse((await operate('admission-status')).out.toString()).state, 'LEGACY_OPEN');
-      const first = JSON.parse((await operate('admission-drain')).out.toString());
-      const repeated = JSON.parse((await operate('admission-drain')).out.toString());
-      assert.equal(first.state, 'DRAINING'); assert.equal(repeated.updatedAt, first.updatedAt);
-      const blocked = await https('/demo/sessions', 'POST', undefined, {});
-      assert.equal(blocked.status, 503); assert.equal(JSON.parse(blocked.body).code, 'DEMO_ADMISSION_DRAINING');
-      assert.equal(blocked.headers['set-cookie'], undefined);
-      assert.equal((await readiness()).status, 200);
-    });
-    await t.test('offline cutover operator preserves v1, opens Workflow admission and restarts the compatible Backend', async () => {
-      await compose('stop', 'backend');
-      // Explicit fixture maintenance is separate from cutover. The cutover command
-      // itself must refuse retained work and must never delete it automatically.
-      await command([...base, '--profile', 'operations', 'run', '--rm', '--no-deps', '--entrypoint', 'node', 'operator', '--import', 'tsx', '-e',
-        "import {loadDeploymentSecrets} from './src/deployment/public-demo-config.ts';loadDeploymentSecrets();const {pool}=await import('./src/db/pool.ts');const {DemoRuntime}=await import('./src/modules/demo-session/demo-runtime.ts');try{const r=await new DemoRuntime(pool).reset.maintainInactiveSessions(1000);if(r.failed||r.pending)throw Error('Fixture cleanup incomplete')}finally{await pool.end()}"]);
-      const legacy = await sql(`SELECT to_jsonb(d) FROM execution_dependency_definition_versions d JOIN calculation_types t ON t.id=d.calculation_type_id
-        WHERE t.domain='CAPEX' AND t.code='DEMO_GUIDED_SUMMARY' AND d.version=1`);
-      const missing = await command([...base, '--profile', 'operations', 'run', '--rm', '--no-deps', 'operator', 'cutover-status'], undefined, true); assert.equal(missing.code, 1);
-      const operate = (operation: string) => compose('--profile', 'operations', 'run', '--rm', '--no-deps',
-        '-e', 'DEMO_CUTOVER_DATABASE_URL_FILE=/run/secrets/database_url', 'operator', operation);
-      assert.equal(JSON.parse((await operate('cutover-status')).out.toString()).state, 'DRAINING');
-      assert.equal(JSON.parse((await operate('cutover')).out.toString()).outcome, 'APPLIED');
-      assert.equal(JSON.parse((await operate('cutover')).out.toString()).outcome, 'ALREADY_APPLIED');
-      assert.equal(await sql('SELECT count(*) FROM calculation_types WHERE is_active'), '10');
-      assert.equal(await sql("SELECT count(*) FROM calculation_types WHERE domain='CAPEX' AND is_active"), '2');
-      assert.equal(await sql(`SELECT to_jsonb(d) FROM execution_dependency_definition_versions d JOIN calculation_types t ON t.id=d.calculation_type_id
-        WHERE t.domain='CAPEX' AND t.code='DEMO_GUIDED_SUMMARY' AND d.version=1`), legacy);
-      await compose('up', '-d', '--wait', 'backend'); assert.equal((await readiness()).status, 200);
-      const s = await https('/demo/sessions', 'POST', undefined, {}); assert.equal(s.status, 201, s.body);
-      const cookie = s.headers['set-cookie']![0]!.split(';')[0]!;
-      const scenario = await https('/demo/scenarios', 'POST', cookie, { scenarioType: 'HAPPY_PATH' });
-      assert.equal(scenario.status, 503); assert.equal(JSON.parse(scenario.body).code, 'DEMO_LEGACY_ADMISSION_CLOSED');
-    });
-    console.info('DEMO04_CONTAINER_VERIFIED', JSON.stringify({ localHttps: true, publicVps: false, migrations: Number(await sql('SELECT count(*) FROM pgmigrations')), volumePersistence: true, restore: true }));
+    console.info('DEMO04_CONTAINER_VERIFIED', JSON.stringify({ localHttps: true, publicVps: false, migrations: Number(await sql('SELECT count(*) FROM pgmigrations')), volumePersistence: true }));
   } finally {
     // Only the randomly named, explicitly owned disposable project/volumes.
     assert.match(id, /^demo04_test_[a-f0-9]+$/);

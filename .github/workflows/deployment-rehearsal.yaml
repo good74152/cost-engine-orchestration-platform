@@ -20,7 +20,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        scenario: [happy-path, backend-startup-failure, cutover-precondition-failure]
+        scenario: [happy-path, backend-startup-failure]
     # Each leg gets a fresh VM and Docker daemon, with no shared services or real credentials.
     steps:
       - uses: actions/checkout@v6

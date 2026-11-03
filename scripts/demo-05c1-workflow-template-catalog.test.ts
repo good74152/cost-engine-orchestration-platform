@@ -3,16 +3,15 @@ import test from 'node:test';
 import { getWorkflowTemplate, listWorkflowTemplates, validateWorkflowTemplates } from '../src/modules/workflow-template/workflow-template.catalog.js';
 import { WORKFLOW_OPERATIONS, type WorkflowTemplate } from '../src/modules/workflow-template/workflow-template.types.js';
 
-const ids = ['HAPPY_PATH', 'FAILURE_RETRY', 'LOST_RESPONSE_RECOVERY', 'SIX_DOMAIN_WORKFLOW'];
+const ids = ['SIX_DOMAIN_WORKFLOW'];
 const templates = ids.map(id => getWorkflowTemplate(id)!);
 const clone = () => structuredClone(templates[0]!);
 
-test('four stable identities, positive versions, PREVIEW and exact descriptive fields', () => {
+test('stable identity, positive version and exact descriptive fields', () => {
   assert.deepEqual(listWorkflowTemplates().map(t => t.id), ids);
   for (const template of templates) {
-    assert.equal(template.version, 2);
-    assert.equal(template.availability, 'PREVIEW');
-    assert.deepEqual(Object.keys(template).sort(), ['availability', 'description', 'id', 'steps', 'title', 'version']);
+    assert.equal(template.version, 1);
+    assert.deepEqual(Object.keys(template).sort(), ['description', 'id', 'steps', 'title', 'version']);
     assert.ok(template.title && template.description && template.steps.length);
     for (const step of template.steps) {
       assert.deepEqual(Object.keys(step).sort(), ['description', 'domain', 'expectedResult', 'id', 'operation', 'prerequisites', 'title']);
@@ -29,42 +28,15 @@ test('list summaries match details, missing IDs have no fallback, definitions ar
     assert.ok(Object.isFrozen(getWorkflowTemplate(summary.id)) && Object.isFrozen(steps));
     assert.ok(steps.every(s => Object.isFrozen(s) && Object.isFrozen(s.prerequisites)));
   }
-  for (const id of ['missing', 'happy_path', '__proto__', 'constructor']) assert.equal(getWorkflowTemplate(id), undefined);
+  for (const id of ['missing', 'six_domain_workflow', '__proto__', 'constructor']) assert.equal(getWorkflowTemplate(id), undefined);
 });
 
 test('stable step IDs and unique steps in each template', () => {
-  const fab = ['create', 'run', 'fake-success', 'reconcile', 'validate', 'publish'].map(action => `fab_cost.${action}`);
   assert.deepEqual(templates.map(t => t.steps.map(s => s.id)), [
-    [...fab, 'capex.create', 'capex.run', 'capex.fake-success', 'capex.reconcile', 'capex.validate', 'capex.publish'],
-    [...fab, 'capex.create', 'capex.run', 'capex.fake-failure', 'capex.reconcile-failure', 'capex.retry', 'capex.fake-success', 'capex.reconcile', 'capex.validate', 'capex.publish'],
-    [...fab, 'capex.create', 'capex.run-lost-response', 'capex.recover', 'capex.run-other-jobs', 'capex.fake-success', 'capex.reconcile', 'capex.validate', 'capex.publish'],
     ['fab_cost', 'capex', 'dpr', 'insurance', 'one_std_cost', 'e2e_cost'].flatMap(domain =>
       ['create', 'run', 'fake-success', 'reconcile', 'validate', 'publish'].map(action => `${domain}.${action}`)),
   ]);
   for (const template of templates) assert.equal(new Set(template.steps.map(s => s.id)).size, template.steps.length);
-});
-
-test('v2 tutorials require FAB_COST publication and every CAPEX Job before validation', () => {
-  for (const template of templates.slice(0, 3)) {
-    const steps = new Map(template.steps.map(s => [s.id, s]));
-    const ancestors = (id: string): string[] => steps.get(id)!.prerequisites.flatMap(p => [p, ...ancestors(p)]);
-    assert.ok(ancestors('capex.create').includes('fab_cost.publish'));
-    assert.ok(ancestors('capex.validate').includes('capex.reconcile'));
-    assert.match(steps.get('capex.reconcile')!.description, /every required Job/);
-    assert.match(steps.get('capex.fake-success')!.description, /each current accepted Attempt/i);
-    assert.match(steps.get('capex.validate')!.description, /every required Job has succeeded/);
-    const allJobs = steps.get('capex.run') ?? steps.get('capex.run-other-jobs')!;
-    assert.match(allJobs.description, /all pages/);
-    assert.match(allJobs.description, /each (?:other )?required Job/);
-    assert.ok(ancestors('capex.validate').includes(allJobs.id));
-  }
-  const failure = templates[1]!;
-  assert.match(failure.steps.find(s => s.id === 'capex.retry')!.description, /same failed Job/);
-  assert.match(failure.description, /every other required Job/);
-  const recovery = templates[2]!.steps.find(s => s.id === 'capex.recover')!;
-  assert.match(recovery.description, /original Attempt and DAG\/run identity/);
-  assert.match(recovery.expectedResult, /without another execution or Attempt/);
-  assert.doesNotMatch(templates[3]!.description, /no upstream|zero.dependency/i);
 });
 
 test('all prerequisites resolve within the same acyclic template (independent topological check)', () => {

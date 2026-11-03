@@ -1,5 +1,5 @@
 import {ApiClient,ApiError,errorMessage} from '../api/client';
-import type {Attempt,Dataset,Job,Session,WorkflowCatalog,WorkflowTemplate} from '../api/types';
+import type {Attempt,Dataset,Job,Session,WorkflowTemplate} from '../api/types';
 import {MESSAGES,type Lang} from '../i18n/messages';
 import {ScenarioApi,ScenarioMismatch,type ApiCall,type PauseRequest,type ScenarioDefinition,type ScenarioSummary} from '../scenarios/engine';
 import {DEFAULT_LINKS,type WorkflowLinks} from '../scenarios/labels';
@@ -85,14 +85,11 @@ export class DemoController {
  }
  private async ensureSession(){
   if(!this.state.session)this.patch({session:(await this.api.request<Session>('/demo/sessions',{})).data});
-  if(!await this.readWorkflow())throw new ApiError(0,'DEMO_NOT_WORKFLOW_OPEN');
+  await this.readWorkflow();
  }
- /** The backend's template decides the map. Other admission states have no workflow to show. */
+ /** The backend's template decides the map. */
  private async readWorkflow(){
-  const catalog=await this.api.get<WorkflowCatalog>('/demo/workflow-templates');
-  if(catalog.admissionState!=='WORKFLOW_OPEN')return false;
   this.patch({links:linksFromTemplate(await this.api.get<WorkflowTemplate>('/demo/workflow-templates/SIX_DOMAIN_WORKFLOW'))});
-  return true;
  }
  start=(scenarioId:string,mode:'auto'|'step')=>{
   const definition=scenarios.find(s=>s.id===scenarioId);if(!definition||this.isActive()||this.state.clearing)return Promise.resolve();

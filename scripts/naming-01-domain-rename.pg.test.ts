@@ -1,4 +1,3 @@
-import { admissionMigrationPattern, installHistoricalAdmissionFixture } from './support/demo-admission-historical-fixture.js';
 import 'dotenv/config';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
@@ -9,6 +8,8 @@ import { runner } from 'node-pg-migrate';
 import { Client } from 'pg';
 import { FakeExecutor } from '../src/executors/fake-executor.js';
 
+const laterMigrations = '1793[345]00000000_.*'; // Migrations after the ones this suite exercises.
+
 const source = process.env.TEST_DATABASE_URL ?? process.env.DATABASE_URL;
 if (!source) throw new Error('Naming-01 requires a disposable PostgreSQL test service');
 const migrationName = '1793200000000_rename-cowos-s-to-e2e-cost';
@@ -17,7 +18,7 @@ function connection(name: string) {
 }
 function migrate(databaseUrl: string, direction: 'up' | 'down' = 'up', count?: number, timestamp = false) {
   return runner({ databaseUrl, dir: fileURLToPath(new URL('../migrations/', import.meta.url)),
-    migrationsTable: 'pgmigrations', direction, count, timestamp, ignorePattern: admissionMigrationPattern, singleTransaction: true,
+    migrationsTable: 'pgmigrations', direction, count, timestamp, ignorePattern: laterMigrations, singleTransaction: true,
     checkOrder: true, logger: { debug() {}, info() {}, warn() {}, error() {} } });
 }
 async function fixture(run: (db: Client, url: string) => Promise<void>, legacy = true) {
@@ -218,7 +219,6 @@ test('Naming-01 real PostgreSQL migration and API contracts', { timeout: 240_000
     pool.on('connect', c => ends.push(new Promise<void>(resolve => c.once('end', resolve))));
     const fake = new FakeExecutor();
     const core = await buildApp({ appMode: 'core', logger: false, nodeEnvironment: 'test', calculationExecutor: fake });
-    await installHistoricalAdmissionFixture(url);
     const runtime = new DemoRuntime(pool, 'test');
     const demo = await buildApp({ appMode: 'demo', logger: false, nodeEnvironment: 'test', demoRuntime: runtime,
       demoSession: { origin: 'https://demo.test' } });

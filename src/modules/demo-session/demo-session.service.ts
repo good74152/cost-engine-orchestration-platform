@@ -1,7 +1,6 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { DemoSessionError, DemoSessionUnavailableError } from './demo-session.errors.js';
-import { admissionUnavailable, assertSessionAdmission, lockDemoAdmission } from '../demo-admission/demo-admission.repository.js';
 
 export const SESSION_LIFETIME_SECONDS = 4 * 60 * 60;
 export const SECURE_SESSION_COOKIE = '__Host-ce_demo_session';
@@ -64,14 +63,13 @@ export class DemoSessionService {
 
   async create(): Promise<{ session: AuthenticatedDemoSession; token: string }> {
     let client: PoolClient;
-    try { client = await this.db.connect(); } catch { throw admissionUnavailable(); }
+    try { client = await this.db.connect(); } catch { throw new DemoSessionError('DEMO_UNAVAILABLE', 503, 'Demo unavailable'); }
     let commitSent = false;
     let discard = false;
     try {
       await client.query('BEGIN');
       await client.query("SET LOCAL lock_timeout='3s'");
       await client.query("SET LOCAL statement_timeout='5s'");
-      assertSessionAdmission(await lockDemoAdmission(client));
       // Admission only: serialize capacity checks and insert in one transaction.
       // Core version allocation/row-lock protocols are not involved.
       if (this.options.capacity) {

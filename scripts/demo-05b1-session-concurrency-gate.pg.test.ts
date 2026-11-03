@@ -9,7 +9,6 @@ import { runner } from 'node-pg-migrate';
 import type { FastifyInstance } from 'fastify';
 import type { AuthenticatedDemoSession } from '../src/modules/demo-session/demo-session.service.js';
 import type { ResetOptions } from '../src/modules/demo-session/demo-session-reset.service.js';
-import type { ScenarioCreateOptions } from '../src/modules/demo-scenario/demo-scenario.service.js';
 import type { CreateDatasetVersionResult } from '../src/modules/dataset-version/dataset-version.types.js';
 import { FakeExecutor } from '../src/executors/fake-executor.js';
 import type { DispatchCalculationCommand } from '../src/executors/calculation-executor.js';
@@ -53,10 +52,10 @@ test('Demo-05B-1: real parallel requests, exclusive barriers and safe Reset', {t
       import('../src/db/pool.js'),import('../src/app.js'),import('../src/modules/demo-session/demo-runtime.js'),import('./seed-demo-six-domain-configuration.js')]);
     db=pool; pool.on('connect',c=>ends.push(new Promise<void>(done=>c.once('end',done))));
     assert.equal((await pool.query('SELECT current_database() AS name')).rows[0].name,name);
-    assert.equal((await pool.query('SELECT count(*)::int AS n FROM pgmigrations')).rows[0].n,14);
+    assert.equal((await pool.query('SELECT count(*)::int AS n FROM pgmigrations')).rows[0].n,15);
     await seedDemoSixDomainConfiguration(pool);
-    const resetHooks:ResetOptions={log(){}}; const createHooks:ScenarioCreateOptions={}; const assigned:FakeExecutor[]=[];
-    const runtime=new DemoRuntime(pool,'test',{createExecutor:()=>assigned.shift()??new FakeExecutor()},resetHooks,createHooks);
+    const resetHooks:ResetOptions={log(){}}; const assigned:FakeExecutor[]=[];
+    const runtime=new DemoRuntime(pool,'test',{createExecutor:()=>assigned.shift()??new FakeExecutor()},resetHooks);
     app=await buildApp({appMode:'demo',demoRuntime:runtime,nodeEnvironment:'test',logger:false,demoSession:{origin:'https://demo.test'}});
     const post=async(url:string,s?:Session,payload:unknown={}):Promise<Response>=>app!.inject({method:'POST',url,payload:JSON.stringify(payload),
       headers:{'content-type':'application/json',origin:'https://demo.test','x-demo-session':'1',...(s?{cookie:s.cookie}:{})}});
@@ -66,11 +65,11 @@ test('Demo-05B-1: real parallel requests, exclusive barriers and safe Reset', {t
       const cookie=String(r.headers['set-cookie']).split(';')[0]!;
       return {cookie,context:await runtime.sessions.authenticate(cookie,'ce_demo_session')};
     };
-    const create=(s:Session,year=2026,domain='CAPEX')=>post('/demo/dataset-versions',s,{domain,fiscalYear:year,period:'Q4'});
+    const create=(s:Session,year=2026,domain='FAB_COST')=>post('/demo/dataset-versions',s,{domain,fiscalYear:year,period:'Q4'});
     const reset=(s:Session)=>post('/demo/sessions/reset',s);
     const count=async(table:string,where:string,values:unknown[])=>Number((await pool.query(`SELECT count(*) AS n FROM ${table} WHERE ${where}`,values)).rows[0].n);
     const owned=async(s:Session)=>(await pool.query(`SELECT to_jsonb(ds) AS row FROM dataset_series ds WHERE company_code=$1 ORDER BY id`,[s.context.companyCode])).rows;
-    const createFixtureSeries=async(s:Session,year:number,domain='CAPEX')=>(await pool.query(`INSERT INTO dataset_series
+    const createFixtureSeries=async(s:Session,year:number,domain='FAB_COST')=>(await pool.query(`INSERT INTO dataset_series
       (id,domain,company_code,fiscal_year,period,last_allocated_version) VALUES (gen_random_uuid(),$1,$2,$3,'Q4',0) RETURNING id`,[domain,s.context.companyCode,year])).rows[0].id as string;
     const lockSeries=async(ids:string[])=>{
       const locker=new Client({connectionString:connection(name)}); await locker.connect(); await locker.query('BEGIN');
@@ -178,39 +177,14 @@ test('Demo-05B-1: real parallel requests, exclusive barriers and safe Reset', {t
       }finally{finish.release();await settled;runtime.sessions.revalidate=original;}
       assert.equal(bodies,0);for(const r of await settled){assert.equal(r.status,'rejected');if(r.status==='rejected')assert.equal(r.reason.code,'DEMO_SESSION_UNAVAILABLE');}await idle();
     });
-    await t.test('manual-first Scenario Create waits for the whole admitted mutation; scenario-first blocks later Manual admission',async()=>{
-      const a=await session();const b=await session();const entered=barrier();const finish=barrier();const queued=barrier();
-      const originalAdmission=runtime.scenarios.assertFreeExploration.bind(runtime.scenarios);const originalRun=runtime.coordinator.run.bind(runtime.coordinator);
-      runtime.scenarios.assertFreeExploration=async owner=>{await originalAdmission(owner);if(owner.sessionId===a.context.sessionId){entered.release();await finish.promise;}};
-      runtime.coordinator.run=(owner,body)=>{const result=originalRun(owner,body);if(owner.sessionId===a.context.sessionId)queued.release();return result;};
-      const manual=create(a);let scenario:Promise<Response>|undefined;
-      try{await bounded(entered.promise,'Manual admission');scenario=post('/demo/scenarios',a,{scenarioType:'HAPPY_PATH'});await bounded(queued.promise,'exclusive Scenario admission');
-        assert.equal(await count('demo_scenario_instances','session_id=$1',[a.context.sessionId]),0);
-        assert.equal((await create(b)).statusCode,201);error(await reset(a),409,'RESET_CONFLICT');
-      }finally{finish.release();await manual;await scenario;runtime.scenarios.assertFreeExploration=originalAdmission;runtime.coordinator.run=originalRun;}
-      assert.equal((await manual).statusCode,201);error(await scenario!,409,'DEMO_SCENARIO_SESSION_NOT_EMPTY');
-
-      const c=await session();const inCreate=barrier();const commit=barrier();const parallelQueued=barrier();let manualEntered=false;
-      createHooks.beforeCommit=async()=>{inCreate.release();await commit.promise;};
-      runtime.scenarios.assertFreeExploration=async owner=>{if(owner.sessionId===c.context.sessionId)manualEntered=true;return originalAdmission(owner);};
-      const parallel=runtime.coordinator.runParallel.bind(runtime.coordinator);
-      runtime.coordinator.runParallel=(owner,body)=>{const result=parallel(owner,body);if(owner.sessionId===c.context.sessionId)parallelQueued.release();return result;};
-      const creating=post('/demo/scenarios',c,{scenarioType:'HAPPY_PATH'});let mutation:Promise<Response>|undefined;
-      try{await bounded(inCreate.promise,'Scenario before COMMIT');mutation=create(c);await bounded(parallelQueued.promise,'Manual waiting behind Scenario');
-        assert.equal((await get('/demo/dataset-versions',b)).statusCode,200);assert.equal(manualEntered,false);
-      }finally{commit.release();await creating;await mutation;delete createHooks.beforeCommit;runtime.coordinator.runParallel=parallel;runtime.scenarios.assertFreeExploration=originalAdmission;}
-      assert.equal((await creating).statusCode,201);error(await mutation!,409,'DEMO_SCENARIO_MODE_CONFLICT');assert.deepEqual(await owned(c),[]);await idle();
-    });
-    await t.test('legacy Run and Fake controls remain exclusive; parallel Reconcile waits for earlier exclusive Run without SQL locks',async()=>{
+    await t.test('Run and Fake controls remain exclusive; parallel Reconcile waits for earlier exclusive Run without SQL locks',async()=>{
       const a=await session();const b=await session();const data=(await create(a)).json<CreateDatasetVersionResult>();
       const fake=new BlockingFake();assigned.push(fake);const job=data.calculationJobs[0]!.jobId;
       const held=post(`/demo/calculation-jobs/${job}/run`,a);const probe=new Client({connectionString:connection(name)});await probe.connect();
       const pending:Promise<Response>[]=[];const original=runtime.coordinator.run.bind(runtime.coordinator);
-      const parallel=runtime.coordinator.runParallel.bind(runtime.coordinator);let signal=barrier();let freeAdmissions=0;
-      const admission=runtime.scenarios.assertFreeExploration.bind(runtime.scenarios);
+      const parallel=runtime.coordinator.runParallel.bind(runtime.coordinator);let signal=barrier();
       try{
         await bounded(fake.entered.promise,'executor dispatch');const attempt=(await pool.query('SELECT id FROM execution_attempts WHERE calculation_job_id=$1',[job])).rows[0].id;
-        runtime.scenarios.assertFreeExploration=async owner=>{if(owner.sessionId===a.context.sessionId)freeAdmissions++;return admission(owner);};
         runtime.coordinator.run=(owner,body)=>{const result=original(owner,body);if(owner.sessionId===a.context.sessionId)signal.release();return result;};
         runtime.coordinator.runParallel=(owner,body)=>{const result=parallel(owner,body);if(owner.sessionId===a.context.sessionId)signal.release();return result;};
         await probe.query('BEGIN');
@@ -221,9 +195,9 @@ test('Demo-05B-1: real parallel requests, exclusive barriers and safe Reset', {t
           ['/demo/fake-executor/dispatch-behavior',{behavior:'ACCEPT'}],[`/demo/execution-attempts/${attempt}/fake-state`,{state:'SUCCEEDED'}]] as const) {
           signal=barrier();pending.push(post(path,a,body));await bounded(signal.promise,'route queued behind legacy exclusive Run');
         }
-        assert.equal(freeAdmissions,0);assert.equal(fake.getDispatchHistory().length,1);assert.equal(fake.getStatusLookupHistory().length,0);
+        assert.equal(fake.getDispatchHistory().length,1);assert.equal(fake.getStatusLookupHistory().length,0);
         assert.equal((await create(b)).statusCode,201);error(await reset(a),409,'RESET_CONFLICT');
-      }finally{fake.finish.release();await held;await Promise.all(pending);await probe.query('ROLLBACK');await probe.end();runtime.coordinator.run=original;runtime.coordinator.runParallel=parallel;runtime.scenarios.assertFreeExploration=admission;}
+      }finally{fake.finish.release();await held;await Promise.all(pending);await probe.query('ROLLBACK');await probe.end();runtime.coordinator.run=original;runtime.coordinator.runParallel=parallel;}
       assert.equal((await held).statusCode,200);for(const r of await Promise.all(pending))assert.equal(r.statusCode,200,r.body);
       assert.equal(fake.getDispatchHistory().length,1);assert.equal(fake.getStatusLookupHistory().length,1);
       const states=(await pool.query(`SELECT j.status AS job,a.status AS attempt FROM calculation_jobs j
@@ -236,7 +210,7 @@ test('Demo-05B-1: real parallel requests, exclusive barriers and safe Reset', {t
       const resetting=reset(a);
       try{await bounded(entered.promise,'Reset before COMMIT');
         for(const request of [()=>create(a,2027),()=>get('/demo/dataset-versions',a),()=>post(`/demo/dataset-versions/${data.datasetVersionId}/abandon`,a),
-          ()=>post('/demo/scenarios',a,{scenarioType:'HAPPY_PATH'}),()=>post(`/demo/calculation-jobs/${data.calculationJobs[0]!.jobId}/run`,a),
+          ()=>post(`/demo/calculation-jobs/${data.calculationJobs[0]!.jobId}/run`,a),
           ()=>post('/demo/fake-executor/dispatch-behavior',a,{behavior:'ACCEPT'}),()=>reset(a)])error(await bounded(request(),'reserved admission'),409,'RESET_CONFLICT');
         assert.deepEqual(await owned(b),beforeB);assert.equal((await get('/demo/dataset-versions',b)).statusCode,200);
       }finally{finish.release();await resetting;delete resetHooks.beforeCommit;}
@@ -250,7 +224,6 @@ test('Demo-05B-1: real parallel requests, exclusive barriers and safe Reset', {t
       try{
         error(await reset(s),503,'DEMO_RESET_OUTCOME_UNKNOWN');
         error(await create(s,2027),503,'DEMO_RESET_OUTCOME_UNKNOWN');error(await get('/demo/dataset-versions',s),503,'DEMO_RESET_OUTCOME_UNKNOWN');
-        error(await post('/demo/scenarios',s,{scenarioType:'HAPPY_PATH'}),503,'DEMO_RESET_OUTCOME_UNKNOWN');
         error(await post('/demo/fake-executor/dispatch-behavior',s,{behavior:'ACCEPT'}),503,'DEMO_RESET_OUTCOME_UNKNOWN');
         assert.deepEqual(await owned(s),before);assert.equal(await runtime.executors.forSession(s.context),fake);
       }finally{delete resetHooks.commit;delete resetHooks.recoveryClient;}
@@ -266,7 +239,7 @@ test('Demo-05B-1: real parallel requests, exclusive barriers and safe Reset', {t
       const r=await post(`/demo/dataset-versions/${data.datasetVersionId}/abandon`,a);assert.equal(r.statusCode,200,r.body);
       assert.equal((await pool.query('SELECT status FROM dataset_versions WHERE id=$1',[data.datasetVersionId])).rows[0].status,'ABANDONED');await idle();
     });
-    console.info('DEMO_05B1_EVIDENCE',JSON.stringify({database:name,migrations:14,parallelLimit:4,realPostgresWaiters:true,noExecutorSessionLock:true}));
+    console.info('DEMO_05B1_EVIDENCE',JSON.stringify({database:name,migrations:15,parallelLimit:4,realPostgresWaiters:true,noExecutorSessionLock:true}));
   }finally{
     try{await app?.close();if(db){await db.end();await Promise.all(ends);}}
     finally{

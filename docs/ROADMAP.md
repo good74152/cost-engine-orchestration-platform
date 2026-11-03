@@ -282,3 +282,7 @@ FakeExecutor is the only implemented adapter and is limited to explicit developm
 ## Demo-11 — Remove recovery tooling
 
 Removes backups, restore verification, drills and readiness reports, and shrinks the deployment rehearsal to the scripts that still exist. The demo's data is disposable. See [ADR-0021](adr/0021-remove-recovery-tooling.md).
+
+## Demo-12 — Remove Guided scenarios and cutover
+
+Removes the unused Guided scenario APIs and the one-way admission gate and cutover. The seed now writes the final ten-type configuration directly, and Web opens on a ready Backend. See [ADR-0022](adr/0022-remove-guided-scenarios-and-cutover.md).

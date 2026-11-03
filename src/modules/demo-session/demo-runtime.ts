@@ -6,8 +6,6 @@ import { DemoSessionError } from './demo-session.errors.js';
 import { DemoOwnershipValidator } from './demo-session.ownership.js';
 import { DemoSessionService, type AuthenticatedDemoSession } from './demo-session.service.js';
 import { DemoSessionResetService, type ResetOptions } from './demo-session-reset.service.js';
-import { DemoScenarioService, type ScenarioCreateOptions } from '../demo-scenario/demo-scenario.service.js';
-import { DemoStepService, type StepOptions } from '../demo-scenario/demo-step.service.js';
 import { publicDemoConfig } from '../../deployment/public-demo-config.js';
 
 export function assertDemoEnvironment(nodeEnvironment?: string): void {
@@ -72,10 +70,8 @@ export class DemoRuntime {
   readonly ownership: DemoOwnershipValidator;
   readonly executors: DemoExecutorRegistry;
   readonly reset: DemoSessionResetService;
-  readonly scenarios: DemoScenarioService;
-  readonly steps: DemoStepService;
 
-  constructor(readonly db: Pool, nodeEnvironment?: string, options: RegistryOptions = {}, resetOptions: ResetOptions = {}, scenarioOptions: ScenarioCreateOptions = {}, stepOptions: StepOptions = {}) {
+  constructor(readonly db: Pool, nodeEnvironment?: string, options: RegistryOptions = {}, resetOptions: ResetOptions = {}) {
     assertDemoEnvironment(nodeEnvironment);
     const profile = publicDemoConfig();
     this.sessions = new DemoSessionService(db, profile ? {
@@ -86,7 +82,5 @@ export class DemoRuntime {
     if (profile && options.maxExecutors !== undefined && options.maxExecutors > profile.executors) throw new Error('Executor capacity exceeds public profile');
     this.executors = new DemoExecutorRegistry(this.sessions, { ...options, maxExecutors: options.maxExecutors ?? profile?.executors });
     this.reset = new DemoSessionResetService(this, resetOptions);
-    this.scenarios = new DemoScenarioService(db, this.sessions, this.executors, scenarioOptions);
-    this.steps = new DemoStepService(this, stepOptions);
   }
 }
