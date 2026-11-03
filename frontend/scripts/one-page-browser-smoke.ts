@@ -127,6 +127,14 @@ test('One-page demo: real Chromium, production bundle, CSP and PostgreSQL',{time
    await page.getByRole('group',{name:/Saved records for Capital spending/}).getByText('Input locked: Fab cost v1').waitFor();
    await shot('04-lost-reply-tree');
   });
+  await t.test('blocks open their explanation without sending a command',async()=>{
+   const count=posts.length;
+   await page.getByRole('button',{name:/^Try execution_attempt/}).click();
+   await dialog('Try (execution_attempt)').waitFor();await shot('04b-concept-dialog');await closeDialog('Try (execution_attempt)');
+   await page.getByRole('button',{name:/^A step failed/}).click();
+   await dialog('A step failed in a long workflow').getByText('Someone reran it by hand in Airflow.').waitFor();await shot('04c-then-now');await closeDialog('A step failed in a long workflow');
+   assert.equal(posts.length,count);
+  });
   await t.test('reloading the page restores saved state and sends no command',async()=>{
    const count=posts.length;await page.reload();
    await page.getByRole('group',{name:/Saved records for/}).waitFor();await page.waitForLoadState('networkidle');

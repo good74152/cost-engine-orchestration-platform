@@ -41,7 +41,8 @@ The browser test fails if the two differ. This stays a demo view: the platform r
 
 ## Dialog scope
 
-A Dialog appears for a finished scenario, an unexpected error, the Lost Response decision and box details.
+A Dialog appears for a finished scenario, an unexpected error, the Lost Response decision, box details and the
+explanations behind the page's blocks. Limits stay one click away, and the first screen still says the jobs are simulated.
 Step success changes the chart and the status line instead, because a scenario sends up to about 40 commands.
 HTTP 409 in the conflict scenario is the expected result, so it is reported as a result, not an error.
 

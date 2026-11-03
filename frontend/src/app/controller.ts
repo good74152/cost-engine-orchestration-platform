@@ -5,11 +5,13 @@ import {DEFAULT_LINKS,type WorkflowLinks} from '../scenarios/labels';
 import {nextReportingPeriod,scenarios} from '../scenarios/scenarios';
 import {linksFromTemplate} from '../ui/tree';
 
+/** An explanation opened from a block or a box. */
+export interface DialogContent {title:string;paragraphs?:string[];bullets?:string[];rows?:[string,string][];note?:string;action?:{label:string;scenarioId:string}}
 export type DialogState=
  |{kind:'summary';summary:ScenarioSummary}
  |{kind:'pause';pause:PauseRequest}
  |{kind:'error';title:string;message:string;code?:string}
- |{kind:'details';title:string;explanation:string;rows:[string,string][]}
+ |{kind:'info';content:DialogContent}
  |{kind:'clear'};
 
 export interface PlaybackState {
@@ -128,7 +130,7 @@ export class DemoController {
  stop=()=>{if(this.state.playback?.status!=='waiting')return;this.abandon();this.patch({playback:null});};
  dismiss=()=>{if(this.state.dialog?.kind!=='pause')this.patch({dialog:null});};
  selectSeries=(id:string)=>this.patch({selectedSeriesId:id});
- openDetails=(dialog:Extract<DialogState,{kind:'details'}>)=>this.patch({dialog});
+ openInfo=(content:DialogContent)=>this.patch({dialog:{kind:'info',content}});
  askToClear=()=>{if(!this.isActive()||this.state.playback?.status==='waiting')this.patch({dialog:{kind:'clear'}});};
  clear=async()=>{
   this.patch({clearing:true});

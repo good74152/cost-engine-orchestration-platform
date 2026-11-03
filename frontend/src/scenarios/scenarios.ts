@@ -157,10 +157,10 @@ function conflictingRequests():ScenarioPlan{
 }
 
 export const scenarios:ScenarioDefinition[]=[
- {id:'happy-path',title:'Happy path',description:'Six reports run in order. Each one waits for the reports it needs.',build:happyPath},
- {id:'lost-reply',title:'Lost reply',description:'A job starts, but the reply never arrives. The system checks instead of starting it twice.',build:lostReply},
- {id:'failed-job',title:'Failed job and retry',description:'A job fails. The retry uses the same input and keeps a record of the failure.',build:failedJob},
- {id:'conflicting-requests',title:'Conflicting requests',description:'Four people click Create at once. Only one succeeds.',build:conflictingRequests},
+ {id:'happy-path',title:'Happy path',description:'Six reports run in order.',build:happyPath},
+ {id:'lost-reply',title:'Lost reply',description:'The reply never arrives. Nothing runs twice.',build:lostReply},
+ {id:'failed-job',title:'Failed job and retry',description:'A job fails, then retries on the same input.',build:failedJob},
+ {id:'conflicting-requests',title:'Conflicting requests',description:'Four clicks at once. One wins.',build:conflictingRequests},
 ];
 
 /** Each run uses a reporting period this session hasn't touched, so scenarios can be replayed. */

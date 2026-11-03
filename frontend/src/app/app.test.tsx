@@ -26,7 +26,7 @@ describe('one-page demo',()=>{
   expect(api.posts()).toEqual([]);
   expect(screen.getByRole('group',{name:'Example of saved records'})).toHaveTextContent('execution_attempt');
   expect(document.body.textContent).not.toMatch(/LOCAL DEMO|Development demo|durable|Normal close|fiscal|ledger/i);
-  expect(screen.getByRole('heading',{name:'How the data is organized'})).toBeInTheDocument();
+  expect(screen.getByRole('region',{name:'How the data is organized'})).toBeInTheDocument();
   expect(document.body.textContent).toContain('One report for one year/period.');
  });
  it('publishes all six reports in order on the happy path, using the real replies',async()=>{
@@ -38,6 +38,23 @@ describe('one-page demo',()=>{
   expect(done).toHaveTextContent('10 jobs succeeded');
   expect(done).toHaveTextContent('5 reports locked the input');
   expect(api.datasets.map(d=>d.domain)).toEqual(['FAB_COST','CAPEX','INSURANCE','ONE_STD_COST','DPR','E2E_COST']);
+ });
+ it('opens each explanation from a block, and can start the scenario it describes',async()=>{
+  const {api,user}=mount();
+  await user.click(screen.getByRole('button',{name:/^Version/}));
+  const version=await dialog('Version (dataset_version)');
+  expect(version).toHaveTextContent('Contains');expect(version).toHaveTextContent('Many jobs');
+  await user.click(closeButton(version));
+  await user.click(screen.getByRole('button',{name:/^What it doesn’t do/}));
+  expect(await dialog('What it doesn’t do')).toHaveTextContent('No real Airflow');
+  await user.click(closeButton(await dialog('What it doesn’t do')));
+  expect(api.posts()).toEqual([]);
+  await user.click(screen.getByRole('button',{name:/^A job looked stuck/}));
+  const stuck=await dialog('A job looked stuck');
+  expect(stuck).toHaveTextContent('production work I did');
+  await user.click(within(stuck).getByRole('button',{name:'Try Lost reply'}));
+  await dialog('The reply never arrived');
+  expect(api.posts().length).toBeGreaterThan(0);
  });
  it('pauses a lost response until the viewer recovers it, then proves there is no duplicate',async()=>{
   const {api,user}=mount();

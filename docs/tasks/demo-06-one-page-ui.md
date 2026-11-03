@@ -5,7 +5,7 @@ Baseline: main `6ddf3d0`. Status: awaiting System Owner review. No deployment or
 
 ## Scope
 
-- One page: a short explanation, the data hierarchy, four scenarios, the live workflow map and records, then-and-now, and limits.
+- One page: a short header, the data hierarchy, four scenarios, the live workflow map and records, then blocks that open then-and-now and limits in a Dialog.
 - `Happy path`, `Lost reply`, `Failed job and retry` and `Conflicting requests`, each with Run and Step through.
 - DataView of scenarios. OrganizationChart of the six reports, and of `dataset_series → dataset_version → calculation_job → execution_attempt`.
 - Read-only `frozenInputs` on Demo dataset list and detail reads.
