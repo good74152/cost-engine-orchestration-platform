@@ -102,7 +102,7 @@ test('One-page demo: real Chromium, production bundle, CSP and PostgreSQL',{time
    assert.equal(rows.length,6);assert.ok(rows.every(r=>r.status==='PUBLISHED'));
    await shot('01b-normal-close');await closeDialog('All six reports published');await shot('01c-normal-close-map');
    const map=page.getByRole('group',{name:'Report dependency map'});
-   for(const label of ['Fab cost','Capital spending','Depreciation','Insurance','Standard cost','End-to-end cost'])await map.getByRole('button',{name:'Show '+label+', Published'}).waitFor();
+   for(const label of ['Fab cost','Capital expenditure','Depreciation','Insurance','Standard cost','End-to-end cost'])await map.getByRole('button',{name:'Show '+label+', Published'}).waitFor();
    const template=await (await context.request.get(origin+'/demo/workflow-templates/SIX_DOMAIN_WORKFLOW')).json() as {steps:{id:string;domain:string;operation:string;prerequisites:string[]}[]};
    const domainOf=new Map(template.steps.map(s=>[s.id,s.domain]));
    const links=Object.fromEntries(template.steps.filter(s=>s.operation==='CREATE_DATASET').map(s=>[s.domain,domainOf.get(s.prerequisites[0]??'')??null]));
@@ -123,8 +123,8 @@ test('One-page demo: real Chromium, production bundle, CSP and PostgreSQL',{time
    assert.match(await done.innerText(),new RegExp(runId));assert.match(await done.innerText(),/1 try\./);
    await shot('03-lost-reply-recovered');await closeDialog('No duplicate run');
    assert.ok((await page.evaluate(()=>window.scrollY))>0,'the page must not jump back to the top after a run');await page.setViewportSize({width:1440,height:1000});
-   await page.getByRole('button',{name:/^Show Capital spending/}).waitFor();
-   await page.getByRole('group',{name:/Saved records for Capital spending/}).getByText('Input locked: Fab cost v1').waitFor();
+   await page.getByRole('button',{name:/^Show Capital expenditure/}).waitFor();
+   await page.getByRole('group',{name:/Saved records for Capital expenditure/}).getByText('Input locked: Fab cost v1').waitFor();
    await shot('04-lost-reply-tree');
   });
   await t.test('blocks open their explanation without sending a command',async()=>{
@@ -140,7 +140,7 @@ test('One-page demo: real Chromium, production bundle, CSP and PostgreSQL',{time
    await page.getByRole('button',{name:'繁體中文'}).click();
    await page.getByRole('heading',{level:1,name:/財務報表計算的 Async Workflow/}).waitFor();
    assert.equal(await page.evaluate(()=>document.documentElement.lang),'zh-TW');await shot('04d-zh');
-   await page.reload();await page.getByRole('heading',{name:'選擇情境'}).waitFor();
+   await page.reload();await page.getByRole('heading',{name:'選擇 Scenario'}).waitFor();
    await page.getByRole('button',{name:'English'}).click();await page.getByRole('heading',{name:'Pick a scenario'}).waitFor();
    assert.equal(posts.length,count);
   });

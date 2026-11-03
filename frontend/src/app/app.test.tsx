@@ -62,14 +62,14 @@ describe('one-page demo',()=>{
   await user.click(screen.getByRole('button',{name:'繁體中文'}));
   expect(document.documentElement.lang).toBe('zh-TW');
   expect(screen.getByRole('heading',{level:1})).toHaveTextContent('財務報表計算的 Async Workflow');
-  expect(screen.getByRole('heading',{name:'選擇情境'})).toBeInTheDocument();
+  expect(screen.getByRole('heading',{name:'選擇 Scenario'})).toBeInTheDocument();
   expect(document.body.textContent).toContain('execution_attempt');
   expect(document.body.textContent).toContain('Lost reply');
   expect(api.posts()).toEqual([]);
-  await user.click(screen.getByRole('button',{name:'執行 Lost reply'}));
-  const paused=await dialog('回應沒有回來');
-  await user.click(within(paused).getByRole('button',{name:'確認同一次 run'}));
-  expect(await dialog('沒有重複執行')).toHaveTextContent('這個 job 有 1 個 try。');
+  await user.click(screen.getByRole('button',{name:'Run Lost reply'}));
+  const paused=await dialog('外部 job 回應沒有回傳');
+  await user.click(within(paused).getByRole('button',{name:'確認同一個 run'}));
+  expect(await dialog('沒有重複 run')).toHaveTextContent('這個 job 有 1 個 try');
   expect(localStorage.getItem('ce-demo-language')).toBe('zh-TW');
   cleanup();
   mount(api);
@@ -140,7 +140,7 @@ describe('one-page demo',()=>{
   await dialog('One winner, and the order held');
   const posts=api.posts().length;cleanup();
   mount(api);
-  await screen.findAllByRole('button',{name:/^Details for (Capital spending|Fab cost)/});
+  await screen.findAllByRole('button',{name:/^Details for (Capital expenditure|Fab cost)/});
   expect(api.posts().length).toBe(posts);
  });
  it('opens plain-language details when a box is selected',async()=>{
