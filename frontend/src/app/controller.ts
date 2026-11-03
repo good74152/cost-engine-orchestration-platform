@@ -1,7 +1,9 @@
 import {ApiClient,ApiError,errorMessage} from '../api/client';
-import type {Attempt,Dataset,Job,Session,WorkflowCatalog} from '../api/types';
+import type {Attempt,Dataset,Job,Session,WorkflowCatalog,WorkflowTemplate} from '../api/types';
 import {ScenarioApi,ScenarioMismatch,type ApiCall,type PauseRequest,type ScenarioDefinition,type ScenarioSummary} from '../scenarios/engine';
+import {DEFAULT_LINKS,type WorkflowLinks} from '../scenarios/labels';
 import {nextReportingPeriod,scenarios} from '../scenarios/scenarios';
+import {linksFromTemplate} from '../ui/tree';
 
 export type DialogState=
  |{kind:'summary';summary:ScenarioSummary}
@@ -16,9 +18,9 @@ export interface PlaybackState {
 }
 export interface DemoState {
  session:Session|null;datasets:Dataset[];jobs:Record<string,Job[]>;attempts:Record<string,Attempt[]>;
- selectedSeriesId:string|null;playback:PlaybackState|null;calls:ApiCall[];dialog:DialogState|null;runIds:Record<string,string>;clearing:boolean;
+ selectedSeriesId:string|null;links:WorkflowLinks;playback:PlaybackState|null;calls:ApiCall[];dialog:DialogState|null;runIds:Record<string,string>;clearing:boolean;
 }
-const empty=():DemoState=>({session:null,datasets:[],jobs:{},attempts:{},selectedSeriesId:null,playback:null,calls:[],dialog:null,runIds:{},clearing:false});
+const empty=():DemoState=>({session:null,datasets:[],jobs:{},attempts:{},selectedSeriesId:null,links:DEFAULT_LINKS,playback:null,calls:[],dialog:null,runIds:{},clearing:false});
 const sleep=(ms:number)=>new Promise<void>(done=>setTimeout(done,ms));
 
 /** Page state. Commands come only from a viewer's click; reloading the page sends GETs only. */
@@ -46,7 +48,7 @@ export class DemoController {
  load=async()=>{
   const epoch=this.epoch;
   try{const session=await this.api.get<Session>('/demo/sessions/current');
-   if(epoch!==this.epoch)return;this.patch({session});await this.refresh();}
+   if(epoch!==this.epoch)return;this.patch({session});await this.refresh();if(epoch===this.epoch)await this.readWorkflow();}
   catch(error){
    if(epoch!==this.epoch||(error instanceof ApiError&&error.status===401))return;
    this.showError('The saved state couldn’t be loaded',error);
@@ -68,8 +70,14 @@ export class DemoController {
  }
  private async ensureSession(){
   if(!this.state.session)this.patch({session:(await this.api.request<Session>('/demo/sessions',{})).data});
+  if(!await this.readWorkflow())throw new ApiError(0,'DEMO_NOT_WORKFLOW_OPEN');
+ }
+ /** The backend's template decides the map. Other admission states have no workflow to show. */
+ private async readWorkflow(){
   const catalog=await this.api.get<WorkflowCatalog>('/demo/workflow-templates');
-  if(catalog.admissionState!=='WORKFLOW_OPEN')throw new ApiError(0,'DEMO_NOT_WORKFLOW_OPEN');
+  if(catalog.admissionState!=='WORKFLOW_OPEN')return false;
+  this.patch({links:linksFromTemplate(await this.api.get<WorkflowTemplate>('/demo/workflow-templates/SIX_DOMAIN_WORKFLOW'))});
+  return true;
  }
  start=(scenarioId:string,mode:'auto'|'step')=>{
   const definition=scenarios.find(s=>s.id===scenarioId);if(!definition||this.isActive()||this.state.clearing)return Promise.resolve();

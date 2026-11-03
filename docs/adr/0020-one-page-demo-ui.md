@@ -16,7 +16,7 @@ and frozen inputs and run identity were not visible. A recruiter will not get th
 
 1. **One page.** Replace the Dashboard, Workflow Explorer, Guided, Free Exploration, Resources and About
    pages with one page and no client routing. Backend Guided APIs and their tests stay.
-2. **Scenario playback in the browser.** Three scenarios play explicit calls to the existing `/demo/*` APIs,
+2. **Scenario playback in the browser.** Four scenarios play explicit calls to the existing `/demo/*` APIs,
    one click at a time or all at once. There is no new endpoint, worker or server-side state.
    This replaces the Demo-05C-3C rule that the UI never sends more than one command per click.
    A page load still sends GETs only, and commands never retry automatically.
@@ -26,16 +26,23 @@ and frozen inputs and run identity were not visible. A recruiter will not get th
    `domain`, `fiscalYear`, `period` and `version`. This narrows the Demo-02A rule that dataset reads expose
    nothing about upstream data. IDs, company code and execution identity stay out. Run ID is shown from the
    existing Run reply, so read DTOs still expose no DAG or run identity.
-5. **PrimeReact 10 in unstyled mode, version pinned.** DataView, OrganizationChart and Dialog supply behavior.
-   One static stylesheet supplies all visuals.
+5. **PrimeReact 10 in unstyled mode, version pinned.** DataView lists the scenarios. One OrganizationChart maps
+   the six reports, and a second shows `series → version → job → attempt` for the selected report. Dialog handles
+   messages. One static stylesheet supplies all visuals.
 6. **CSP stays without `unsafe-inline`.** PrimeReact injects a fixed `<style>` block and empty ones even when
    unstyled. `style-src` allows exactly those two SHA-256 hashes. The browser test runs the production bundle
    under the policy read from `deploy/Caddyfile`, so a version that changes them fails CI.
 
+## The workflow map
+
+The map comes from the prerequisites in the existing `SIX_DOMAIN_WORKFLOW` template, so the frontend doesn't define
+the pipeline. Before a session exists that API can't be read, so the page shows the same shape from a constant.
+The browser test fails if the two differ. This stays a demo view: the platform remains generic across domains.
+
 ## Dialog scope
 
 A Dialog appears for a finished scenario, an unexpected error, the Lost Response decision and box details.
-Step success changes the chart and the status line instead, because a scenario sends up to about 20 commands.
+Step success changes the chart and the status line instead, because a scenario sends up to about 40 commands.
 HTTP 409 in the conflict scenario is the expected result, so it is reported as a result, not an error.
 
 ## Alternatives
@@ -62,5 +69,5 @@ HTTP 409 in the conflict scenario is the expected result, so it is reported as a
 ## Truth boundary
 
 The page separates past production work ("Then") from this implementation ("Now") and uses generic wording.
-Freezing inputs is labeled as a design added for this project. Playback is a UI convenience, not backend
+Locking inputs is labeled as a design added for this project. Playback is a UI convenience, not backend
 automation, and must not be described as a workflow engine.

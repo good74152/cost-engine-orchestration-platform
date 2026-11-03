@@ -4,7 +4,11 @@ export const json=(data:unknown,status=200)=>new Response(JSON.stringify(data),{
 export const fail=(code:string,status:number)=>json({code,message:'Safe backend message'},status);
 const uuid=(n:number)=>'10000000-0000-4000-8000-'+String(n).padStart(12,'0');
 const TIME='2026-11-02T01:00:00.000Z';
-const JOBS:Record<string,string[]>={FAB_COST:['DEMO_FAB_COST_SUMMARY'],CAPEX:['DEMO_CAPEX_TABLE_Y','DEMO_GUIDED_SUMMARY']};
+const JOBS:Record<string,string[]>={FAB_COST:['DEMO_FAB_COST_SUMMARY'],CAPEX:['DEMO_CAPEX_TABLE_Y','DEMO_GUIDED_SUMMARY'],DPR:['DEMO_DPR_TABLE_X','DEMO_DPR_TABLE_Y'],
+ INSURANCE:['DEMO_INSURANCE_SUMMARY'],ONE_STD_COST:['DEMO_ONE_STD_COST_TABLE_X','DEMO_ONE_STD_COST_TABLE_Y'],E2E_COST:['DEMO_E2E_COST_TABLE_X','DEMO_E2E_COST_TABLE_Y']};
+const NEEDS:Record<string,string>={CAPEX:'FAB_COST',DPR:'CAPEX',INSURANCE:'FAB_COST',ONE_STD_COST:'FAB_COST',E2E_COST:'ONE_STD_COST'};
+const TEMPLATE={steps:Object.keys(JOBS).flatMap(domain=>{const need=NEEDS[domain];return [
+ {id:domain+'.create',domain,operation:'CREATE_DATASET',prerequisites:need?[need+'.publish']:[]},{id:domain+'.publish',domain,operation:'PUBLISH_DATASET',prerequisites:[domain+'.create']}];})};
 
 /** In-memory stand-in for the Demo API. Real behavior is proven by the PostgreSQL and browser tests. */
 export class MockApi {
@@ -24,6 +28,7 @@ export class MockApi {
   if(path==='/demo/sessions/current')return json(this.session);
   if(path==='/demo/sessions/reset'){this.session=null;this.datasets=[];this.jobs=[];this.attempts=[];return new Response(null,{status:204});}
   if(path==='/demo/workflow-templates')return json({admissionState:this.admissionState,templates:[]});
+  if(path==='/demo/workflow-templates/SIX_DOMAIN_WORKFLOW')return json(TEMPLATE);
   const page=(items:unknown[])=>json({items,nextCursor:null});
   let m:RegExpExecArray|null;
   if(path==='/demo/dataset-versions'&&method==='GET')return page(this.datasets);
@@ -46,10 +51,11 @@ export class MockApi {
  }
  private run(jobId:string,{simulation}:{simulation:{dispatch:string;completion:string}}){
   const job=this.jobs.find(j=>j.jobId===jobId)!;const d=this.datasets.find(x=>x.datasetVersionId===job.datasetVersionId)!;
-  if(d.domain==='CAPEX'&&!d.frozenInputs.length){
-   const upstream=this.datasets.filter(x=>x.domain==='FAB_COST'&&x.fiscalYear===d.fiscalYear&&x.period===d.period&&x.datasetStatus==='PUBLISHED').at(-1);
+  const need=NEEDS[d.domain];
+  if(need&&!d.frozenInputs.length){
+   const upstream=this.datasets.filter(x=>x.domain===need&&x.fiscalYear===d.fiscalYear&&x.period===d.period&&x.datasetStatus==='PUBLISHED').at(-1);
    if(!upstream)return fail('DEPENDENCY_NOT_READY',409);
-   const frozen:FrozenInput={domain:'FAB_COST',fiscalYear:d.fiscalYear,period:d.period,version:upstream.version};d.frozenInputs=[frozen];
+   const frozen:FrozenInput={domain:need,fiscalYear:d.fiscalYear,period:d.period,version:upstream.version};d.frozenInputs=[frozen];
   }
   d.datasetStatus='BUILDING';
   let attempt=this.attempts.filter(a=>a.jobId===jobId).at(-1);

@@ -15,6 +15,7 @@ import {build} from 'vite';
 import type {FastifyInstance} from 'fastify';
 import {DemoAdmissionOperator} from '../../src/modules/demo-admission/demo-admission.operator.js';
 import {DemoCutoverOperator} from '../../src/modules/demo-cutover/demo-cutover.operator.js';
+import {DEFAULT_LINKS} from '../src/scenarios/labels.js';
 
 const source=process.env.TEST_DATABASE_URL;
 if(!source)throw new Error('The one-page browser test requires an explicit disposable TEST_DATABASE_URL');
@@ -85,62 +86,77 @@ test('One-page demo: real Chromium, production bundle, CSP and PostgreSQL',{time
 
   await t.test('a first-time visitor sees the point at once, with no error and no command',async()=>{
    await page.goto(origin);
-   await page.getByRole('heading',{level:1,name:/Financial data stays correct/}).waitFor();
-   await page.getByRole('group',{name:'Example of the dataset hierarchy'}).waitFor();
+   await page.getByRole('heading',{level:1,name:/Async Workflow for Financial Report Calculation/}).waitFor();
+   await page.getByRole('group',{name:'Example of saved records'}).waitFor();
    await page.waitForLoadState('networkidle');
    assert.equal(await page.getByRole('dialog').count(),0);assert.equal(posts.length,0);
    assert.deepEqual(problems,[]);await shot('01-first-visit');
   });
   let company='';
-  await t.test('Lost response pauses on the unknown outcome, then recovers without a second attempt or run',async()=>{
-   await page.getByRole('button',{name:'Run Lost response'}).click();
-   const paused=dialog('The reply was lost');await paused.waitFor();await shot('02-lost-reply-dialog');
+  await t.test('Normal close publishes all six reports, and the map matches the backend template',async()=>{
+   await page.getByRole('button',{name:'Run Normal close'}).click();
+   const done=dialog('All six reports published');await done.waitFor({timeout:40_000});
+   const text=await done.innerText();assert.match(text,/6 reports published/);assert.match(text,/10 jobs succeeded/);assert.match(text,/5 reports locked the input/);
    company=(await session()).companyCode;
-   const before=await attempts(company,'CAPEX','Q1');assert.equal(before.length,1);assert.equal(before[0]!.status,'DISPATCHING');
+   const rows=(await pool.query(`SELECT s.domain,v.status FROM dataset_versions v JOIN dataset_series s ON s.id=v.dataset_series_id WHERE s.company_code=$1 AND s.period='Q1'`,[company])).rows as {domain:string;status:string}[];
+   assert.equal(rows.length,6);assert.ok(rows.every(r=>r.status==='PUBLISHED'));
+   await shot('01b-normal-close');await closeDialog('All six reports published');await shot('01c-normal-close-map');
+   const map=page.getByRole('group',{name:'Report dependency map'});
+   for(const label of ['Fab cost','Capital spending','Depreciation','Insurance','Standard cost','End-to-end cost'])await map.getByRole('button',{name:'Show '+label+', Published'}).waitFor();
+   const template=await (await context.request.get(origin+'/demo/workflow-templates/SIX_DOMAIN_WORKFLOW')).json() as {steps:{id:string;domain:string;operation:string;prerequisites:string[]}[]};
+   const domainOf=new Map(template.steps.map(s=>[s.id,s.domain]));
+   const links=Object.fromEntries(template.steps.filter(s=>s.operation==='CREATE_DATASET').map(s=>[s.domain,domainOf.get(s.prerequisites[0]??'')??null]));
+   assert.deepEqual(links,DEFAULT_LINKS,'the map shown before a session must match the backend template');
+  });
+  await t.test('Lost reply pauses on the unknown outcome, then recovers without a second attempt or run',async()=>{
+   await page.setViewportSize({width:1440,height:600});await page.evaluate(()=>window.scrollTo(0,180));
+   await page.getByRole('button',{name:'Run Lost reply'}).click();
+   const paused=dialog('The reply never arrived');await paused.waitFor();await shot('02-lost-reply-dialog');
+   const before=await attempts(company,'CAPEX','Q2');assert.equal(before.length,1);assert.equal(before[0]!.status,'DISPATCHING');
    const job=before[0]!.job;const runId=before[0]!.airflow_dag_run_id;
    await page.keyboard.press('Escape');await paused.waitFor();// The viewer has to decide; Escape doesn't skip it.
-   await paused.getByRole('button',{name:'Recover the original run'}).click();
-   const done=dialog('Recovered with no duplicate run');await done.waitFor();
-   const after=await attempts(company,'CAPEX','Q1');const same=after.filter(a=>a.job===job);
+   await paused.getByRole('button',{name:'Check the same run'}).click();
+   const done=dialog('No duplicate run');await done.waitFor();
+   const after=await attempts(company,'CAPEX','Q2');const same=after.filter(a=>a.job===job);
    assert.equal(same.length,1);assert.equal(same[0]!.airflow_dag_run_id,runId);assert.equal(same[0]!.status,'SUCCEEDED');
-   assert.equal(new Set(after.map(a=>a.job)).size,2);assert.deepEqual(await versions(company,'CAPEX','Q1'),[{version:1,status:'PUBLISHED'}]);
-   assert.match(await done.innerText(),new RegExp(runId));assert.match(await done.innerText(),/1 attempt\./);
-   await shot('03-lost-reply-recovered');await closeDialog('Recovered with no duplicate run');
-   assert.ok((await page.evaluate(()=>window.scrollY))>0,'the page must not jump back to the top after a run');
-   await page.getByRole('button',{name:/^CAPEX v1/}).waitFor();
-   await page.getByRole('group',{name:/Dataset hierarchy for CAPEX/}).getByText('Inputs frozen: FAB_COST v1').waitFor();
+   assert.equal(new Set(after.map(a=>a.job)).size,2);assert.deepEqual(await versions(company,'CAPEX','Q2'),[{version:1,status:'PUBLISHED'}]);
+   assert.match(await done.innerText(),new RegExp(runId));assert.match(await done.innerText(),/1 try\./);
+   await shot('03-lost-reply-recovered');await closeDialog('No duplicate run');
+   assert.ok((await page.evaluate(()=>window.scrollY))>0,'the page must not jump back to the top after a run');await page.setViewportSize({width:1440,height:1000});
+   await page.getByRole('button',{name:/^Show Capital spending/}).waitFor();
+   await page.getByRole('group',{name:/Saved records for Capital spending/}).getByText('Input locked: Fab cost v1').waitFor();
    await shot('04-lost-reply-tree');
   });
   await t.test('reloading the page restores saved state and sends no command',async()=>{
    const count=posts.length;await page.reload();
-   await page.getByRole('group',{name:/Dataset hierarchy for/}).waitFor();await page.waitForLoadState('networkidle');
+   await page.getByRole('group',{name:/Saved records for/}).waitFor();await page.waitForLoadState('networkidle');
    assert.equal(posts.length,count);assert.equal(await page.getByRole('dialog').count(),0);
   });
   await t.test('Failed job and retry, stepped by hand, keeps history and frozen inputs when upstream moves on',async()=>{
    await page.getByRole('button',{name:'Step through Failed job and retry'}).click();
    for(let clicks=0;clicks<6;clicks++){const next=page.getByRole('button',{name:/^Next: /});await next.waitFor();if(clicks===3)await shot('05-step-through');await next.click();}
-   const done=dialog('Retried without rewriting history');await done.waitFor();
-   assert.match(await done.innerText(),/attempt 1 FAILED, attempt 2 SUCCEEDED/);assert.match(await done.innerText(),/FAB_COST version 1\. The newest FAB_COST is version 2/);
-   const rows=await attempts(company,'CAPEX','Q2');const failed=rows.filter(a=>a.status==='FAILED');
+   const done=dialog('Retried, with the failure on record');await done.waitFor();
+   assert.match(await done.innerText(),/try 1 FAILED, try 2 SUCCEEDED/);assert.match(await done.innerText(),/Fab cost v1\. The newest is v2/);
+   const rows=await attempts(company,'CAPEX','Q3');const failed=rows.filter(a=>a.status==='FAILED');
    assert.equal(failed.length,1);assert.equal(rows.filter(a=>a.job===failed[0]!.job).length,2);
    assert.equal(new Set(rows.map(a=>a.airflow_dag_run_id)).size,rows.length,'a retry must use a new run ID');
-   assert.deepEqual(await versions(company,'FAB_COST','Q2'),[{version:1,status:'PUBLISHED'},{version:2,status:'PUBLISHED'}]);
-   await closeDialog('Retried without rewriting history');await shot('06-retry-tree');
-   await page.getByRole('button',{name:'Details for Attempt 1, FAILED'}).first().click();
-   const details=dialog('Attempt 1 (execution_attempt)');await details.waitFor();assert.match(await details.innerText(),/A retry adds an attempt/);
-   await shot('07-details');await closeDialog('Attempt 1 (execution_attempt)');
+   assert.deepEqual(await versions(company,'FAB_COST','Q3'),[{version:1,status:'PUBLISHED'},{version:2,status:'PUBLISHED'}]);
+   await closeDialog('Retried, with the failure on record');await shot('06-retry-tree');
+   await page.getByRole('button',{name:'Details for Try 1, Failed'}).first().click();
+   const details=dialog('Try 1 (execution_attempt)');await details.waitFor();assert.match(await details.innerText(),/A retry adds a new try/);
+   await shot('07-details');await closeDialog('Try 1 (execution_attempt)');
   });
   await t.test('Conflicting requests shows the real replies: one winner, then the order rule',async()=>{
    await page.getByRole('button',{name:'Run Conflicting requests'}).click();
-   const done=dialog('One winner, and order enforced');await done.waitFor();
-   const text=await done.innerText();assert.match(text,/1 created, 3 rejected with HTTP 409/);assert.match(text,/left 0 attempts behind/);assert.match(text,/can’t prove/);
-   assert.deepEqual(await versions(company,'CAPEX','Q3'),[{version:1,status:'BUILDING'}]);await shot('08-conflict');
-   await closeDialog('One winner, and order enforced');
+   const done=dialog('One winner, and the order held');await done.waitFor();
+   const text=await done.innerText();assert.match(text,/1 created, 3 rejected with HTTP 409/);assert.match(text,/Starting too early created 0 tries/);assert.match(text,/can’t prove/);
+   assert.deepEqual(await versions(company,'CAPEX','Q4'),[{version:1,status:'BUILDING'}]);await shot('08-conflict');
+   await closeDialog('One winner, and the order held');
    await page.getByText('API commands sent').click();await page.getByText('ACTIVE_DATASET_VERSION_EXISTS').first().waitFor();await page.getByText('DEPENDENCY_NOT_READY').first().waitFor();
   });
   await t.test('a lost browser response is reported as unknown and never retried',async()=>{
    let lost=0;await page.route('**/demo/calculation-jobs/*/run',async route=>{lost++;await route.fetch();await route.abort('failed');});
-   await page.getByRole('button',{name:'Run Lost response'}).click();
+   await page.getByRole('button',{name:'Run Lost reply'}).click();
    const stopped=dialog('The scenario stopped');await stopped.waitFor();assert.match(await stopped.innerText(),/the result is unknown/);
    await page.unroute('**/demo/calculation-jobs/*/run');assert.equal(lost,1);await closeDialog('The scenario stopped');
    problems.splice(0,problems.length,...problems.filter(p=>!/ERR_FAILED/.test(p)));
@@ -148,23 +164,23 @@ test('One-page demo: real Chromium, production bundle, CSP and PostgreSQL',{time
   await t.test('the page fits a phone with no sideways page scroll, and the chart scrolls on its own',async()=>{
    const phoneContext=await browser!.newContext({viewport:{width:390,height:844},storageState:await context.storageState(),reducedMotion:'reduce'});
    const phone=await phoneContext.newPage();watch(phone);await phone.goto(origin);await phone.waitForLoadState('networkidle');
-   await phone.getByRole('group',{name:/Dataset hierarchy/}).waitFor();
+   await phone.getByRole('group',{name:/Saved records/}).waitFor();
    const widths=await phone.evaluate(()=>({page:document.documentElement.scrollWidth,view:window.innerWidth}));
    assert.ok(widths.page<=widths.view,`page ${widths.page} wider than ${widths.view}`);await shot('09-phone',phone);await phoneContext.close();
   });
   await t.test('sessions stay isolated, and clearing data removes only that session after confirmation',async()=>{
    const owner=await session();
    const other=await browser!.newContext();const otherPage=await other.newPage();await otherPage.goto(origin);
-   await otherPage.getByRole('group',{name:'Example of the dataset hierarchy'}).waitFor();
+   await otherPage.getByRole('group',{name:'Example of saved records'}).waitFor();
    assert.equal((await other.request.get(origin+'/demo/dataset-versions')).status(),401);await other.close();
    await page.getByRole('button',{name:'Clear my demo data'}).click();
    await dialog('Clear your demo data?').getByRole('button',{name:'Keep my data'}).click();
    assert.notEqual((await pool.query('SELECT 1 FROM dataset_series WHERE company_code=$1',[owner.companyCode])).rowCount,0);
    await page.getByRole('button',{name:'Clear my demo data'}).click();
    await dialog('Clear your demo data?').getByRole('button',{name:'Clear data'}).click();
-   await page.getByRole('group',{name:'Example of the dataset hierarchy'}).waitFor();
+   await page.getByRole('group',{name:'Example of saved records'}).waitFor();
    assert.equal((await pool.query('SELECT 1 FROM dataset_series WHERE company_code=$1',[owner.companyCode])).rowCount,0);
-   await page.reload();await page.getByRole('button',{name:'Run Lost response'}).waitFor();assert.equal(await page.getByRole('dialog').count(),0);
+   await page.reload();await page.getByRole('button',{name:'Run Lost reply'}).waitFor();assert.equal(await page.getByRole('dialog').count(),0);
   });
   assert.deepEqual(problems,[],'no CSP violation, console error or uncaught error across the whole run');
   assert.equal(await page.evaluate(()=>localStorage.length),0);

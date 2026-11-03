@@ -9,3 +9,4 @@ export interface Attempt {executionAttemptId:string;attemptNumber:number;attempt
 export interface RunResult {jobId:string;jobStatus:string;executionAttemptId:string;attemptNumber:number;attemptStatus:string;airflowDagRunId:string}
 export type AdmissionState='LEGACY_OPEN'|'DRAINING'|'WORKFLOW_OPEN';
 export interface WorkflowCatalog {admissionState:AdmissionState}
+export interface WorkflowTemplate {steps:{id:string;domain:string;operation:string;prerequisites:string[]}[]}

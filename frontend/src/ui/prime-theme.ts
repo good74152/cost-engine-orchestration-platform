@@ -11,6 +11,6 @@ export const primeOptions:Partial<APIOptions>={
    node:className('chart-node'),lineCell:className('chart-cell'),lineDown:className('chart-down'),nodeToggler:className('chart-toggler'),
    lineLeft:({context}:{context:{lineTop:boolean}})=>className(context.lineTop?'chart-left chart-top':'chart-left'),
    lineRight:({context}:{context:{lineTop:boolean}})=>className(context.lineTop?'chart-right chart-top':'chart-right')},
-  dataview:{root:className('versions'),grid:className('versions-grid'),emptyMessage:className('versions-empty')},
+  dataview:{root:className('scenario-list')},
  },
 };

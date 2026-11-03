@@ -174,7 +174,7 @@ test('Demo-04 isolated Compose, HTTPS, production UI and PostgreSQL operations',
         await page.getByRole('heading', { level: 1 }).waitFor(); assert.equal(await page.getByRole('dialog').count(), 0);
         const started = page.waitForResponse(r => new URL(r.url()).pathname === '/demo/sessions' && r.request().method() === 'POST');
         // This fixture is LEGACY_OPEN, so the page must create the session and then explain the missing configuration.
-        await page.getByRole('button', { name: 'Run Lost response', exact: true }).click();
+        await page.getByRole('button', { name: 'Run Lost reply', exact: true }).click();
         const created = await started; assert.equal(created.status(), 201);
         await page.getByRole('dialog', { name: 'The scenario stopped' }).getByText(/Workflow cutover/).waitFor();
         const cookies = await context.cookies(); const cookie = cookies.find(c => c.name === '__Host-ce_demo_session'); assert.ok(cookie?.secure && cookie.httpOnly);
