@@ -294,4 +294,4 @@ Replaces the architecture, system flow and Task 002–006 diagrams with short st
 ## Demo-15 — DigitalOcean Launch Runbook
 
 Adds the [first-launch runbook](DIGITALOCEAN_RUNBOOK.md) for one Droplet. It reuses the existing deployment controls and
-adds no code. The System Owner runs it; no public launch has been recorded yet.
+adds no code. The System Owner ran it, and the demo is live at https://cost-engine.ichiaho.dev.

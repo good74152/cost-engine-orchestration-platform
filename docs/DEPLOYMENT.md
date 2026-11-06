@@ -1,6 +1,7 @@
 # Restricted portfolio Demo deployment
 
-This is deployment capability, not an already deployed website. System Owner owns
+The demo is live at https://cost-engine.ichiaho.dev on one DigitalOcean Droplet. This
+page is its deployment contract. System Owner owns
 VPS, DNS, credentials, production operations and launch authorization. Local tests
 use disposable targets only. See [Demo-04](tasks/demo-04-secure-deployment.md) and
 [ADR-0013 / threat model](adr/0013-restricted-public-demo-deployment.md).
