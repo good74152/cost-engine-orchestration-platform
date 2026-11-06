@@ -290,3 +290,8 @@ Removes the unused Guided scenario APIs and the one-way admission gate and cutov
 ## Demo-14 — Simpler diagrams
 
 Replaces the architecture, system flow and Task 002–006 diagrams with short static SVGs from [one generator](diagrams/generate.cjs). The five GIFs and their generators are removed.
+
+## Demo-15 — DigitalOcean Launch Runbook
+
+Adds the [first-launch runbook](DIGITALOCEAN_RUNBOOK.md) for one Droplet. It reuses the existing deployment controls and
+adds no code. The System Owner runs it; no public launch has been recorded yet.
