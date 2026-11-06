@@ -2,6 +2,8 @@
 
 A backend that keeps versioned financial report builds in sync with external jobs, so lost responses, failed jobs and conflicting requests don't corrupt what gets published.
 
+**Live demo: [cost-engine.ichiaho.dev](https://cost-engine.ichiaho.dev)** (no sign-up; hosted on one 2 GiB DigitalOcean Droplet)
+
 This is a portfolio implementation, not a copy of a former employer's system. **Tracking, database state and recovery are real. The jobs are simulated:** there is no real Airflow integration and no financial calculation.
 
 ![The demo page in manual mode, showing dataset versions, calculation jobs and execution attempts](docs/images/demo-ui/manual-mode.png)
